@@ -3,7 +3,7 @@
 Created on Wed Jan 29 19:59:19 2020
 
 @author: Kevin Nebiolo
-@qaqc: Ish Deo
+@qaqc: Isha Deo
 
 Stryke: Kleinschmidt Associates Turbine Blade Strike Simulation Model
 
@@ -88,44 +88,75 @@ def create_route(dbDir):
     '''function creates a networkx graph object from information provided by 
     nodes and edges found in standard project database.  the only input
     is the standard project database.'''
-    # get nodes and edges - this assumes the end user has updated the database
+    
+    # get nodes and edges - this assumes the end user has updated the database!
     node_sql = "SELECT * FROM tblNodes"
     edges_sql = "SELECT * FROM tblEdges"
-    
     conn = sqlite3.connect(dbDir, timeout=30.0)
     c = conn.cursor()   
     nodes = pd.read_sql(node_sql,con = conn)
     edges = pd.read_sql(edges_sql,con = conn)
     c.close()
+    
     # create empty route object
     route = nx.route = nx.DiGraph()
     
     # add nodes to route - nodes.loc.values
     route.add_nodes_from(nodes.location.values)
-    weights = []
+    
     # create edges - iterate over edge rows to create edges
+    weights = []
+    dist = {}
     for i in edges.iterrows():
         _from = i[1]['_from']
         _to = i[1]['_to']
         weight = i[1]['weight']
         route.add_edge(_from,_to,weight = weight)
+        dist[_from] = {_to:5}
         weights.append(weight)
-    # return the finished product and enjoy functionality of networkx
+        
+    # make a plot for posterity     
     labels = {}
+    pos = {}
     idx = 0
     for i in nodes.location.values:
         labels[idx] = i
         idx = idx + 1
 
-    pos = nx.layout.spring_layout(route)
+    pos = nx.layout.kamada_kawai_layout(route, center = [0,0], scale = 5)
     plt.subplot(111)
-    nx.draw_networkx_nodes(route, pos, node_size = 10, node_color = 'blue')
-    nx.draw_networkx_labels(route, pos, font_size = 8)
-    nx.draw_networkx_edges(route, pos, node_size = 10, width = weights * 1000)
+    nx.draw_networkx_nodes(route, pos, node_size = 1000, node_color = 'white')
+    nx.draw_networkx_labels(route, pos, font_size = 6)
+    nx.draw_networkx_edges(route, pos, node_size = 1000, width = np.array(weights) * 2.0)
     plt.show()
+    
+    # return finished product and enjoy functionality of networkx
     return route
 
-#def Kaplan:
+class fish():
+    '''python class object for a fish in our individual based model'''
+    def __init__(self,species,len_params,route,dbDir):
+        self.species = species
+        self.length = np.random.lognormal(len_params[0],len_params[1])
+        self.route = route
+        self.status = 1  # fish are alive at start
+        self.location = 'forebay'
+        self.dbDir = dbDir
+    
+    def survive(self):
+        '''apply survival function at node - if fish at a turbine - apply TBSM'''
+            # first get the survival function type
+            conn = sqlite3.connect(dbDir, timeout=30.0)
+            c = conn.cursor()  
+            surv_fun = pd.read_sql("SELECT * FROM tblNodes WHERE location == '%s'"%(self.location)).surv_fun.values
+            c.close()
+            
+            # if survival function is a priori - roll the dice of death
+            if surv_fun == 'a priori':
+                
+
+
+#def Kaplan(:
     
 #def Francis:
     
