@@ -145,13 +145,11 @@ def create_route(dbDir):
     
     # create edges - iterate over edge rows to create edges
     weights = []
-    dist = {}
     for i in edges.iterrows():
         _from = i[1]['_from']
         _to = i[1]['_to']
         weight = i[1]['weight']
         route.add_edge(_from,_to,weight = weight)
-        dist[_from] = {_to:5}
         weights.append(weight)
         
     # make a plot for posterity     
