@@ -10,9 +10,8 @@ Create an Upper Barker Model to test out Stryke
 import stryke
 import os
 
-
 # set up workspaces
-proj_dir = r"J:\705\092\Calcs\Python"
+proj_dir = r"C:\Users\Kevin Nebiolo\Desktop\StrykeTest"
 dbName = "upper_barker.db"
 dbDir = os.path.join(proj_dir,'Data',dbName)
 # create project
@@ -20,3 +19,13 @@ dbDir = os.path.join(proj_dir,'Data',dbName)
 
 # create routing network and append to project database
 route = stryke.create_route(dbDir)
+
+# create a fish object, supply it with a species, log normal (mean, standard deviation) tuple, migration route, and database directory
+fish = stryke.fish('shad',(1.,2.5), route, dbDir)
+
+# while fish is alive and it hasn't completed migrating through project 
+while fish.status == 1 and fish.complete == 0:
+    # assess survival at this node
+    fish.survive()
+    # move to the next node
+    fish.move()
