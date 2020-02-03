@@ -24,8 +24,8 @@ route = stryke.create_route(dbDir)
 
 # iterate through 10 simulations
 for i in np.arange(0,10,1):
-    # iterate over 10 fish
-    for j in np.arange(0,10,1):
+    # iterate over 100 fish
+    for j in np.arange(0,100,1):
         # create a fish object, supply it with a species, log normal (mean, standard deviation) tuple, migration route, and database directory
         fish = stryke.fish('shad',(1.2,0.05), route, dbDir,i,j)
         # while fish is alive and it hasn't completed migrating through project 
