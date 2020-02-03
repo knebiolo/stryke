@@ -35,6 +35,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import warnings
 warnings.filterwarnings("ignore")
+from scipy.stats import beta
 
 
 # create the standard project database and directory structure
@@ -273,7 +274,7 @@ class fish():
     The simulation ends for an individual fish when there are no more moves to 
     make or its dead.'''
     
-    def __init__(self,species,len_params,route,dbDir):
+    def __init__(self,species,len_params,route,dbDir,simulation,fish):
         self.species = species
         self.length = np.random.lognormal(len_params[0],len_params[1])
         self.route = route
@@ -281,6 +282,17 @@ class fish():
         self.complete = 0 # fish do not start the simulation in a completed step
         self.location = 'forebay'
         self.dbDir = dbDir
+        self.simulation = simulation
+        self.fish = fish
+        conn = sqlite3.connect(self.dbDir, timeout=30.0)
+        c = conn.cursor()  
+        c.execute('''CREATE TABLE IF NOT EXISTS tblFish(simulation INTEGER, 
+                                                           fish INTEGER,
+                                                           length REAL)''')
+        conn.commit()
+        c.execute("INSERT INTO tblFish VALUES(%s,%s,%s);"%(simulation,fish,self.length))
+        conn.commit()
+        c.close()
     
     def survive(self):
         '''we apply the survival method at a node, therefore survival is a function 
@@ -314,7 +326,7 @@ class fish():
             param_dict = pd.DataFrame.to_dict(params,'index')
             
             # calculate the probability of strike as a function of the length of the fish and turbine parameters
-            prob = Kaplan(self.length, param_dict[0])
+            prob = Kaplan(self.length, param_dict[0])[0]
         
         print ("Fish is at %s, the probability of surviving is %s"%(self.location, prob))
         # roll the dice of death - very dungeons and dragons of us . . . 
@@ -328,6 +340,20 @@ class fish():
             self.status = 0
         else:
             print ("Fish has survived <0>>>><")
+            
+        # write results to project database
+        conn = sqlite3.connect(self.dbDir, timeout=30.0)
+        c = conn.cursor()  
+        c.execute('''CREATE TABLE IF NOT EXISTS tblSurvive(simulation INTEGER, 
+                                                           fish INTEGER,
+                                                           location TEXT,
+                                                           prob_surv REAL,
+                                                           dice REAL,
+                                                           status INTEGER)''')
+        conn.commit()
+        c.execute("INSERT INTO tblSurvive VALUES(%s,%s,'%s',%s,%s,%s);"%(self.simulation,self.fish,self.location,prob,dice[0],self.status))
+        conn.commit()
+        c.close()
             
     def move(self):
         '''we move between nodes after applying the survival function.  movement 
@@ -364,5 +390,63 @@ class fish():
             else:
                 print ("Fish survived passage through project <0>>>><")
                 self.complete = 1
+                conn = sqlite3.connect(self.dbDir, timeout=30.0)
+                c = conn.cursor()  
+                c.execute('''CREATE TABLE IF NOT EXISTS tblCompletion(simulation INTEGER, 
+                                                                   fish INTEGER,
+                                                                   status INTEGER,
+                                                                   completion INTEGER)''')
+                conn.commit()
+                c.execute("INSERT INTO tblCompletion VALUES(%s,%s,%s,%s);"%(self.simulation,self.fish,self.status,self.complete))
+                conn.commit()
+                c.close()                
             
+def summary(dbDir):
+    '''create a function to summarize the Monte Carlo simulation.  
+    
+    I believe we care about the lengths of the simulated fish and survival % by simulation
+    
+    The only input is the project database'''
+    
+    # first let's get the data we wish to describe
+    conn = sqlite3.connect(dbDir, timeout=30.0)
+    fish = pd.read_sql('SELECT * FROM tblFish', con = conn)
+    survival = pd.read_sql('SELECT * FROM tblSurvive', con = conn)
+    
+    # let's desribe fish lengths with a histogram
+    plt.figure(figsize = (6,3)) 
+    fig, ax = plt.subplots()
+    ax.hist(fish.length.values,10,density = 1)
+    ax.set_xlabel('Length (ft)')  
+    plt.show()
+    
+    # let's describe survival by node 
+    grouped = survival[['simulation','location','prob_surv','status']].groupby(['simulation','location']).agg({'prob_surv':'count','status':'sum'}).reset_index().rename(columns = {'prob_surv':'n','status':'p'})
+    grouped['proportion'] = grouped.p / grouped.n
+    
+    # now fit a beta distribution to each node 
+    locations = grouped.location.unique()
+    beta_dict = {}
+    for i in locations:
+        dat = grouped.loc[grouped.location == i]
+        params = beta.fit(dat.proportion.values)
+        beta_mean = beta.mean(params[0],params[1],params[2],params[3])
+        beta_std = beta.std(params[0],params[1],params[2],params[3])
+        beta_95ci = beta.interval(alpha = 0.05,a = params[0],b = params[1],loc = params[2],scale = params[3])
+
+        beta_dict[i] = [params,beta_mean,beta_std,beta_95ci]
+    beta_fit_df = pd.DataFrame.from_dict(beta_dict,orient = 'index',columns = ['params','mean','std','95_ci'])
+    del i, params
+    print (beta_dict)
+    print (beta_fit_df)
+    # make a plot for each beta distribution - we like visuals!
+    for i in beta_dict.keys():
+        params = beta_dict[i]
+        
+        
+        
+
+    
+    
+    
 

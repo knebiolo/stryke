@@ -27,11 +27,13 @@ for i in np.arange(0,10,1):
     # iterate over 10 fish
     for j in np.arange(0,10,1):
         # create a fish object, supply it with a species, log normal (mean, standard deviation) tuple, migration route, and database directory
-        fish = stryke.fish('shad',(1.,2.5), route, dbDir)
-
+        fish = stryke.fish('shad',(1.2,0.05), route, dbDir,i,j)
         # while fish is alive and it hasn't completed migrating through project 
         while fish.status == 1 and fish.complete == 0:
-            # assess survival at this node
+            # assess survival at this node and write to database
             fish.survive()
-            # move to the next node
+            # move to the next node- do we care enough about this data to log it?
             fish.move()
+            
+# summarize
+stryke.summary(dbDir)
