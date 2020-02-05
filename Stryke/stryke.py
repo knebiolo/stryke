@@ -200,7 +200,7 @@ def Kaplan(length, param_dict):
     p_strike = _lambda * (N / (D * 12)) * (np.radians(a_a)/(8 * Qwd) + np.radians(a_a)/(np.pi * rR)) # IPD: conversion to radians is redundant and incorrect; 
     # need to take cosine and sine of angle alpha a (a_a)
     
-    return 1 - (p_strike * length)
+    return 1 - (p_strike * length) # i don't know why I said 1 - , i have no faith in my math, help me Isha
 
 def Propeller(length, param_dict):
     '''Franke et al. TBS for Kaplan turbines.
@@ -356,6 +356,7 @@ class fish():
             prob = Francis(self.length, param_dict[0])[0]
             
         print ("Fish is at %s, the probability of surviving is %s"%(self.location, prob))
+        
         # roll the dice of death - very dungeons and dragons of us . . . 
         dice = np.random.uniform(0.00,1.00,1)
         print ("Random draw: %s"%(dice))
