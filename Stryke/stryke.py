@@ -181,7 +181,7 @@ def Kaplan(length, param_dict):
     RPM = param_dict['RPM']
     D = param_dict['D']
     Q = param_dict['Q']
-    rR = np.random.uniform(0.3,1.0,1) # where on the blade did the fish strike? - see Deng for more info
+    rR = np.random.uniform(0.3,1.0,1) # where on the blade did the fish strike? - see Deng for more info #IPD: can you send me the reference for this?
     #Q_per = param_dict['Q_per']
     ada = param_dict['ada']
     N = param_dict['N']
@@ -194,10 +194,11 @@ def Kaplan(length, param_dict):
     Qwd = Q/ (omega * D)**3
     
     # part 2 - calculate angle of absolute flow to the axis of rotation
-    a_a = np.arctan((np.pi * ada * Ewd)/(2 * Qwd * rR))
+    a_a = np.arctan((np.pi * ada * Ewd)/(2 * Qwd * rR)) #IPD: np.arctan returns answer in radians
     
     # probability of strike * length of fish
-    p_strike = _lambda * (N / (D * 12)) * (np.radians(a_a)/(8 * Qwd) + np.radians(a_a)/(np.pi * rR))
+    p_strike = _lambda * (N / (D * 12)) * (np.radians(a_a)/(8 * Qwd) + np.radians(a_a)/(np.pi * rR)) # IPD: conversion to radians is redundant and incorrect; 
+    # need to take cosine and sine of angle alpha a (a_a)
     
     return 1 - (p_strike * length)
 
@@ -215,7 +216,7 @@ def Propeller(length, param_dict):
     Q_per = param_dict['Q_per']
     ada = param_dict['ada']
     N = param_dict['N']
-    Qopt = param_dict['Qopt']
+    Qopt = param_dict['Qopt'] #IPD: why not use Qopt for beta calculations?
     _lambda = 0.2 # use USFWS value of 0.2
     
     # part 1 - calculate omega, the energy coefficient, discharge coefficient
@@ -224,8 +225,8 @@ def Propeller(length, param_dict):
     Qwd = Q/ (omega * D)**3
     
     # part 2 - calculate angle of absolute flow to the axis of rotation
-    beta = np.arctan((np.pi/8 * rR)/(Qwd * Q_per))
-    a_a = np.arctan((np.pi/2 * Ewd * ada)/(Qwd * rR) + (np.pi/8 * rR)/Qwd - beta)
+    beta = np.arctan((np.pi/8 * rR)/(Qwd * Q_per)) #IPD: what does Qper refer to? optimimum multiplier?
+    a_a = np.arctan((np.pi/2 * Ewd * ada)/(Qwd * rR) + (np.pi/8 * rR)/Qwd - beta) #IPD: should be tan(beta)
        
     # probability of strike * length of fish
     p_strike = _lambda * (N / (D * 12)) * (np.cos(a_a)/(8 * Qwd)) + np.sin(a_a)/(np.pi * rR)
@@ -257,8 +258,8 @@ def Francis(length, param_dict):
     Qwd = Q/ (omega * D)**3
     
     # part 2 - calculate alpha and beta
-    beta = np.arctan((0.707 * np.pi/8)/(iota * Qwd * Q_per * np.power(D1/D2,3)))
-    alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * beta * (B/D1) * (D1/D2))
+    beta = np.arctan((0.707 * np.pi/8)/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation
+    alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * beta * (B/D1) * (D1/D2)) #IPD: should be tan(beta)
 
     # probability of strike * length of fish
     p_strike = _lambda * (N / D) * (((np.sin(alpha) * (B/D1))/(2*Qwd)) + (np.cos(alpha)/np.pi))
@@ -328,12 +329,38 @@ class fish():
             # calculate the probability of strike as a function of the length of the fish and turbine parameters
             prob = Kaplan(self.length, param_dict[0])[0]
         
+        # if survival is assessed at a Propeller turbine:
+        elif surv_fun == 'Propeller':
+            # get turbine parameters
+            conn = sqlite3.connect(self.dbDir, timeout=30.0)
+            c = conn.cursor()  
+            params = pd.read_sql("SELECT * FROM tblPropeller WHERE unit == '%s'"%(self.location), con = conn)
+            c.close()
+            # convert dataframe to dictionary by index - pass index [0]
+            param_dict = pd.DataFrame.to_dict(params,'index')
+            
+            # calculate the probability of strike as a function of the length of the fish and turbine parameters
+            prob = Propeller(self.length, param_dict[0])[0]
+            
+        # if survival is assessed at a Francis turbine:
+        elif surv_fun == 'Francis':
+            # get turbine parameters
+            conn = sqlite3.connect(self.dbDir, timeout=30.0)
+            c = conn.cursor()  
+            params = pd.read_sql("SELECT * FROM tblFrancis WHERE unit == '%s'"%(self.location), con = conn)
+            c.close()
+            # convert dataframe to dictionary by index - pass index [0]
+            param_dict = pd.DataFrame.to_dict(params,'index')
+            
+            # calculate the probability of strike as a function of the length of the fish and turbine parameters
+            prob = Francis(self.length, param_dict[0])[0]
+            
         print ("Fish is at %s, the probability of surviving is %s"%(self.location, prob))
         # roll the dice of death - very dungeons and dragons of us . . . 
         dice = np.random.uniform(0.00,1.00,1)
         print ("Random draw: %s"%(dice))
         '''apply death logic:
-        if our dice role is greater than the probability of surviving, fish has died'''
+        if our dice roll is greater than the probability of surviving, fish has died'''
         
         if dice > prob:
             print ("Fish has been killed <X>>>><")
