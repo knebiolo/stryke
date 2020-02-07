@@ -95,6 +95,7 @@ def create_proj_db(project_dir, dbName):
                                          D1 REAL, 
                                          D2 REAL, 
                                          B REAL,
+                                         _lambda REAL,
                                          FOREIGN KEY (unit)
                                              REFERENCES tblNodes(location))''')
     c.execute('''CREATE TABLE tblKaplan(unit TEXT, 
@@ -105,6 +106,7 @@ def create_proj_db(project_dir, dbName):
                                         ada REAL, 
                                         N INTEGER, 
                                         Qopt REAL,
+                                         _lambda REAL,
                                         FOREIGN KEY (unit)
                                              REFERENCES tblNodes(location))''')
     c.execute('''CREATE TABLE tblPropeller(unit TEXT, 
@@ -116,6 +118,7 @@ def create_proj_db(project_dir, dbName):
                                            ada REAL,
                                            N INTEGER, 
                                            Qopt REAL,
+                                         _lambda REAL,                                           
                                            FOREIGN KEY (unit)
                                              REFERENCES tblNodes(location))''')
 
@@ -181,26 +184,27 @@ def Kaplan(length, param_dict):
     RPM = param_dict['RPM']
     D = param_dict['D']
     Q = param_dict['Q']
-    rR = np.random.uniform(0.3,1.0,1) # where on the blade did the fish strike? - see Deng for more info #IPD: can you send me the reference for this?
+    #rR = np.array([0.75])
+    rR = np.random.uniform(0.3,1.0,1) # where on the blade did the fish strike? - see Deng for more info #IPD: can you send me the reference for this? ~ discussed 2/5/20
     #Q_per = param_dict['Q_per']
     ada = param_dict['ada']
     N = param_dict['N']
     #Qopt = param_dict['Qopt']
-    _lambda = 0.2 # use USFWS value of 0.2
+    _lambda = param_dict['_lambda'] # use USFWS value of 0.2 #IPD: updated to mimic spreadsheet for upper barker
     
     # part 1 - calculate omega, the energy coefficient, discharge coefficient
     omega = RPM * ((2 * np.pi)/60)
     Ewd = (g * H) / (omega * D)**2
-    Qwd = Q/ (omega * D)**3
+    Qwd = Q/ (omega * D**3)
     
     # part 2 - calculate angle of absolute flow to the axis of rotation
     a_a = np.arctan((np.pi * ada * Ewd)/(2 * Qwd * rR)) #IPD: np.arctan returns answer in radians
     
     # probability of strike * length of fish
-    p_strike = _lambda * (N / (D * 12)) * (np.radians(a_a)/(8 * Qwd) + np.radians(a_a)/(np.pi * rR)) # IPD: conversion to radians is redundant and incorrect; 
+    p_strike = _lambda * (N / (D)) * (np.cos(a_a)/(8 * Qwd) + np.sin(a_a)/(np.pi * rR)) # IPD: conversion to radians is redundant and incorrect ~ corrected 2/5/20
     # need to take cosine and sine of angle alpha a (a_a)
     
-    return 1 - (p_strike * length) # i don't know why I said 1 - , i have no faith in my math, help me Isha
+    return 1 - (p_strike * length) 
 
 def Propeller(length, param_dict):
     '''Franke et al. TBS for Kaplan turbines.
@@ -217,19 +221,19 @@ def Propeller(length, param_dict):
     ada = param_dict['ada']
     N = param_dict['N']
     Qopt = param_dict['Qopt'] #IPD: why not use Qopt for beta calculations?
-    _lambda = 0.2 # use USFWS value of 0.2
+    _lambda = param_dict['_lambda'] # use USFWS value of 0.2
     
     # part 1 - calculate omega, the energy coefficient, discharge coefficient
     omega = RPM * ((2 * np.pi)/60) # radians per second
     Ewd = (g * H) / (omega * D)**2
-    Qwd = Q/ (omega * D)**3
+    Qwd = Q/ (omega * D**3)
     
     # part 2 - calculate angle of absolute flow to the axis of rotation
-    beta = np.arctan((np.pi/8 * rR)/(Qwd * Q_per)) #IPD: what does Qper refer to? optimimum multiplier?
-    a_a = np.arctan((np.pi/2 * Ewd * ada)/(Qwd * rR) + (np.pi/8 * rR)/Qwd - beta) #IPD: should be tan(beta)
+    beta = np.arctan((np.pi/8 * rR)/(Qwd * Q_per)) #IPD: what does Qper refer to? optimimum multiplier? ~ corrected 2/5/20
+    a_a = np.arctan((np.pi/2 * Ewd * ada)/(Qwd * rR) + (np.pi/8 * rR)/Qwd - tan(beta)) #IPD: should be tan(beta) ~ corrected 2/5/20
        
     # probability of strike * length of fish
-    p_strike = _lambda * (N / (D * 12)) * (np.cos(a_a)/(8 * Qwd)) + np.sin(a_a)/(np.pi * rR)
+    p_strike = _lambda * (N / (D)) * (np.cos(a_a)/(8 * Qwd)) + np.sin(a_a)/(np.pi * rR)
     
     return 1 - (p_strike * length)
 
@@ -250,16 +254,16 @@ def Francis(length, param_dict):
     D1 = param_dict['D1']
     D2 = param_dict['D2']
     B = param_dict['B']
-    _lambda = 0.2 # use USFWS value of 0.2
+    _lambda = param_dict['_lambda'] # use USFWS value of 0.2
 
     # part 1 - calculate omega, the energy coefficient, discharge coefficient
     omega = RPM * ((2 * np.pi)/60) # radians per second
     Ewd = (g * H) / (omega * D)**2
-    Qwd = Q/ (omega * D)**3
+    Qwd = Q/ (omega * D**3)
     
     # part 2 - calculate alpha and beta
-    beta = np.arctan((0.707 * np.pi/8)/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation
-    alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * beta * (B/D1) * (D1/D2)) #IPD: should be tan(beta)
+    beta = np.arctan((0.707 * np.pi/8)/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
+    alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
 
     # probability of strike * length of fish
     p_strike = _lambda * (N / D) * (((np.sin(alpha) * (B/D1))/(2*Qwd)) + (np.cos(alpha)/np.pi))
@@ -277,7 +281,7 @@ class fish():
     
     def __init__(self,species,len_params,route,dbDir,simulation,fish):
         self.species = species
-        self.length = np.random.lognormal(len_params[0],len_params[1])
+        self.length = np.random.normal(len_params[0],len_params[1])
         self.route = route
         self.status = 1   # fish are alive at start
         self.complete = 0 # fish do not start the simulation in a completed step
@@ -366,6 +370,17 @@ class fish():
         if dice > prob:
             print ("Fish has been killed <X>>>><")
             self.status = 0
+            self.complete = 1
+            conn = sqlite3.connect(self.dbDir, timeout=30.0)
+            c = conn.cursor()  
+            c.execute('''CREATE TABLE IF NOT EXISTS tblCompletion(simulation INTEGER, 
+                                                               fish INTEGER,
+                                                               status INTEGER,
+                                                               completion INTEGER)''')
+            conn.commit()
+            c.execute("INSERT INTO tblCompletion VALUES(%s,%s,%s,%s);"%(self.simulation,self.fish,self.status,self.complete))
+            conn.commit()
+            c.close()
         else:
             print ("Fish has survived <0>>>><")
             
@@ -468,10 +483,30 @@ def summary(dbDir):
     print (beta_dict)
     print (beta_fit_df)
     # make a plot for each beta distribution - we like visuals!
+    plt.figure(figsize = (6,3))
+    fig,ax = plt.subplots()
     for i in beta_dict.keys():
         params = beta_dict[i]
-        
-        
+        x = np.linspace(beta.ppf(0.01, params[0][0], params[0][1]),beta.ppf(0.99, params[0][0], params[0][1]), 100)
+        ax.plot(x,beta.pdf(x, params[0][0], params[0][1]),label = i)
+    fig.legend()
+  
+    c = conn.cursor()  
+    c.execute('''CREATE TABLE IF NOT EXISTS tblSummary(Scenario INTEGER, 
+                                                                   FishLengthMean REAL,
+                                                                   FishLengthSD REAL,
+                                                                   NumFish INTEGER,
+                                                                   NumPassedSuccess INTEGER,
+                                                                   PercentSurvival REAL
+                                                                   )''')         
+    conn.commit()
+    completion = pd.read_sql('SELECT * FROM tblCompletion',conn)
+       
+    for sim in completion['simulation'].unique():
+        subset = completion.loc[completion['simulation'] == sim].sum()
+        c.execute("INSERT INTO tblSummary VALUES(%d,%f,%f,%d,%d,%f);"%(sim,10.5,0.5,1000,subset['status'],subset['status']/subset['completion']))
+    conn.commit()
+    c.close()  
         
 
     
