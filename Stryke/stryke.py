@@ -68,13 +68,15 @@ def create_proj_db(project_dir, dbName):
     c.execute('''DROP TABLE IF EXISTS tblFrancis''')                           # table to hold standard Frank et. al. tbsm parameters for Francis by facility unit #
     c.execute('''DROP TABLE IF EXISTS tblKaplan''')                            # table to hold standard Frank et. al. tbsm parameters for Kaplan by facility unit # - yes even if they only have francis 
     c.execute('''DROP TABLE IF EXISTS tblPropeller''')                         # you guessed it, now one for propellers
+    c.execute('''DROP TABLE IF EXISTS tblPump''')                         # you guessed it, now one for propellers
     c.execute('''DROP TABLE IF EXISTS tblNodes''')                             # placeholder for route - will hold a networkx graph object
     c.execute('''DROP TABLE IF EXISTS tblEdges''')
     c.execute('''CREATE TABLE tblNodes(location TEXT PRIMARY KEY, 
                                        surv_fun TEXT CHECK(surv_fun = "a priori" OR 
                                                            surv_fun = "Kaplan" OR 
                                                            surv_fun = "Francis" OR 
-                                                           surv_fun = "Propeller"), 
+                                                           surv_fun = "Propeller" OR
+                                                           surv_fun = "Pump"), 
                                        prob REAL)''')
     c.execute('''CREATE TABLE tblEdges(_from TEXT, 
                                        _to TEXT, 
@@ -122,7 +124,22 @@ def create_proj_db(project_dir, dbName):
                                            FOREIGN KEY (unit)
                                              REFERENCES tblNodes(location))''')
 
-    
+    c.execute('''CREATE TABLE tblPump(unit TEXT, 
+                                           H REAL, 
+                                           RPM INTEGER, 
+                                           D REAL, 
+                                           Q REAL, 
+                                           Q_p REAL, 
+                                           ada REAL,
+                                           N INTEGER, 
+                                           D1 REAL, 
+                                           D2 REAL,
+                                           B REAL,
+                                           Qopt REAL,
+                                           _lambda REAL,
+                                           gamma REAL,                                        
+                                           FOREIGN KEY (unit)
+                                             REFERENCES tblNodes(location))''')
     conn.commit()   
     c.close()
 
@@ -230,7 +247,7 @@ def Propeller(length, param_dict):
     
     # part 2 - calculate angle of absolute flow to the axis of rotation
     beta = np.arctan((np.pi/8 * rR)/(Qwd * Q_per)) #IPD: what does Qper refer to? optimimum multiplier? ~ corrected 2/5/20
-    a_a = np.arctan((np.pi/2 * Ewd * ada)/(Qwd * rR) + (np.pi/8 * rR)/Qwd - tan(beta)) #IPD: should be tan(beta) ~ corrected 2/5/20
+    a_a = np.arctan((np.pi/2 * Ewd * ada)/(Qwd * rR) + (np.pi/8 * rR)/Qwd - np.tan(beta)) #IPD: should be tan(beta) ~ corrected 2/5/20
        
     # probability of strike * length of fish
     p_strike = _lambda * (N / (D)) * (np.cos(a_a)/(8 * Qwd)) + np.sin(a_a)/(np.pi * rR)
@@ -263,13 +280,43 @@ def Francis(length, param_dict):
     
     # part 2 - calculate alpha and beta
     beta = np.arctan((0.707 * np.pi/8)/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
-    alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
+    alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
 
     # probability of strike * length of fish
     p_strike = _lambda * (N / D) * (((np.sin(alpha) * (B/D1))/(2*Qwd)) + (np.cos(alpha)/np.pi))
     
     return 1 - (p_strike * length)
 
+def Pump(length, param_dict):
+    ''' pump mode calculations from fish entrainment analysis report: 
+        J:\1210\005\Docs\Entrainment\Entrainment Calcs\BladeStrike_CabotStation.xlsx'''
+    
+    # either sample parameters from statistical distributions, use a priori measures or extract from parameter dictionary
+    g = 32.2
+    H = param_dict['H']
+    RPM = param_dict['RPM']
+    D = param_dict['D']
+    Q = param_dict['Q']
+    Q_p = param_dict['Q_p']
+    ada = param_dict['ada']
+    N = param_dict['N']
+    D1 = param_dict['D1']
+    D2 = param_dict['D2']
+    B = param_dict['B']
+    _lambda = param_dict['_lambda'] # use USFWS value of 0.2
+    gamma = param_dict['gamma'] # use value of 0.153 from Chief Joseph Kokanee project
+    
+    # part 1 - calculate omega, discharge coefficient
+    omega = RPM * ((2 * np.pi)/60) # radians per second
+    Qpwd = Q_p/ (omega * D**3)
+    
+    # part 2 - calculate beta
+    beta_p = np.arctan((0.707 * np.pi/8)/(Qpwd * np.power(D1/D2,3)))
+    
+    # probability of strike * length of fish
+    p_strike = gamma * (N / (0.707 * D2)) * (((np.sin(beta_p) * (B/D1))/(2*Qpwd)) + (np.cos(beta_p)/np.pi))
+    
+    return 1 - (p_strike * length)
     
 class fish():
     '''python class object describing an individual fish in our individual based
@@ -358,17 +405,30 @@ class fish():
             
             # calculate the probability of strike as a function of the length of the fish and turbine parameters
             prob = Francis(self.length, param_dict[0])[0]
+
+        # if survival is assessed at a turbine in pump mode:
+        elif surv_fun == 'Pump':
+            # get turbine parameters
+            conn = sqlite3.connect(self.dbDir, timeout=30.0)
+            c = conn.cursor()  
+            params = pd.read_sql("SELECT * FROM tblPump WHERE unit == '%s'"%(self.location), con = conn)
+            c.close()
+            # convert dataframe to dictionary by index - pass index [0]
+            param_dict = pd.DataFrame.to_dict(params,'index')
             
-        print ("Fish is at %s, the probability of surviving is %s"%(self.location, prob))
+            # calculate the probability of strike as a function of the length of the fish and turbine parameters
+            prob = Pump(self.length, param_dict[0])
+            
+#        print ("Fish is at %s, the probability of surviving is %s"%(self.location, prob))
         
         # roll the dice of death - very dungeons and dragons of us . . . 
         dice = np.random.uniform(0.00,1.00,1)
-        print ("Random draw: %s"%(dice))
+#        print ("Random draw: %s"%(dice))
         '''apply death logic:
         if our dice roll is greater than the probability of surviving, fish has died'''
         
         if dice > prob:
-            print ("Fish has been killed <X>>>><")
+#            print ("Fish has been killed <X>>>><")
             self.status = 0
             self.complete = 1
             conn = sqlite3.connect(self.dbDir, timeout=30.0)
@@ -381,8 +441,8 @@ class fish():
             c.execute("INSERT INTO tblCompletion VALUES(%s,%s,%s,%s);"%(self.simulation,self.fish,self.status,self.complete))
             conn.commit()
             c.close()
-        else:
-            print ("Fish has survived <0>>>><")
+#        else:
+#            print ("Fish has survived <0>>>><")
             
         # write results to project database
         conn = sqlite3.connect(self.dbDir, timeout=30.0)
@@ -418,20 +478,20 @@ class fish():
                 for i in neighbors:
                     u_prob = self.route[self.location][i]['weight'] + l_prob
                     move_prob_dict[i] = (l_prob,u_prob)
-                    print ("If roll of dice is between %s and %s, fish will move to the %s"%(l_prob,u_prob,i))
+                    #print ("If roll of dice is between %s and %s, fish will move to the %s"%(l_prob,u_prob,i))
                     l_prob = u_prob
                 del i
                 
                 # role the dice of movement (arguably, this is not as catchy)
                 dice = np.random.uniform(0.00,1.00,1)
-                print ("Random draw: %s"%(dice))
+                #print ("Random draw: %s"%(dice))
                 for i in move_prob_dict:
                     # if the dice role is between movement thresholds for the this neighbor...
                     if dice >= move_prob_dict[i][0] and dice < move_prob_dict[i][1]:
                         self.location = i
-                        print ("Fish moved to %s"%(i))                      
+                        #print ("Fish moved to %s"%(i))                      
             else:
-                print ("Fish survived passage through project <0>>>><")
+                #print ("Fish survived passage through project <0>>>><")
                 self.complete = 1
                 conn = sqlite3.connect(self.dbDir, timeout=30.0)
                 c = conn.cursor()  
@@ -457,39 +517,37 @@ def summary(dbDir):
     survival = pd.read_sql('SELECT * FROM tblSurvive', con = conn)
     
     # let's desribe fish lengths with a histogram
-    plt.figure(figsize = (6,3)) 
-    fig, ax = plt.subplots()
-    ax.hist(fish.length.values,10,density = 1)
-    ax.set_xlabel('Length (ft)')  
-    plt.show()
+    # plt.figure(figsize = (6,3)) 
+    # fig, ax = plt.subplots()
+    # ax.hist(fish.length.values,10,density = 1)
+    # ax.set_xlabel('Length (ft)')  
+    # plt.show()
     
     # let's describe survival by node 
     grouped = survival[['simulation','location','prob_surv','status']].groupby(['simulation','location']).agg({'prob_surv':'count','status':'sum'}).reset_index().rename(columns = {'prob_surv':'n','status':'p'})
     grouped['proportion'] = grouped.p / grouped.n
-    
     # now fit a beta distribution to each node 
     locations = grouped.location.unique()
     beta_dict = {}
     for i in locations:
         dat = grouped.loc[grouped.location == i]
         params = beta.fit(dat.proportion.values)
-        beta_mean = beta.mean(params[0],params[1],params[2],params[3])
+        beta_median = beta.median(params[0],params[1],params[2],params[3])
         beta_std = beta.std(params[0],params[1],params[2],params[3])
-        beta_95ci = beta.interval(alpha = 0.05,a = params[0],b = params[1],loc = params[2],scale = params[3])
-
-        beta_dict[i] = [params,beta_mean,beta_std,beta_95ci]
-    beta_fit_df = pd.DataFrame.from_dict(beta_dict,orient = 'index',columns = ['params','mean','std','95_ci'])
+        beta_95ci = beta.interval(alpha = 0.95,a = params[0],b = params[1],loc = params[2],scale = params[3])
+        beta_dict[i] = [beta_median,beta_std,beta_95ci[0],beta_95ci[1]]
+    beta_fit_df = pd.DataFrame.from_dict(beta_dict,orient = 'index',columns = ['mean','std','ll','ul'])
     del i, params
-    print (beta_dict)
+    #print (beta_dict)
     print (beta_fit_df)
     # make a plot for each beta distribution - we like visuals!
-    plt.figure(figsize = (6,3))
-    fig,ax = plt.subplots()
-    for i in beta_dict.keys():
-        params = beta_dict[i]
-        x = np.linspace(beta.ppf(0.01, params[0][0], params[0][1]),beta.ppf(0.99, params[0][0], params[0][1]), 100)
-        ax.plot(x,beta.pdf(x, params[0][0], params[0][1]),label = i)
-    fig.legend()
+    # plt.figure(figsize = (6,3))
+    # fig,ax = plt.subplots()
+    # for i in beta_dict.keys():
+    #     params = beta_dict[i]
+    #     x = np.linspace(beta.ppf(0.01, params[0][0], params[0][1]),beta.ppf(0.99, params[0][0], params[0][1]), 100)
+    #     ax.plot(x,beta.pdf(x, params[0][0], params[0][1]),label = i)
+    # fig.legend()
   
     c = conn.cursor()  
     c.execute('''CREATE TABLE IF NOT EXISTS tblSummary(Scenario INTEGER, 
@@ -501,10 +559,11 @@ def summary(dbDir):
                                                                    )''')         
     conn.commit()
     completion = pd.read_sql('SELECT * FROM tblCompletion',conn)
+    beta_fit_df.to_sql("tblBetaFit", con = conn, if_exists = 'replace')
        
     for sim in completion['simulation'].unique():
         subset = completion.loc[completion['simulation'] == sim].sum()
-        c.execute("INSERT INTO tblSummary VALUES(%d,%f,%f,%d,%d,%f);"%(sim,10.5,0.5,1000,subset['status'],subset['status']/subset['completion']))
+        c.execute("INSERT INTO tblSummary VALUES(%d,%f,%f,%d,%d,%f);"%(sim,fish.length.mean(),fish.length.std(),len(fish),subset['status'],subset['status']/subset['completion']))
     conn.commit()
     c.close()  
         
