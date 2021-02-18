@@ -419,16 +419,16 @@ class fish():
             # calculate the probability of strike as a function of the length of the fish and turbine parameters
             prob = Pump(self.length, param_dict[0])
             
-#        print ("Fish is at %s, the probability of surviving is %s"%(self.location, prob))
+        print ("Fish is at %s, the probability of surviving is %s"%(self.location, prob))
         
         # roll the dice of death - very dungeons and dragons of us . . . 
         dice = np.random.uniform(0.00,1.00,1)
-#        print ("Random draw: %s"%(dice))
+        print ("Random draw: %s"%(dice))
         '''apply death logic:
         if our dice roll is greater than the probability of surviving, fish has died'''
         
         if dice > prob:
-#            print ("Fish has been killed <X>>>><")
+            print ("Fish has been killed <X>>>><")
             self.status = 0
             self.complete = 1
             conn = sqlite3.connect(self.dbDir, timeout=30.0)
@@ -441,8 +441,8 @@ class fish():
             c.execute("INSERT INTO tblCompletion VALUES(%s,%s,%s,%s);"%(self.simulation,self.fish,self.status,self.complete))
             conn.commit()
             c.close()
-#        else:
-#            print ("Fish has survived <0>>>><")
+        else:
+            print ("Fish has survived <0>>>><")
             
         # write results to project database
         conn = sqlite3.connect(self.dbDir, timeout=30.0)
@@ -478,20 +478,20 @@ class fish():
                 for i in neighbors:
                     u_prob = self.route[self.location][i]['weight'] + l_prob
                     move_prob_dict[i] = (l_prob,u_prob)
-                    #print ("If roll of dice is between %s and %s, fish will move to the %s"%(l_prob,u_prob,i))
+                    print ("If roll of dice is between %s and %s, fish will move to the %s"%(l_prob,u_prob,i))
                     l_prob = u_prob
                 del i
                 
                 # role the dice of movement (arguably, this is not as catchy)
                 dice = np.random.uniform(0.00,1.00,1)
-                #print ("Random draw: %s"%(dice))
+                print ("Random draw: %s"%(dice))
                 for i in move_prob_dict:
                     # if the dice role is between movement thresholds for the this neighbor...
                     if dice >= move_prob_dict[i][0] and dice < move_prob_dict[i][1]:
                         self.location = i
-                        #print ("Fish moved to %s"%(i))                      
+                        print ("Fish moved to %s"%(i))                      
             else:
-                #print ("Fish survived passage through project <0>>>><")
+                print ("Fish survived passage through project <0>>>><")
                 self.complete = 1
                 conn = sqlite3.connect(self.dbDir, timeout=30.0)
                 c = conn.cursor()  
@@ -515,7 +515,7 @@ def summary(dbDir):
     conn = sqlite3.connect(dbDir, timeout=30.0)
     fish = pd.read_sql('SELECT * FROM tblFish', con = conn)
     survival = pd.read_sql('SELECT * FROM tblSurvive', con = conn)
-    
+    completion = pd.read_sql('SELECT * FROM tblCompletion', con = conn)
     # let's desribe fish lengths with a histogram
     # plt.figure(figsize = (6,3)) 
     # fig, ax = plt.subplots()
@@ -529,6 +529,7 @@ def summary(dbDir):
     # now fit a beta distribution to each node 
     locations = grouped.location.unique()
     beta_dict = {}
+    
     for i in locations:
         dat = grouped.loc[grouped.location == i]
         params = beta.fit(dat.proportion.values)
@@ -536,6 +537,16 @@ def summary(dbDir):
         beta_std = beta.std(params[0],params[1],params[2],params[3])
         beta_95ci = beta.interval(alpha = 0.95,a = params[0],b = params[1],loc = params[2],scale = params[3])
         beta_dict[i] = [beta_median,beta_std,beta_95ci[0],beta_95ci[1]]
+        
+    # now calculate whole project survival
+    whole = completion[['simulation','status','completion']].groupby(['simulation']).agg({'status':'sum','completion':'sum'}).reset_index().rename(columns = {'status':'p','completion':'n'})
+    whole ['proportion'] = whole.p / whole.n
+    params = beta.fit(whole.proportion.values)
+    beta_median = beta.median(params[0],params[1],params[2],params[3])
+    beta_std = beta.std(params[0],params[1],params[2],params[3])
+    beta_95ci = beta.interval(alpha = 0.95,a = params[0],b = params[1],loc = params[2],scale = params[3])
+    beta_dict['whole project'] = [beta_median,beta_std,beta_95ci[0],beta_95ci[1]]
+        
     beta_fit_df = pd.DataFrame.from_dict(beta_dict,orient = 'index',columns = ['mean','std','ll','ul'])
     del i, params
     #print (beta_dict)
