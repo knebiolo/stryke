@@ -15,7 +15,7 @@ import pandas as pd
 from scipy.stats import beta
 
 # read scenario worksheet
-wks_dir = r"J:\1871\134\Docs\Studies\Desktop Entrainment\HacketMills_STRYKE Run 4 - Final Run.xlsx"
+wks_dir = r"\\kleinschmidtusa.com\Condor\Jobs\455\108\Docs\Studies\Entrainment-Blade Strike\STRYKE_StevensCreek_sensitivity_v4.xlsx"
 scenarios = pd.read_excel(wks_dir,'Scenarios',header = 0,index_col = None)
 
 all_results = pd.DataFrame()
@@ -37,10 +37,15 @@ for row in scenarios.iterrows():
                   'RPM':float(row[1]['RPM']),
                   'D':float(row[1]['D']),
                   'Q':float(row[1]['Q']),
+                  'Q_per':float(row[1]['Q_per']),
                   'ada':float(row[1]['ada']),
                   'N':float(row[1]['N']),
-                  'Qopt':float(row[1]['Qopt']),
-                  '_lambda':float(row[1]['lambda'])}
+                  'iota':float(row[1]['iota']),
+                  'D1':float(row[1]['D1']),
+                  'D2':float(row[1]['D2']),
+                  'B':float(row[1]['B']),
+                  '_lambda':float(row[1]['_lambda'])} # use USFWS value of 0.2
+
 
     # build a survival dictionary
     surv_dict = {'bypass':float(row[1]['Bypass Survival']),
@@ -54,14 +59,14 @@ for row in scenarios.iterrows():
         population = np.random.normal(length,stdv,n)
 
         # simulate choice of route
-        route = np.random.choice(['bypass','spill','Kaplan'],n,p = p_list)
+        route = np.random.choice(['bypass','spill','Francis'],n,p = p_list)
 
         # simulate survival draws
         draw = np.random.uniform(0.,1.,n)
 
         # vectorize STRYKE survival function
         v_surv_rate = np.vectorize(stryke_v2.node_surv_rate)
-        rates = v_surv_rate(route,length,surv_dict,param_dict)
+        rates = v_surv_rate(population,route,surv_dict,param_dict)
 
         # calculate survival
         survival = np.where(draw > rates,0,1)
@@ -124,7 +129,7 @@ for row in scenarios.iterrows():
         spill_95ci = beta.interval(alpha = 0.95,a = spill_params[0],b = spill_params[1],loc = spill_params[2],scale = spill_params[3])
         beta_dict['%s_%s'%('spill',scen_num)] = [spill_median,spill_std,spill_95ci[0],spill_95ci[1]]
     # unit
-    unit = route_summ[route_summ.route == 'Kaplan']
+    unit = route_summ[route_summ.route == 'Francis']
     if len(unit) > 0:
         unit_params = beta.fit(unit.prob.values)
         unit_median = beta.median(unit_params[0],unit_params[1],unit_params[2],unit_params[3])
@@ -138,3 +143,5 @@ for row in scenarios.iterrows():
 beta_fit_df = pd.DataFrame.from_dict(beta_dict,orient = 'index',columns = ['mean','std','ll','ul'])
 with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
     beta_fit_df.to_excel(writer,sheet_name = 'summary')
+writer.close()
+
