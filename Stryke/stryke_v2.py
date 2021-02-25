@@ -193,7 +193,7 @@ def Pump(length, param_dict):
 
     return 1 - (p_strike * length)
 
-def node_surv_rate(route,length,surv_dict,param_dict):
+def node_surv_rate(length,route,surv_dict,param_dict):
     # if survival function is a priori
     if route == 'bypass':
         # get the a priori survival rate from the table in sqlite
@@ -205,22 +205,22 @@ def node_surv_rate(route,length,surv_dict,param_dict):
     # if survival is assessed at a Kaplan turbine:
     elif route == 'Kaplan':
         # calculate the probability of strike as a function of the length of the fish and turbine parameters
-        prob = Kaplan(length, param_dict)[0]
+        prob = Kaplan(length, param_dict)
 
     # if survival is assessed at a Propeller turbine:
     elif route == 'Propeller':
         # calculate the probability of strike as a function of the length of the fish and turbine parameters
-        prob = Propeller(length, param_dict)[0]
+        prob = Propeller(length, param_dict)
 
     # if survival is assessed at a Francis turbine:
     elif route == 'Francis':
         # calculate the probability of strike as a function of the length of the fish and turbine parameters
-        prob = Francis(length, param_dict)[0]
+        prob = Francis(length, param_dict)
 
     # if survival is assessed at a turbine in pump mode:
     elif route == 'Pump':
         # calculate the probability of strike as a function of the length of the fish and turbine parameters
-        prob = Pump(length, param_dict)[0]
+        prob = Pump(length, param_dict)
 
     return prob
 
