@@ -15,7 +15,7 @@ import pandas as pd
 from scipy.stats import beta
 
 # read scenario worksheet
-wks_dir = r"J:\1871\134\Docs\Studies\Desktop Entrainment\HacketMills_STRYKE Run 4 - Final Run.xlsx"
+wks_dir = r"J:\705\093\Docs\Studies\Desktop\Lowell Tannery 2021_Scen3_17.xlsx"
 scenarios = pd.read_excel(wks_dir,'Scenarios',header = 0,index_col = None)
 
 all_results = pd.DataFrame()
@@ -61,8 +61,8 @@ for row in scenarios.iterrows():
 
         # vectorize STRYKE survival function
         v_surv_rate = np.vectorize(stryke_v2.node_surv_rate)
-        rates = v_surv_rate(route,length,surv_dict,param_dict)
-
+        rates = v_surv_rate(population,route,surv_dict,param_dict)
+        
         # calculate survival
         survival = np.where(draw > rates,0,1)
 
