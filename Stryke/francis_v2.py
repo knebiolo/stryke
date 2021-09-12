@@ -15,7 +15,10 @@ import pandas as pd
 from scipy.stats import beta
 
 # read scenario worksheet
-wks_dir = r"\\kleinschmidtusa.com\Condor\Jobs\455\108\Docs\Studies\Entrainment-Blade Strike\STRYKE_StevensCreek_sensitivity_v4.xlsx"
+ws = r'J:\012\217\Calcs\Entrainment'
+wks = 'KelleysFalls_lambda_sensitivity_v2.xlsx'
+
+wks_dir = os.path.join(ws,'Data',wks)
 scenarios = pd.read_excel(wks_dir,'Scenarios',header = 0,index_col = None)
 
 all_results = pd.DataFrame()
@@ -85,10 +88,9 @@ for row in scenarios.iterrows():
         all_results = all_results.append(iteration)
 
     # write scenario results to spreadsheet
-    with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
-        scen_results.to_excel(writer,sheet_name = '%s %s'%(species,flow_scen))
-
-    # summarize scenario - whole project
+    # with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
+    #     scen_results.to_excel(writer,sheet_name = '%s %s'%(species,flow_scen))
+    scen_results.to_csv(os.path.join(ws,"Output","scen_%s.csv"%(scen_num)))    # summarize scenario - whole project
     whole_proj_succ = scen_results.groupby(by = 'iteration').survival.sum().to_frame().reset_index(drop = False).rename(columns = {'survival':'successes'})
     whole_proj_count = scen_results.groupby(by = 'iteration').survival.count().to_frame().reset_index(drop = False).rename(columns = {'survival':'count'})
 
@@ -143,5 +145,5 @@ for row in scenarios.iterrows():
 beta_fit_df = pd.DataFrame.from_dict(beta_dict,orient = 'index',columns = ['mean','std','ll','ul'])
 with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
     beta_fit_df.to_excel(writer,sheet_name = 'summary')
-writer.close()
+#writer.close()
 
