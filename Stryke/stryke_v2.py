@@ -224,7 +224,51 @@ def node_surv_rate(length,route,surv_dict,param_dict):
 
     return prob
 
+def move_rates(location, status, graph, transition_prob):
+    '''we move between nodes after applying the survival function.  movement 
+    is a random choice between available nodes and edge weight'''
+    
+    if self.status == 1:
+        # get neighbors
+        neighbors = self.route[self.location]
 
+        if len(neighbors) > 0:
+            u_prob = 0
+            l_prob = 0
+            move_prob_dict = {}
+            
+            ''' we need to apportion our movement probabilities by edge weights
+            iterate through neighbors and assign them ranges 0 - 1.0 based on 
+            movement weights - (]'''
+
+            for i in neighbors:
+                u_prob = self.route[self.location][i]['weight'] + l_prob
+                move_prob_dict[i] = (l_prob,u_prob)
+                print ("If roll of dice is between %s and %s, fish will move to the %s"%(l_prob,u_prob,i))
+                l_prob = u_prob
+            del i
+            
+            # role the dice of movement (arguably, this is not as catchy)
+            dice = np.random.uniform(0.00,1.00,1)
+            print ("Random draw: %s"%(dice))
+            for i in move_prob_dict:
+                # if the dice role is between movement thresholds for the this neighbor...
+                if dice >= move_prob_dict[i][0] and dice < move_prob_dict[i][1]:
+                    self.location = i
+                    print ("Fish moved to %s"%(i))                      
+        else:
+            print ("Fish survived passage through project <0>>>><")
+            self.complete = 1
+            conn = sqlite3.connect(self.dbDir, timeout=30.0)
+            c = conn.cursor()  
+            c.execute('''CREATE TABLE IF NOT EXISTS tblCompletion(simulation INTEGER, 
+                                                               fish INTEGER,
+                                                               status INTEGER,
+                                                               completion INTEGER)''')
+            conn.commit()
+            c.execute("INSERT INTO tblCompletion VALUES(%s,%s,%s,%s);"%(self.simulation,self.fish,self.status,self.complete))
+            conn.commit()
+            c.close()     
 
 def summary(dbDir):
     '''create a function to summarize the Monte Carlo simulation.

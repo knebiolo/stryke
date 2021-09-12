@@ -15,14 +15,17 @@ import pandas as pd
 from scipy.stats import beta
 
 # read scenario worksheet
-wks_dir = r"J:\705\093\Docs\Studies\Desktop\Lowell Tannery 2021_Scen3_17.xlsx"
+ws = r'J:\1871\134\Calcs\Desktop Entrainment'
+wks = 'Hacket_UncertaintyLambdaCal_v2.xlsx'
+
+wks_dir = os.path.join(ws,'Data',wks)
 scenarios = pd.read_excel(wks_dir,'Scenarios',header = 0,index_col = None)
 
 all_results = pd.DataFrame()
 beta_dict = {}
 for row in scenarios.iterrows():
     # extract the number of fish, their length,  and stdv from row
-    n = row[1]['Fish']
+    n = np.int(row[1]['Fish'])
     length = row[1]['Length']/12.
     stdv = row[1]['StDev']/12.
     species = row[1]['Species']
@@ -50,39 +53,44 @@ for row in scenarios.iterrows():
 
     # create an iterator
     for i in np.arange(0,row[1]['Iterations'],1):
-        # create population of fish
-        population = np.random.normal(length,stdv,n)
-
-        # simulate choice of route
-        route = np.random.choice(['bypass','spill','Kaplan'],n,p = p_list)
-
-        # simulate survival draws
-        draw = np.random.uniform(0.,1.,n)
-
-        # vectorize STRYKE survival function
-        v_surv_rate = np.vectorize(stryke_v2.node_surv_rate)
-        rates = v_surv_rate(population,route,surv_dict,param_dict)
-        
-        # calculate survival
-        survival = np.where(draw > rates,0,1)
-
-        # build dataframe of this iterations results
         iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,n),
                                   'species':np.repeat(species,n),
                                   'flow_scenario':np.repeat(flow_scen,n),
-                                  'iteration':np.repeat(i,n),
-                                  'population':population,
-                                  'route':route,
-                                  'draw':draw,
-                                  'rates':rates,
-                                  'survival':survival,})
-        scen_results = scen_results.append(iteration)
-        all_results = all_results.append(iteration)
+                                  'iteration':np.repeat(i,n)})
+        for j in moves:
+            # create population of fish
+            population = np.random.normal(length,stdv,n)
+    
+            # simulate choice of route
+            route = np.random.choice(['bypass','spill','Kaplan'],n,p = p_list)
+    
+            # simulate survival draws
+            draw = np.random.uniform(0.,1.,n)
+    
+            # vectorize STRYKE survival function
+            v_surv_rate = np.vectorize(stryke_v2.node_surv_rate)
+            rates = v_surv_rate(population,route,surv_dict,param_dict)
+            
+            # calculate survival
+            survival = np.where(draw > rates,0,1)
+    
+            # build dataframe of this iterations results
+            iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,n),
+                                      'species':np.repeat(species,n),
+                                      'flow_scenario':np.repeat(flow_scen,n),
+                                      'iteration':np.repeat(i,n),
+                                      'population':population,
+                                      'route':route,
+                                      'draw':draw,
+                                      'rates':rates,
+                                      'survival':survival,})
+            scen_results = scen_results.append(iteration)
+            all_results = all_results.append(iteration)
 
     # write scenario results to spreadsheet
-    with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
-        scen_results.to_excel(writer,sheet_name = '%s %s'%(species,flow_scen))
-
+    # with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
+    #     scen_results.to_excel(writer,sheet_name = '%s %s'%(species,flow_scen))
+    scen_results.to_csv(os.path.join(ws,"Output","scen_%s.csv"%(scen_num)))
     # summarize scenario - whole project
     whole_proj_succ = scen_results.groupby(by = 'iteration').survival.sum().to_frame().reset_index(drop = False).rename(columns = {'survival':'successes'})
     whole_proj_count = scen_results.groupby(by = 'iteration').survival.count().to_frame().reset_index(drop = False).rename(columns = {'survival':'count'})
