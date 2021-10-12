@@ -1,0 +1,138 @@
+Species,Family,Common,FeedingGuild,Habitat,WaterType,Host,Migrant
+Acipenser fulvescens,Acipenseridae,Lake sturgeon,IN,Ben,BW,null,Spring
+Alosa aestivalis,Clupeidae,Blueback herring,FF,Pel,Either,null,Spring
+Alosa pseudoharengus,Clupeidae,Alewife,FF,Pel,Either,null,Spring
+Ambloplites rupestris,Centrarchidae,Rock bass,CA,Lit,either,Yes,null
+Ameiurus brunneus,Ictaluridae,Snail bullhead,GE,Ben,either,null,null
+Ameiurus catus,Ictaluridae,White catfish,GE,Ben,either,null,null
+Ameiurus melas,Ictaluridae,Black bullhead,GE,Ben,either,Yes,null
+Ameiurus natalis,Ictaluridae,Yellow bullhead,GE,Ben,either,Yes,null
+Ameiurus nebulosus,Ictaluridae,Brown bullhead,GE,Ben,either,Yes,null
+Ameiurus platycephalus,Ictaluridae,Flat bullhead,GE,Ben,either,null,null
+Amia calva,Amiidae,Bowfin,CA,Pel,Either,Yes,null
+Ammocrypta clara,Percidae,Western sand darter,IN,BFS,Either,Yes,null
+Anguilla rostrata,Anguillidae,American eel,CA,Ben,Either,Yes,Spring-Summer
+Aplodinotus grunniens,Sciaenidae,Freshwater drum,CA,Ben,Either,Yes,null
+Campostoma anomalum,Cyprinidae,Central stoneroller,HE,RRP,SS,Yes,null
+Carassius auratus,Cyprinidae,Goldfish,GE,Pool,Either,Yes (introduced fish),null
+Carpiodes carpio,Catostomidae,River carpsucker,IN,Ben,either,null,Spring
+Carpiodes cyprinus,Catostomidae,Quillback,IN,Ben,either,null,Spring
+Catostomus catostomus,Catostomidae,Longnose sucker,IN,Ben,either,null,Spring
+Catostomus commersonii,Catostomidae,White sucker,IN,Ben,either,Yes,Spring
+Centrarchid spp.,Centrarchidae,Unid. Centrarchidae,unknown,Lit,either,null,null
+Catostomus spp.,Catostomidae,Unid. Catostomidae,IN,Ben,unknown,null,Spring
+Chrosomus eos,Cyprinidae,Northern redbelly dace,IC,RRP,Either,Yes,null
+Chrosomus neogaeus,Cyprinidae,Finescale dace,IC,Pool,Either,null,null
+Coregonus artedi,Salmonidae,Cisco,FF,Pel,BW,null,Fall
+Coregonus clupeaformis,Salmonidae,Lake whitefish,FF,Pel,BW,null,Fall
+Cottus bairdii,Cottidae,Mottled sculpin,CA,BFS,SS,Yes,null
+Cottus cognatus,Cottidae,Slimy sculpin,CA,BFS,Either,Yes,null
+Couesius plumbeus,Cyprinidae,Lake chub,GE,Pool,Either,null,null
+Culaea inconstans,Gasterosteidae,Brook stickleback,IN,Lit,SS,Yes,null
+Exoglossum maxillingua,Cyprinidae,Cutlips minnow,IC,RP,SS,null,null
+Cyprinella labrosa,Cyprinidae,Thicklip chub,IC,FS,Either,null,null
+Cyprinella nivea,Cyprinidae,Whitefin shiner,IC,RRP,Either,null,null
+Cyprinella pyrrhomelas,Cyprinidae,Fieryblack shiner,IC,RRP,Either,null,null
+Cyprinella spiloptera,Cyprinidae,Spottail shiner,IC,Pool,Either,Yes,null
+Cyprinus carpio,Cyprinidae,Common carp,GE,Ben,Either,Yes,null
+Cyprinus spp.,Cyprinidae,Unid. Cyprinidae,unknown,unknown,unknown,null,null
+Dorosoma cepedianum,Clupeidae,Gizzard shad,FF,Pel,Either,Yes,Fall
+Dorosoma petenense,Clupeidae,Threadfin shad,FF,Pel,Either,null,Fall
+Erimyzon oblongus,Catostomidae,Creek chubsucker,IN,Ben,either,null,Spring
+Esox lucius,Esocidae,Northern pike,CA,Lit,Either,Yes,null
+Esox masquinongy,Esocidae,Muskellunge,CA,Lit,Either,null,null
+Esox masquinongy × lucius,Esocidae,Tiger muskellunge,CA,Lit,Either,null,null
+Esox niger,Esocidae,Chain pickerel,CA,Lit,Either,null,null
+Etheostoma blennioides,Percidae,Greenside darter,IN,BFS,SS,Yes,null
+Etheostoma caeruleum,Percidae,Rainbow darter,IN,BFS,Either,Yes,null
+Etheostoma exile,Percidae,Iowa darter,IN,BFS,Either,Yes,null
+Etheostoma flabellare,Percidae,Fantail darter,IN,BFS,SS,Yes,null
+Etheostoma microperca,Percidae,Least darter,IN,BFS,Either,null,null
+Etheostoma nigrum,Percidae,Johnny darter,IN,BFS,Either,Yes,null
+Etheostoma olmstedi,Percidae,Tessellated darter,IN,BFS,Either,null,null
+Etheostoma thalassinum,Percidae,Seagreen darter,IN,BFS,Either,null,null
+Etheostoma zonale,Percidae,Banded darter,IN,BFS,SS,Yes,null
+Fundulus diaphanus,Fundulidae,Banded killifish,IN,Lit,either,Yes,null
+Hiodon tergisus,Hiodontidae,Mooneye,IN,FS,BW,Yes,Spring
+Hybognathus hankinsoni,Cyprinidae,Brassy minnow,HE,Pool,Either,Yes,null
+Hybognathus regius,Cyprinidae,Eastern silvery minnow,IC,Pool,Either,Yes,null
+Hypentelium nigricans,Catostomidae,Northern hog sucker,IN,Ben,either,Yes,Spring
+Ichthyomyzon castaneus,Petromyzontiformes,Chestnut lamprey,PR,Ben,Either,null,Spring
+Ichthyomyzon fossor,Petromyzontiformes,Northern brook lamprey,HE,FS,SS,null,Spring
+Ichthyomyzon unicuspis,Petromyzontiformes,Silver lamprey,PR,Ben,Either,null,Spring
+Ictalurus punctatus,Ictaluridae,Channel catfish,GE,Ben,either,Yes,null
+Ictiobus bubalus,Catostomidae,Smallmouth buffalo,IN,Ben,either,null,Spring
+Labidesthes sicculus,Atherinopsidae,Brook silverside,IN,Pel,either,Yes,null
+Lampetra planeri,Petromyzontiformes,Brook lamprey,HE,FS,SS,null,Spring
+Lepisosteus osseus,Lepisosteidae,Longnose gar,CA,Pel,Either,Yes,null
+Lepomis auritus,Centrarchidae,Redbreast sunfish,IN,Lit,either,Yes (to introduced mussels),null
+Lepomis cyanellus,Centrarchidae,Green sunfish,GE,Lit,either,Yes,null
+Lepomis gibbosus,Centrarchidae,Pumpkinseed,IN,Lit,either,Yes,null
+Lepomis gulosus,Centrarchidae,Warmouth,CA,Lit,either,Yes,null
+Lepomis megalotis,Centrarchidae,Longear sunfish,IN,Lit,either,Yes,null
+Lepomis microlophus,Centrarchidae,Redear sunfish,IN,Lit,either,null,null
+Lepomis macrochirus,Centrarchidae,Bluegill,IN,Lit,either,Yes,null
+Lethenteron appendix,Petromyzontiformes,American brook lamprey,HE,FS,SS,null,Spring
+Lota lota,Lotidae,Burbot,OM,Ben,either,null,Fall-Winter
+Luxilus cornutus,Cyprinidae,Common shiner,GE,Pool,Either,Yes,null
+Margariscus nachtriebi,Cyprinidae,Pearl dace,IC,Pool,SS,Yes,null
+Micropterus coosae,Centrarchidae,Redeye bass,CA,Lit,either,null,null
+Micropterus dolomieu,Centrarchidae,Smallmouth bass,CA,Lit,either,Yes,Spring-Summer
+Micropterus punctulatus,Centrarchidae,Spotted bass,CA,Lit,either,Yes,null
+Micropterus salmoides,Centrarchidae,Largemouth bass,CA,Lit,either,Yes,null
+Minytrema melanops,Catostomidae,Spotted sucker,IN,Ben,either,null,Spring
+Morone americana,Moronidae,White perch,OM,Pel,either,Yes (to introduced mussels),Spring
+Morone chrysops,Moronidae,White bass,CA,Pel,either,Yes,Winter
+Morone saxatilis,Moronidae,Striped bass,CA,Pel,either,null,Spring
+Morone saxatilis x chrysops,Moronidae,Hybrid bass,CA,Pel,either,null,Spring
+Moxostoma anisurum,Catostomidae,Silver redhorse,IN,Ben,either,null,Spring
+Moxostoma anisurum,Catostomidae,Silver redhorse,IN,Ben,either,null,Spring
+Moxostoma carinatum,Catostomidae,River redhorse,IN,Ben,either,Yes,Spring
+Moxostoma duquesni,Catostomidae,Black redhorse,IN,Ben,either,Yes,Spring
+Moxostoma erythrurum,Catostomidae,Golden redhorse,IN,Ben,either,Yes,Spring
+Moxostoma macrolepidotum,Catostomidae,Shorthead redhorse,IN,Ben,either,null,Spring
+Moxostoma robustum,Catostomidae,Smallfin redhorse,IN,Ben,either,null,Spring
+Moxostoma rupiscartes,Catostomidae,Striped jumprock,IN,Ben,either,null,Spring
+Nocomis biguttatus,Cyprinidae,Hornyhead chub,OM,RRP,SS,Yes,null
+Nocomis leptocephalus,Cyprinidae,Bluehead chub,OM,RRP,SS,null,null
+Nocomis micropogon,Cyprinidae,River chub,OM,RRP,Either,Yes,null
+Notemigonus crysoleucas,Cyprinidae,Golden shiner,GE,Pool,Either,Yes,null
+Notropis atherinoides,Cyprinidae,Emerald shiner,IC,RRP,Either,Yes,null
+Notropis bifrenatus,Cyprinidae,Bridle shiner,HE,Pool,Either,null,null
+Notropis blennius,Cyprinidae,River shiner,IC,Pool,Either,Yes,null
+Notropis heterodon,Cyprinidae,Blackchin shiner,IC,Pool,Either,Yes,null
+Notropis heterolepis,Cyprinidae,Blacknose shiner,IC,Pool,Either,Yes,null
+Notropis photogenis,Cyprinidae,Silver shiner,IC,RRP,Either,Yes,null
+Notropis rubellus,Cyprinidae,Rosyface shiner,IC,RRP,Either,Yes,null
+Notropis scepticus,Cyprinidae,Satinfin shiner,IC,RRP,SS,Yes,null
+Notropis stramineus,Cyprinidae,Sand shiner,IC,Pool,Either,Yes,null
+Notropis texanus,Cyprinidae,Weed shiner,IC,Pool,Either,null,null
+Notropis volucellus,Cyprinidae,Mimic shiner,IC,RRP,Either,Yes,null
+Noturus flavus,Ictaluridae,Stonecat,IN,BFS,either,null,null
+Noturus gyrinus,Ictaluridae,Tadpole madtom,IN,BFS,either,null,null
+Noturus insignis,Ictaluridae,Margined madtom,IN,BFS,either,null,null
+Oncorhynchus mykiss,Salmonidae,Rainbow trout,CA,FS,Either,null,Fall
+Oncorhynchus mykiss,Salmonidae,Rainbow trout,CA,FS,Either,null,Fall
+Oncorhynchus tshawytscha,Salmonidae,Chinook salmon,CA,FS,Either,null,Summer-Fall
+Opsopoeodus emiliae,Cyprinidae,Pugnose minnow,IC,Pool,Either,null,null
+Osmerus mordax,Osmeridae,Rainbow smelt,OM,Pel,Either,null,Spring
+Perca flavescens,Percidae,Yellow perch,CA,Lit,either,Yes,null
+Percina caprodes,Percidae,Logperch,IN,BFS,Either,Yes,null
+Percina crassa,Percidae,Piedmont darter,IN,BFS,SS,null,null
+Percina maculata,Percidae,Blackside darter,IN,BFS,SS,Yes,null
+Percopsis omiscomaycus,Percopsidae,Trout-perch,IN,BFS,either,null,Spring-Summer
+Petromyzon marinus,Petromyzontiformes,Sea lamprey,PR,Ben,Either,null,Spring/Fall
+Pimephales notatus,Cyprinidae,Bluntnose minnow,OM,RRP,Either,Yes,null
+Pimephales promelas,Cyprinidae,Fathead minnow,IC,Pool,Either,Yes,null
+Pomoxis annularis,Centrarchidae,White crappie,CA,Lit,either,Yes,null
+Pomoxis nigromaculatus,Centrarchidae,Black crappie,CA,Lit,either,Yes,null
+Pylodictis olivaris,Ictaluridae,Flathead catfish,GE,Ben,either,Yes,null
+Rhinichthys atratulus,Cyprinidae,Blacknose dace,IC,RRP,SS,Yes,null
+Rhinichthys cataractae,Cyprinidae,Longnose dace,IC,FS,SS,Yes,null
+Salmo salar,Salmonidae,Atlantic salmon,CA,FS,Either,null,Spring
+Salmo trutta,Salmonidae,Brown trout,CA,FS,Either,null,Fall
+Sander canadensis,Percidae,Sauger,CA,Ben,BW,Yes,Spring
+Sander vitreus,Percidae,Walleye,CA,Ben,BW,null,Spring
+Semotilus atromaculatus,Cyprinidae,Creek chub,GE,Pool,SS,Yes,null
+Semotilus corporalis,Cyprinidae,Fallfish,GE,RP,Either,null,null
+Umbra limi,Umbridae,Central mudminnow,OM,Lit,Either,null,null
