@@ -8,5 +8,5 @@ recent_files = ['Stryke\\hydrology.py', 'Stryke\\stryke_v3.py']
 
 [main]
 version = 0.2.0
-recent_files = ['J:\\4287\\002\\Calcs\\Program\\stryke\\Stryke\\stryke_v3.py', 'Stryke\\hydrology.py', 'J:\\4287\\002\\Calcs\\Program\\stryke\\Stryke\\epri_database.py', 'Stryke\\kaplan_v3.py', 'J:\\1210\\005\\Calcs\\Studies\\3_3_19\\2018\\Program\\time to event data prep Trial Type Hearing Prep.py', 'J:\\1210\\005\\Calcs\\Studies\\3_3_19\\Program\\time_to_event_data_prep_trial_prep.py']
+recent_files = ['Stryke\\stryke_v3.py', 'Stryke\\hydrology.py', 'Stryke\\kaplan_v3.py', 'Stryke\\stryke.py', 'Stryke\\upper_barker.py', 'Stryke\\epri_database.py']
 

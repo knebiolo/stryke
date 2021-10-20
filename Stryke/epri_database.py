@@ -14,7 +14,7 @@ from scipy.stats import pareto, lognorm, genpareto, ks_2samp
 
 
 # connect to data pass simple filter to EPRI class
-fish = stryke.epri(Feeding_Guild = 'IC', Habitat = 'Pool', Month = [6,7,8])
+fish = stryke.epri(Family = 'Clupeidae', Feeding_Guild = 'FF', Habitat = 'Pel', Month = [3,4,5])
 fish.ParetoFit()
 
 # get a sample
