@@ -15,12 +15,12 @@ from scipy.stats import pareto
 
 
 # read scenario worksheet
-ws = r'E:\Rye_Entrainment_4287001\stryke\Data'
-wks = 'Rye_Stryke_Charleroi_test.xlsx'
+ws = r'E:\Rye_Entrainment_4287001\Entrainment\Data'
+wks = 'Rye_Stryke_Allegheny.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke_v3.simulation(ws,wks, output_name = 'charleroi')
+simulation = stryke_v3.simulation(ws,wks, output_name = 'allegheny')
 
 simulation.run()
 simulation.summary()
