@@ -40,10 +40,11 @@ import hydrofunctions as hf
 import geopandas as gp
 import statsmodels.api as sm
 import math
-from scipy.stats import genpareto, pareto, lognorm, gamma
+from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min
 import h5py
 import tables
-
+from numpy.random import default_rng
+rng = default_rng()
 
 
 def Kaplan(length, param_dict):
@@ -74,7 +75,7 @@ def Kaplan(length, param_dict):
     a_a = np.arctan((np.pi * ada * Ewd)/(2 * Qwd * rR)) #IPD: np.arctan returns answer in radians
     
     # probability of strike * length of fish
-    p_strike = _lambda * (N * length / D) * (np.cos(a_a)/(8 * Qwd) + np.sin(a_a)/(np.pi * rR)) # IPD: conversion to radians is redundant and incorrect ~ corrected 2/5/20
+    p_strike = _lambda * (N * length / D) * ((np.cos(a_a)/(8 * Qwd)) + np.sin(a_a)/(np.pi * rR)) # IPD: conversion to radians is redundant and incorrect ~ corrected 2/5/20
     # need to take cosine and sine of angle alpha a (a_a)
 
     return 1 - (p_strike)
@@ -437,9 +438,12 @@ class simulation():
                             loc = spc_dat.param2.values[0]
                             scale = spc_dat.param3.values[0]
                             if spc_dat.dist.values[0] == 'pareto':
-                                ent_rate = pareto.rvs(shape,loc,scale,1)
+                                ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
+                            elif spc_dat.dist.values[0] == 'extreme':
+                                ent_rate = genextreme.rvs(shape, loc, scale, 1, random_state=rng)
                             else:
-                                ent_rate = genpareto.rvs(shape,loc,scale,1)
+                                ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
+
                         
                         print ("Entrainment rate of %s %s during %s simulated"%(round(ent_rate[0],4),spc,scen))
                         
@@ -478,10 +482,10 @@ class simulation():
                         print ("Resulting in an entrainment event of %s %s"%(n,spc))
                         
                         # create population of fish - IN CM!!!!!
-                        population = np.abs(lognorm.rvs(s,len_loc,len_scale,np.int(n)))
+                        population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
                         
                         # convert lengths in cm to feet
-                        population = population * 0.0328084 
+                        population = population * 0.393701 / 12 
                         
                         
                         print ("created population for %s iteration:%s day: %s"%(species,i,j))
@@ -599,8 +603,9 @@ class simulation():
         summary['iteration'] = []
         summary['day'] = []
         summary['pop_size'] = []
-        summary['length_mean'] = []
-        summary['length_sd'] = []
+        summary['length_median'] = []
+        summary['length_min'] = []
+        summary['length_max'] = []
         for u in units:
             summary['num_entrained_%s'%(u)] = []
             summary['num_killed_%s'%(u)] = []
@@ -627,8 +632,10 @@ class simulation():
                         summary['iteration'].append(k)
                         summary['day'].append(d)
                         summary['pop_size'].append(day_dat.population.count())
-                        summary['length_mean'].append(day_dat.population.mean())
-                        summary['length_sd'].append(day_dat.population.std())
+                        summary['length_median'].append(day_dat.population.median())
+                        summary['length_min'].append(day_dat.population.min())
+                        summary['length_max'].append(day_dat.population.max())
+
                                            
                         # figure out number entrained and number suvived
                         counts = day_dat.groupby(by = ['state_2'])['survival_2']\
@@ -1010,20 +1017,38 @@ class epri():
         the species of interest'''
 
         # fit a pareto and write to the object
-        self.ent_dist = pareto.fit(self.epri.FishPerMft3.values)
-        self.ent_dist2 = gamma.fit(self.epri.FishPerMft3.values)
-        self.ent_dist3 = genpareto.fit(self.epri.FishPerMft3.values)
-        print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.ent_dist[0],4),
-                                                                                                      round(self.ent_dist[1],4),
-                                                                                                      round(self.ent_dist[2],4)))
+        self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values)
+
+        print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
+                                                                                                      round(self.dist_pareto[1],4),
+                                                                                                      round(self.dist_pareto[2],4)))
         print ("%s percent of the entrainment events had 80 percent of the total entrainment impact"%(round(pareto.cdf(0.8,
-                                                                                                                       self.ent_dist[0],
-                                                                                                                       self.ent_dist[1],
-                                                                                                                       self.ent_dist[2]),2)))
-        print ("The Generalized Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.ent_dist3[0],4),
-                                                                                                                  round(self.ent_dist3[1],4),
-                                                                                                                  round(self.ent_dist3[2],4)))
-        
+                                                                                                                       self.dist_pareto[0],
+                                                                                                                       self.dist_pareto[1],
+                                                                                                                       self.dist_pareto[2]),2)))
+    def ExtremeFit(self):
+        ''' Function fits a generic extreme value distribution to the epri dataset relating to 
+        the species of interest'''
+
+        # fit a pareto and write to the object
+        self.dist_extreme = genextreme.fit(self.epri.FishPerMft3.values)
+
+        print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
+                                                                                                      round(self.dist_extreme[1],4),
+                                                                                                      round(self.dist_extreme[2],4)))
+
+    def WeibullMinFit(self):
+       ''' Function fits a Frechet distribution to the epri dataset relating to 
+       the species of interest'''
+
+       # fit a pareto and write to the object
+       self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values)
+
+       print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
+                                                                                                     round(self.dist_weibull[1],4),
+                                                                                                     round(self.dist_weibull[2],4)))
+
+
     def LengthSummary(self):
         '''Function summarizes length for species of interest using EPRI database'''
         

@@ -10,34 +10,57 @@ Script Intent: Work with EPRI entrainment database, filter and fit Pareto
 # import moduels
 import stryke_v3 as stryke
 import matplotlib.pyplot as plt
-from scipy.stats import pareto, lognorm, genpareto, ks_2samp
+from scipy.stats import pareto, lognorm, genextreme, ks_2samp, weibull_min
+import os
+from matplotlib import rcParams
 
+
+font = {'family': 'serif','size': 10}
+rcParams['font.size'] = 6
+rcParams['font.family'] = 'serif'
 
 # connect to data pass simple filter to EPRI class
-fish = stryke.epri(Family = 'Clupeidae', Feeding_Guild = 'FF', Habitat = 'Pel', Month = [3,4,5])
+fish = stryke.epri(Feeding_Guild = 'CA', Habitat = 'Ben', Month = [9,10,11])
 fish.ParetoFit()
+fish.ExtremeFit()
+fish.WeibullMinFit()
 
 # get a sample
-pareto_sample = pareto.rvs(fish.ent_dist[0],fish.ent_dist[1],fish.ent_dist[2],len(fish.epri))
-plt.hist(pareto_sample,color = 'r')
+pareto_sample = pareto.rvs(fish.dist_pareto[0],fish.dist_pareto[1],fish.dist_pareto[2],1000)
+genextreme_sample = genextreme.rvs(fish.dist_extreme[0],fish.dist_extreme[1],fish.dist_extreme[2],1000)
+weibull_sample = weibull_min.rvs(fish.dist_weibull[0],fish.dist_weibull[1],fish.dist_weibull[2],1000)
 
-genpareto_sample = genpareto.rvs(fish.ent_dist3[0],fish.ent_dist3[1],fish.ent_dist3[2],len(fish.epri))
-plt.hist(genpareto_sample,color = 'g')
-
-# plot the original data for comparison
-
+# get our observations
 observations = fish.epri.FishPerMft3.values
-plt.hist(observations,color = 'b')
 
-# KS test
+# KS test comnpare distribution with observations are they from the same distribution?
 t1 = ks_2samp(observations,pareto_sample,alternative = 'two-sided')
-print (t1)
-t2 = ks_2samp(observations,genpareto_sample,alternative = 'two-sided')
-print (t2)
+t2 = ks_2samp(observations,genextreme_sample,alternative = 'two-sided')
+t3 = ks_2samp(observations,weibull_sample,alternative = 'two-sided')
+
+# make a figure
+figSize = (4,4)
+plt.figure()
+fig, axs = plt.subplots(2,2,tight_layout = True,figsize = figSize)
+axs[0,0].hist(observations, color='darkorange', density = True) 
+axs[0,0].set_title('Observations')                  
+axs[0,0].set_xlabel('org per Mft3')
+axs[0,1].hist(pareto_sample, color='blue',lw=2, density = True)   
+axs[0,1].set_title('Pareto p = %s'%(round(t1[1],4)))                    
+axs[0,1].set_xlabel('org per Mft3')
+axs[1,0].hist(genextreme_sample, color='blue',lw=2, density = True)                   
+axs[1,0].set_title('Extreme Value p = %s'%(round(t2[1],4)))
+axs[1,0].set_xlabel('org per Mft3')
+axs[1,1].hist(weibull_sample, color='darkorange',lw=2, density = True)                   
+axs[1,1].set_title('Weibull p = %s'%(round(t3[1],4)))
+axs[1,1].set_xlabel('org per Mft3')
+
+#plt.savefig(os.path.join(r"J:\4287\001\Calcs\Entrainment\Output",'yellow_perch_sample.png'), dpi = 700)
+plt.show()
 
 # # ok, now do lengths
 #fish = stryke.epri(Species = 'Ictalurus punctatus')
 fish.LengthSummary()
 
-plt.hist(fish.lengths,color = 'r')
-plt.hist(lognorm.rvs(fish.len_dist[0],fish.len_dist[1],fish.len_dist[2],len(fish.lengths)),color = 'b')
+#plt.hist(fish.lengths,color = 'r')
+#plt.hist(lognorm.rvs(fish.len_dist[0],fish.len_dist[1],fish.len_dist[2],len(fish.lengths)),color = 'b')
