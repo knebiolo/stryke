@@ -20,7 +20,7 @@ rcParams['font.size'] = 6
 rcParams['font.family'] = 'serif'
 
 # connect to data pass simple filter to EPRI class
-fish = stryke.epri(Feeding_Guild = 'CA', Habitat = 'Ben', Month = [9,10,11])
+fish = stryke.epri(Feeding_Guild = 'FF', Habitat = 'Pel', Month = [12,1,2])
 fish.ParetoFit()
 fish.ExtremeFit()
 fish.WeibullMinFit()
