@@ -15,12 +15,12 @@ from scipy.stats import pareto
 
 
 # read scenario worksheet
-ws = r'E:\Rye_Entrainment_4287001\Entrainment\Data'
-wks = 'Rye_Stryke_Allegheny.xlsx'
+ws = r'J:\4287\001\Calcs\Entrainment\Data'
+wks = 'Rye_Stryke_Montgomery.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke_v3.simulation(ws,wks, output_name = 'allegheny')
+simulation = stryke_v3.simulation(ws,wks, output_name = 'montgomery')
 
 simulation.run()
 simulation.summary()
@@ -37,8 +37,8 @@ with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
 
 # fig, ax = plt.subplots()
 # ax.plot(unit_1.species.values,unit_1.est.values)
-# ax.fill_between(unit_1.species.values, 
+# ax.fill_between(unit_1.species.values,
 #                 unit_1.ll.values,
-#                 unit_1.ul.values, 
+#                 unit_1.ul.values,
 #                 color='b', alpha=.1)
 # plt.show()
