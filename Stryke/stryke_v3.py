@@ -50,7 +50,7 @@ rng = default_rng()
 def Kaplan(length, param_dict):
     '''Franke et al. TBS for Kaplan turbines.
     Inputs are length of fish and dictionary of turbine parameters'''
-    
+
     # either sample parameters from statistical distributions, use a priori measures or extract from parameter dictionary
     g = 32.2
     H = param_dict['H']
@@ -69,11 +69,11 @@ def Kaplan(length, param_dict):
     omega = RPM * ((2 * np.pi)/60)
     Ewd = (g * H) / (omega * D)**2
     Qwd = Q/ (omega * D**3)
-    
+
     # part 2 - calculate angle of absolute flow to the axis of rotation
 
     a_a = np.arctan((np.pi * ada * Ewd)/(2 * Qwd * rR)) #IPD: np.arctan returns answer in radians
-    
+
     # probability of strike * length of fish
     p_strike = _lambda * (N * length / D) * ((np.cos(a_a)/(8 * Qwd)) + np.sin(a_a)/(np.pi * rR)) # IPD: conversion to radians is redundant and incorrect ~ corrected 2/5/20
     # need to take cosine and sine of angle alpha a (a_a)
@@ -179,7 +179,7 @@ def Pump(length, param_dict):
     return 1 - (p_strike * length)
 
 def node_surv_rate(length,status,surv_fun,route,surv_dict,u_param_dict):
-   
+
     if status == 0:
         return 0.0
     else:
@@ -192,17 +192,17 @@ def node_surv_rate(length,status,surv_fun,route,surv_dict,u_param_dict):
             if surv_fun == 'Kaplan':
                 # calculate the probability of strike as a function of the length of the fish and turbine parameters
                 prob = Kaplan(length, param_dict)
-    
+
             # if survival is assessed at a Propeller turbine:
             elif surv_fun == 'Propeller':
                 # calculate the probability of strike as a function of the length of the fish and turbine parameters
                 prob = Propeller(length, param_dict)
-    
+
             # if survival is assessed at a Francis turbine:
             elif surv_fun == 'Francis':
                 # calculate the probability of strike as a function of the length of the fish and turbine parameters
                 prob = Francis(length, param_dict)
-    
+
             # if survival is assessed at a turbine in pump mode:
             elif surv_fun == 'Pump':
                 # calculate the probability of strike as a function of the length of the fish and turbine parameters
@@ -212,19 +212,19 @@ def node_surv_rate(length,status,surv_fun,route,surv_dict,u_param_dict):
 
 # create function that builds networkx graph object from nodes and edges in project database
 def create_route(wks_dir):
-    '''function creates a networkx graph object from information provided by 
+    '''function creates a networkx graph object from information provided by
     nodes and edges found in standard project database.  the only input
     is the standard project database.'''
-       
+
     nodes = pd.read_excel(wks_dir,'Nodes',header = 0,index_col = None, usecols = "B:C", skiprows = 9)
     edges = pd.read_excel(wks_dir,'Edges',header = 0,index_col = None, usecols = "B:D", skiprows = 8)
 
     # create empty route object
     route = nx.route = nx.DiGraph()
-    
+
     # add nodes to route - nodes.loc.values
     route.add_nodes_from(nodes.Location.values)
-    
+
     # create edges - iterate over edge rows to create edges
     weights = []
     for i in edges.iterrows():
@@ -233,7 +233,7 @@ def create_route(wks_dir):
         weight = i[1]['weight']
         route.add_edge(_from,_to,weight = weight)
         weights.append(weight)
-    
+
     # return finished product and enjoy functionality of networkx
     return route
 
@@ -241,57 +241,57 @@ def movement (location, status, graph):
     if status == 1:
         # get neighbors
         neighbors = graph[location]
-        
+
         ''' we need to apportion our movement probabilities by edge weights
-        iterate through neighbors and assign them ranges 0 - 1.0 based on 
+        iterate through neighbors and assign them ranges 0 - 1.0 based on
         movement weights - (]'''
-        
+
         locs = []
         probs = []
         for i in neighbors:
             if graph[location][i]['weight'] > 0.0:
                 locs.append(i)
                 probs.append(graph[location][i]['weight'])
-        #print (locs,probs)    
+        #print (locs,probs)
         new_loc = np.random.choice(locs,1,p = probs)[0]
     else:
         new_loc = location
-                    
+
     return new_loc
 
 class simulation():
-    ''' Python class object that initiates, runs, and holds data for a facility 
+    ''' Python class object that initiates, runs, and holds data for a facility
     specific simulation'''
-    
+
     def __init__ (self, proj_dir, wks, output_name):
         self.wks_dir = os.path.join(proj_dir,wks)
-        # extract scenarios from input spreadsheet    
+        # extract scenarios from input spreadsheet
         self.routing = pd.read_excel(self.wks_dir,'Routing',header = 0,index_col = None, usecols = "B:G", skiprows = 9)
-        
+
         # import nodes and create a survival function dictionary
         self.nodes = pd.read_excel(self.wks_dir,'Nodes',header = 0,index_col = None, usecols = "B:C", skiprows = 9)
         #print (nodes.head())
         self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
         self.surv_fun_dict = self.surv_fun_df.to_dict('index')
-        
+
         # get last river node
         max_river_node = 0
         for i in self.nodes.Location.values:
             i_split = i.split("_")
             if len(i_split) > 1:
-                river_node = int(i_split[2])                            
+                river_node = int(i_split[2])
                 if river_node > max_river_node:
                     max_river_node = river_node
-                    
-        
+
+
         # make a movement graph from input spreadsheet
         self.graph = create_route(self.wks_dir)
         print ("created a graph")
-        
-        
+
+
         # identify the number of moves that a fish can make
         path_list = nx.all_shortest_paths(self.graph,'river_node_0','river_node_%s'%(max_river_node))
-    
+
         max_len = 0
         for i in path_list:
             path_len = len(i)
@@ -299,30 +299,30 @@ class simulation():
                 max_len = path_len
         self.moves = np.arange(0,max_len-1,1)
         print ("identified the number of moves, %s"%(self.moves))
-        
+
         # import unit parameters
         self.unit_params = pd.read_excel(self.wks_dir,'Unit Params', header = 0, index_col = None, usecols = "B:O", skiprows = 4)
-        
+
         # join unit parameters to scenarios
         self.scenario_dat = self.routing.join(self.unit_params, how = 'left', lsuffix = 'State', rsuffix = 'Unit')
-    
+
         # get hydraulic capacity of facility
         self.flow_cap = self.unit_params.Qcap.sum()
-    
+
         # identify unique flow scenarios
         self.scenarios_df = pd.read_excel(self.wks_dir,'Flow Scenarios',header = 0,index_col = None, usecols = "B:F", skiprows = 5)
         self.scenarios = self.scenarios_df['Scenario'].unique()
-        
+
         # import population data
         self.pop = pd.read_excel(self.wks_dir,'Population',header = 0,index_col = None, usecols = "B:Q", skiprows = 11)
-        
-        # create output HDF file 
+
+        # create output HDF file
         self.proj_dir = proj_dir
         self.output_name = output_name
-        
+
         # create hdf object with Pandas
         self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))
-        
+
         # write study set up data to hdf store
         self.hdf['Scenarios'] = self.scenarios_df
         self.hdf['Population'] = self.pop
@@ -334,59 +334,59 @@ class simulation():
     def run(self):
         # create some empty holders
         self.beta_dict = {}
-        
+
         str_size = dict()
         str_size['species'] = 30
         for i in self.moves:
             str_size['state_%s'%(i)] = 30
-            
-        
+
+
         for scen in self.scenarios:
             scen_num = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Scenario Number'].values[0]
             season = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Season'].values[0]
             months = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Months'].values[0]
             months = len(months.split(","))
             flow = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Flow'].values[0]
-            
+
             # identify the species we need to simulate for this scenario
             species = self.pop[self.pop['Season'] == season].Species.unique()
-            
+
             # for each species, perform the simulation for n individuals x times
             for spc in species:
                 # extract a single row based on season and species
                 spc_dat = self.pop[(self.pop['Season'] == season) & (self.pop.Species == spc)]
-                
+
                 # get scipy log normal distribution paramters - note values in centimeters
                 s = spc_dat.s.values[0]
                 len_loc = spc_dat.location.values[0]
                 len_scale = spc_dat.scale.values[0]
-                
+
                 # get species name
-                species = spc_dat.Species.values[0] 
-                
+                species = spc_dat.Species.values[0]
+
                 # get the number of times we are going to iterate this thing
                 iterations = spc_dat['Iterations'].values[0]
-                
+
                 # get scenario routing and node survival data for this species/flow scenario
                 sc_dat = self.scenario_dat[self.scenario_dat['Scenario'] == scen]
-                
+
                 # create empty holders for some dictionaries
                 u_param_dict = {}
                 surv_dict = {}
-                
+
                 # iterate through routing rows for this flow scenario
                 for row in sc_dat.iterrows():
-    
+
                     state = row[1]['State']
                     # create a unit parameter dictionary or add to the survival dictionary
                     if math.isnan(row[1]['lambda']) == False:
                         # get this unit's parameters
                         u_dat = self.unit_params[self.unit_params.Unit == state]
                         runner_type = u_dat['Runner Type'].values[0]
-                        
+
                         # create parameter dictionary for every unit, a dictionary in a dictionary
                         if runner_type == 'Kaplan':
-                            
+
                             # built a parameter dictionary for the kaplan function
                             param_dict = {'H':float(u_dat.H.values[0]),
                                           'RPM':float(u_dat.RPM.values[0]),
@@ -397,7 +397,7 @@ class simulation():
                                           'Qopt':float(u_dat.Qopt.values[0]),
                                           '_lambda':float(row[1]['lambda'])}
                             u_param_dict[state] = param_dict
-                            
+
                         elif runner_type == 'Propeller':
                             # built a parameter dictionary for the kaplan function
                             param_dict = {'H':float(row[1]['H']),
@@ -412,10 +412,10 @@ class simulation():
                             u_param_dict[state] = param_dict
                         #print (u_param_dict)
                         #fuck
-                        
+
                     else:
-                         surv_dict[state] = row[1]['Survival'] 
-                    
+                         surv_dict[state] = row[1]['Survival']
+
                     # alter the graph edge weigths with probability of movement into the node
                     for edge in self.graph.edges:
                         to_edge = edge[1]
@@ -424,14 +424,14 @@ class simulation():
 
                 # create an iterator
                 for i in np.arange(0,iterations,1):
-                    
+
                     #create an iterator to simulate days for the number of months passed to the season
                     for j in np.arange(0,months * 30,1):
-                        
-                        # if we don't have pareto parameters, we are passing a population         
+
+                        # if we don't have pareto parameters, we are passing a population
                         if math.isnan(spc_dat.param1.values[0]):
                             n = np.int(spc_dat.Fish.values[0])
-                            
+
                         # fit a pareto or generalized pareto using scipy
                         else:
                             shape = spc_dat.param1.values[0]
@@ -444,35 +444,35 @@ class simulation():
                             else:
                                 ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
 
-                        
+                        ent_rate = np.abs(ent_rate)
                         print ("Entrainment rate of %s %s during %s simulated"%(round(ent_rate[0],4),spc,scen))
-                        
+
                         # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
                         max_ent_rate = spc_dat.max_ent_rate.values[0]
 
-                        if np.log10(ent_rate[0]) > (np.log10(max_ent_rate) + 0.1):
-                            
+                        if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
+
                             # how many orders of magnitude larger is the simulated entrainment rate than the largest entrainment rate on record?
-                            magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) - 0.5
-                            
+                            magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) + 0.5
+
                             if magnitudes < 1.:
                                 magnitudes = 1.
-                                
+
                             # reduce by at least 1 order of magnitude
                             ent_rate = np.abs(ent_rate / 10**magnitudes)
                             print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
 
-                            
+
                         # calculate the amount of discharge through the units
                         # if flow >= self.flow_cap:
                         #     Mft3 = (60 * 60 * 24 * self.flow_cap)/1000000
                         # else:
                         #     Mft3 = (60 * 60 * 24 * flow)/1000000
-                        
+
                         # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
                         Mft3 = (60 * 60 * 24 * flow)/1000000
-            
-                        # calcualte sample size 
+
+                        # calcualte sample size
                         n = np.int(Mft3 * ent_rate)
                         if n == 0:
                             n = 1
@@ -480,14 +480,14 @@ class simulation():
                         #     n = np.int(n / 2.)
 
                         print ("Resulting in an entrainment event of %s %s"%(n,spc))
-                        
+
                         # create population of fish - IN CM!!!!!
                         population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
-                        
+
                         # convert lengths in cm to feet
-                        population = population * 0.393701 / 12 
-                        
-                        
+                        population = population * 0.393701 / 12
+
+
                         print ("created population for %s iteration:%s day: %s"%(species,i,j))
                         # start this iterations dataframe
                         iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,n),
@@ -497,21 +497,21 @@ class simulation():
                                                   'day':np.repeat(j,n),
                                                   'population':np.float32(population),
                                                   'state_0':np.repeat('river_node_0',n)})
-                        
+
                         for k in self.moves:
                             if k == 0:
                                 # initial status
                                 status = np.repeat(1,n)
                             else:
                                 status = iteration['survival_%s'%(k-1)].values
-            
+
                             # initial location
                             location = iteration['state_%s'%(k)].values
-                            
+
                             def surv_fun_att(state,surv_fun_dict):
                                 fun_typ = surv_fun_dict[state]['Surv_Fun']
                                 return fun_typ
-                            
+
                             v_surv_fun = np.vectorize(surv_fun_att,excluded = [1])
                             surv_fun = v_surv_fun(location,self.surv_fun_dict)
                             # simulate survival draws
@@ -524,21 +524,21 @@ class simulation():
                             # calculate survival
                             survival = np.where(dice <= rates,1,0)
                             #print (survival)
-                            
-                            # simulate movement 
+
+                            # simulate movement
                             if k < max(self.moves):
                                 # vectorize movement function
                                 v_movement = np.vectorize(movement,excluded = [2])
                                 move = v_movement(location,survival,self.graph)
-                            
+
                             # add onto iteration dataframe, attach columns
                             iteration['draw_%s'%(k)] = np.float32(dice)
                             iteration['rates_%s'%(k)] = np.float32(rates)
                             iteration['survival_%s'%(k)] = np.float32(survival)
-            
+
                             if k < max(self.moves):
                                 iteration['state_%s'%(k+1)] = move
-                                                    
+
                         # save that data
                         self.hdf['simulations/%s/%s/%s/%s'%(scen,spc,i,j)] = iteration
 
@@ -547,19 +547,19 @@ class simulation():
                         #         self.hdf.append('Iteration',iteration, data_columns = iteration.columns,min_itemsize = str_size)
                         #     else:
                         #         self.hdf.append('Iteration',iteration,min_itemsize = str_size)
-                        #         counter = counter + 1     
-                    
-                    
+                        #         counter = counter + 1
+
+
                 print ("Completed Scenario %s %s"%(species,scen))
-    
+
         print ("Completed Simulations - view results")
 
-            
+
     def summary(self):
         '''Function summarizes entrainment risk hdf file'''
         # create hdf store
         self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))
-        
+
         tree = dict(dict(dict()))
 
         print ("Iterate through database, develop simulation tree")
@@ -573,29 +573,29 @@ class simulation():
                 # if this scenario isn't in the first key
                 if scenario not in tree.keys():
                     tree['%s'%(scenario)] = {}
-                
+
                 # if this species isn't in the first subkey
                 if species not in tree['%s'%(scenario)].keys():
                     tree['%s'%(scenario)]['%s'%(species)] = {}
-                    
+
                 if iteration not in tree['%s'%(scenario)]['%s'%(species)].keys():
                     tree['%s'%(scenario)]['%s'%(species)]['%s'%(iteration)] = []
-                
-                tree['%s'%(scenario)]['%s'%(species)]['%s'%(iteration)].append(day)       
-                
+
+                tree['%s'%(scenario)]['%s'%(species)]['%s'%(iteration)].append(day)
+
         # get Population table
         pop = self.hdf['Population']
-        species = pop.Species.values
-        
+        species = pop.Species.unique()
+
         # get Scenarios
         scen = self.hdf['Scenarios']
-        scens = scen.Scenario.values
-        
+        scens = scen.Scenario.unique()
+
         # get units
         units = self.hdf['Unit_Parameters'].Unit.values
-        
+
         self.daily_summary = pd.DataFrame()
-        
+
         # create a summary dictionary to pandas data frame by column
         summary = dict()
         summary['species'] = []
@@ -614,7 +614,7 @@ class simulation():
         for i in species:
             for j in scens:
                 dat = pd.DataFrame()
-                
+
                 # identify the number of iterations this species/scenario ran for
                 iters = tree[j][i].keys()
 
@@ -625,7 +625,7 @@ class simulation():
                         key = "simulations/" + j + "/" + i + "/" + k + "/" + d
                         day_dat = pd.read_hdf(self.hdf, key = key)
                         dat = dat.append(day_dat)
-                        
+
                         # start filling in that summary dictionary
                         summary['species'].append(i)
                         summary['scenario'].append(j)
@@ -636,13 +636,13 @@ class simulation():
                         summary['length_min'].append(day_dat.population.min())
                         summary['length_max'].append(day_dat.population.max())
 
-                                           
+
                         # figure out number entrained and number suvived
                         counts = day_dat.groupby(by = ['state_2'])['survival_2']\
                             .count().to_frame().reset_index().rename(columns = {'survival_2':'entrained'})
                         sums = day_dat.groupby(by = ['state_2'])['survival_2']\
                             .sum().to_frame().reset_index().rename(columns = {'survival_2':'survived'})
-                        
+
                         # merge and calculate entrainment survival
                         ent_stats = counts.merge(sums,how = 'left',on ='state_2', copy = False)
                         ent_stats.fillna(0,inplace = True)
@@ -655,25 +655,25 @@ class simulation():
                                 summary['num_killed_%s'%(u)].append(udat.mortality.values[0])
                             else:
                                 summary['num_entrained_%s'%(u)].append(0)
-                                summary['num_killed_%s'%(u)].append(0) 
-                                
+                                summary['num_killed_%s'%(u)].append(0)
+
                 # summarize species-scenario - whole project
                 whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
                     .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'successes'})
                 whole_proj_count = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
                     .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'count'})
-            
+
                 # merge successes and counts
                 whole_summ = whole_proj_succ.merge(whole_proj_count)
-            
+
                 # calculate probabilities, fit to beta, write to dictionary summarizing results
                 whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
                 whole_params = beta.fit(whole_summ.prob.values)
                 whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
                 whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
                 whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
-                
-                self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,whole_95ci[0],whole_95ci[1]]                                           
+
+                self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,whole_95ci[0],whole_95ci[1]]
                 print ("whole project survival for %s in scenario %s expected to be %s (%s,%s)"%(i,j,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
                 for l in self.moves:
                     # we need to remove the fish that died at the previous state
@@ -681,19 +681,19 @@ class simulation():
                         sub_dat = dat[dat['survival_%s'%(l-1)] == 1]
                     else:
                         sub_dat = dat
-                    
+
                     # group by iteration and state
                     route_succ = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
                         .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'successes'})
                     route_count = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
                         .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'count'})
-                        
+
                     # merge successes and counts
                     route_summ = route_succ.merge(route_count)
-                    
+
                     # calculate probabilities
                     route_summ['prob'] = route_summ['successes']/route_summ['count']
-                    
+
                     # extract route specific dataframes and fit beta
                     states = route_summ['state_%s'%(l)].unique()
                     for m in states:
@@ -706,26 +706,26 @@ class simulation():
                         except:
                             st_median = 0.5
                             st_std = 1.0
-                            st_95ci = (0.,1.)                        
+                            st_95ci = (0.,1.)
                         self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,st_95ci[0],st_95ci[1]]
-        
-        self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])                        
-        self.summ_dat = pd.DataFrame.from_dict(data = summary, orient = 'columns')                   
+
+        self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])
+        self.summ_dat = pd.DataFrame.from_dict(data = summary, orient = 'columns')
 
 class hydrologic():
-    '''python class object that conducts flow exceedance analysis using recent USGS data as afunction of the contributing watershed size.  
-    We have develped a strong linear relationship between drainage area and flow exceedances for the 100 nearest gages to the dam.  With 
+    '''python class object that conducts flow exceedance analysis using recent USGS data as afunction of the contributing watershed size.
+    We have develped a strong linear relationship between drainage area and flow exceedances for the 100 nearest gages to the dam.  With
     this relationship we can predict what a wet spring looks like.'''
-    
+
     def __init__(self, dam_dir, gage_dir, nid_near_gage_dir, output_dir):
         ''' to initialize the hydrologic class, provide:
-            dam_dir = a shapefile directory for affected dams, must be subset of National Inventory of Dams (USACE 2004) 
+            dam_dir = a shapefile directory for affected dams, must be subset of National Inventory of Dams (USACE 2004)
             gage_dir = a shapefile directory of USGS gages active since 2009
             nid_near_gage_dir = link to nid_near_gage table, csv file which lists the 100 nearest USGS gages to every NID dam
             output_dir = link to the output directory'''
-        # establish output directory 
+        # establish output directory
         self.output_dir = output_dir
-        
+
         # import dams, gages, and the near table and construct the exceedance table
         self.nid = gp.read_file(dam_dir)
         self.dams = self.nid.NIDID.values.tolist()
@@ -734,13 +734,13 @@ class hydrologic():
         self.DAvgFlow = pd.DataFrame()
         print("Data imported, proceed to data extraction and exceedance calculation ")
         self.gages = self.gages_shp.STAID.unique()
-        
+
         self.nearest_gages = []
-        
+
         for d in self.nid.NIDID.values:
             near_gages = self.NID_to_gage[self.NID_to_gage.NIDID == d].STAID.values.tolist()
             self.nearest_gages.extend(near_gages)
-        
+
         self.nearest_gages = set(self.nearest_gages)
         print ("There are %s near gages"%(len(self.nearest_gages)))
         for i in self.nearest_gages:
@@ -748,10 +748,10 @@ class hydrologic():
                 print ("Start analyzing gage %s"%(i))
                 # get gage data object from web
                 gage = hf.NWIS(site = str(i),service = 'dv', start_date = '2009-01-01')
-                
-                # extract dataframe 
+
+                # extract dataframe
                 df = gage.df()
-                
+
                 # replace column names
                 for j in gage.df().columns:
                     if '00060' in j:
@@ -759,52 +759,52 @@ class hydrologic():
                             if ':00000' in j or ':00003' in j:
                                 df.rename(columns = {j:'DAvgFlow'},inplace = True)            # reset index
                 df.reset_index(inplace = True)
-                
+
                 #extract what we need
                 df = df[['datetimeUTC','DAvgFlow']]
-    
+
                 # convert to datetime
                 df['datetimeUTC'] = pd.to_datetime(df.datetimeUTC)
-    
+
                 # extract month
                 df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month
-    
+
                 curr_gage = self.gages_shp[self.gages_shp.STAID == i]
-    
+
                 curr_name = curr_gage.iloc[0]['STANAME']
-    
+
                 curr_huc = curr_gage.iloc[0]['HUC02']
-    
+
                 drain_sqkm = np.float(curr_gage.iloc[0]['DRAIN_SQKM'])
-    
+
                 df['STAID'] = np.repeat(curr_gage.iloc[0]['STAID'], len(df.index))
                 df['Name'] = np.repeat(curr_name, len(df.index))
                 df['HUC02'] = np.repeat(curr_huc, len(df.index))
                 df['Drain_sqkm'] = np.repeat(drain_sqkm, len(df.index))
-    
+
                 self.DAvgFlow = self.DAvgFlow.append(df)
-                 
-                print ("stream gage %s with a drainage area of %s square kilometers added to flow data."%(i,drain_sqkm)) 
+
+                print ("stream gage %s with a drainage area of %s square kilometers added to flow data."%(i,drain_sqkm))
             except:
                 continue
 
     def seasonal_exceedance(self, seasonal_dict, HUC = None):
         '''function calculates the 90, 50, and 10 percent exceedance flows by season and writes to an output data frame.
-        
+
         seasonal_dict = python dictionary consisting of season (key) with a Python list like object of month numbers (value)'''
-        
+
         self.exceedance = pd.DataFrame()
         self.DAvgFlow['season'] = np.empty(len(self.DAvgFlow))
         for key in seasonal_dict:
             for month in seasonal_dict[key]:
                 self.DAvgFlow.loc[self.DAvgFlow['month'] == month, 'season'] = key
-        
+
         if HUC is not None:
             self.DAvgFlow = self.DAvgFlow[self.DAvgFlow.HUC02 == HUC]
-        
+
         # seasonal exceedance probability
         self.DAvgFlow['SeasonalExcProb'] = self.DAvgFlow.groupby(['season','STAID'])['DAvgFlow'].rank(ascending = False, method = 'first',pct = True) * 100
-        
+
         for i in self.nearest_gages:
             # extract exceedance probabilities and add to exceedance data frame
             for key in seasonal_dict:
@@ -812,19 +812,19 @@ class hydrologic():
                 season.sort_values(by = 'SeasonalExcProb', ascending = False, inplace = True)
                 print('length of season dataframe is %s'%(len(season.index)))
                 if len(season.index) > 0:
-                    
+
                     exc10df = season[season.SeasonalExcProb <= 10.]
                     exc10 = exc10df.DAvgFlow.min()
-                    print ("Gage %s has a 10 percent exceedance flow of %s in %s"%(i,exc10,key)) 
-                    
+                    print ("Gage %s has a 10 percent exceedance flow of %s in %s"%(i,exc10,key))
+
                     exc50df = season[season.SeasonalExcProb <= 50.]
                     exc50 = exc50df.DAvgFlow.min()
                     print ("Gage %s has a 50 percent exceedance flow of %s in %s"%(i,exc50,key))
-                    
+
                     exc90df = season[season.SeasonalExcProb <= 90.]
-                    exc90 = exc90df.DAvgFlow.min()     
-                    print ("Gage %s has a 90 percent exceedance flow of %s in %s"%(i,exc90,key))    
-    
+                    exc90 = exc90df.DAvgFlow.min()
+                    print ("Gage %s has a 90 percent exceedance flow of %s in %s"%(i,exc90,key))
+
                     # get gage information from gage shapefile
                     curr_gage = self.gages_shp[self.gages_shp.STAID == str(i)]
                     curr_name = curr_gage.iloc[0]['STANAME']
@@ -836,12 +836,12 @@ class hydrologic():
 
     def curve_fit(self, season, dam, exceedance):
         '''function uses statsmodels to perform OLS regaression and describe exceedance probablity as a function of watershed size,
-        
+
             required inputs inlcude:
                 season = string object denoting current season
                 dam = string object denoting current dam
                 exccednace = string object pulling specific exceedance column, 'exc_90','exc_50','exc_10' '''
-        
+
         # get dam data
         dam_df = self.nid[self.nid.NIDID == dam]
 
@@ -854,12 +854,12 @@ class hydrologic():
 
         # extract the 100 nearest gages associated with this NID feature
         gages = self.NID_to_gage[self.NID_to_gage.NIDID == nidid].STAID.values
-        
-        # filter exceedance 
+
+        # filter exceedance
         seasonal_exceedance_df = self.exceedance[self.exceedance.season == season]
 
         gage_dat = pd.DataFrame()
-        
+
         for i in gages:
             dat = seasonal_exceedance_df[seasonal_exceedance_df.STAID == i]
             gage_dat = gage_dat.append(dat)
@@ -867,7 +867,7 @@ class hydrologic():
         # extract X and y arrays
         self.X = gage_dat.Drain_sqkm.values.astype(np.float32)
         self.Y = gage_dat['%s'%(exceedance)].values.astype(np.float32)
-        
+
         # fit a linear model
         model = sm.OLS(self.Y, self.X).fit()
         print ("-------------------------------------------------------------------------------")
@@ -879,29 +879,29 @@ class hydrologic():
             exc_flow = drain_sqkm * coef
             self.DamX = drain_sqkm
             self.DamY = exc_flow
-            print ("dam %s with a drainage area of %s sq km has a %s percent exceedance flow of %s in %s"%(dam,round(drain_sqkm,2),exceedance.split("_")[1],round(exc_flow,2),season))   
+            print ("dam %s with a drainage area of %s sq km has a %s percent exceedance flow of %s in %s"%(dam,round(drain_sqkm,2),exceedance.split("_")[1],round(exc_flow,2),season))
 
 class epri():
     '''python class object that queries the EPRI entrainment database and fits
     a pareto distribution to the observations.'''
-    
-    def __init__(self, 
-                 states = None, 
-                 plant_cap = None, 
-                 Month = None, 
-                 Family = None, 
-                 Species = None, 
-                 Feeding_Guild = None, 
-                 Habitat = None, 
-                 Water_Type = None, 
-                 Mussel_Host = None, 
+
+    def __init__(self,
+                 states = None,
+                 plant_cap = None,
+                 Month = None,
+                 Family = None,
+                 Species = None,
+                 Feeding_Guild = None,
+                 Habitat = None,
+                 Water_Type = None,
+                 Mussel_Host = None,
                  Seasonal_Migrant = None):
-        
-        '''The EPRI database can be queried many different ways.  Note, these are 
-        optional named arguments, meaning the end user doesn't have to query the 
-        database at all.  In this instance the returned Pareto distribution 
+
+        '''The EPRI database can be queried many different ways.  Note, these are
+        optional named arguments, meaning the end user doesn't have to query the
+        database at all.  In this instance the returned Pareto distribution
         parameters will be representative of the entire dataset.
-        
+
         -states = list like object of state abbreviations or single state abbreviation
         -plant_cap = tuple object indicating the plant capacity (cfs) cutoff and the direction, i.e. (1000,'gt')
         -Month = list like object of Month integer or single Month integer object.
@@ -932,88 +932,88 @@ class epri():
                 SS = small stream
                 Either = can be found in all river sizes
         -Mussel_Host = is this fish a mussel host?
-            List of appropriate 
+            List of appropriate
                 Yes
                 No
                 null
         -Seasonal Migrant = string object indicating migration season.
             List of appropriate seasons:
-                'Spring', 'Spring/Fall', 'Spring-Summer','Fall','Fall-Winter'       
+                'Spring', 'Spring/Fall', 'Spring-Summer','Fall','Fall-Winter'
         '''
 
         # import EPRI database
         self.epri = pd.read_csv(r"J:\4287\002\Calcs\Data\epri1997.csv",  encoding= 'unicode_escape')
         ''' I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame'''
-        
+
         if states is not None:
             if isinstance(states,str):
                 self.epri = self.epri[self.epri.State == states]
             else:
                 self.epri = self.epri[self.epri['State'].isin(states)]
-                
+
         if plant_cap is not None:
             if plant_cap[1] == '>':
                 self.epri = self.epri[self.epri.Plant_cap_cfs > plant_cap[0]]
             else:
                 self.epri = self.epri[self.epri.Plant_cap_cfs <= plant_cap[0]]
-                
+
         if Month is not None:
             if isinstance(Month,str):
                 self.epri = self.epri[self.epri.Month == Month]
             else:
                 self.epri = self.epri[self.epri['Month'].isin(Month)]
-                
+
         if Family is not None:
             if isinstance(Family,str):
                 self.epri = self.epri[self.epri['Family'] == Family]
             else:
                 self.epri = self.epri[self.epri['Family'].isin(Family)]
-                
+
         if Species is not None:
             if isinstance(Species,str):
                 self.epri = self.epri[self.epri.Species == Species]
             else:
                 self.epri = self.epri[self.epri['Species'].isin(Species)]
-        
+
         if Feeding_Guild is not None:
             if isinstance(Feeding_Guild,str):
                 self.epri = self.epri[self.epri.FeedingGuild == Feeding_Guild]
             else:
                 self.epri = self.epri[self.epri['FeedingGuild'].isin(Feeding_Guild)]
-        
+
         if Habitat is not None:
             if isinstance(Habitat,str):
                 self.epri = self.epri[self.epri.Habitat == Habitat]
             else:
                 self.epri = self.epri[self.epri['Habitat'].isin(Habitat)]
-                         
+
         if Water_Type is not None:
             if isinstance(Water_Type,str):
                 self.epri = self.epri[self.epri.WaterType == Water_Type]
             else:
-                self.epri = self.epri[self.epri['WaterType'].isin(Water_Type)]        
+                self.epri = self.epri[self.epri['WaterType'].isin(Water_Type)]
 
         if Mussel_Host is not None:
             if isinstance(Mussel_Host,str):
                 self.epri = self.epri[self.epri.Host == Mussel_Host]
             else:
-                self.epri = self.epri[self.epri['Host'].isin(Mussel_Host)]      
+                self.epri = self.epri[self.epri['Host'].isin(Mussel_Host)]
 
         if Seasonal_Migrant is not None:
             if isinstance(Seasonal_Migrant,str):
                 self.epri = self.epri[self.epri.Migrant == Seasonal_Migrant]
             else:
                 self.epri = self.epri[self.epri['Migrant'].isin(Seasonal_Migrant)]
-                
+
         self.epri.fillna(0,inplace = True)
         print ("--------------------------------------------------------------------------------------------")
         #print ("With a maximum entrainment rate of %s and only %s percent of records acount for 80 percent of the entrainment"%(self.epri.FishPerMft3.max(),
-        #                                                                                                                round(len(self.epri[self.epri.FishPerMft3 > self.epri.FishPerMft3.max()*0.8]) / len(self.epri) * 100,2)))     
+        #                                                                                                                round(len(self.epri[self.epri.FishPerMft3 > self.epri.FishPerMft3.max()*0.8]) / len(self.epri) * 100,2)))
         print ("There are %s records left to describe entrainment rates"%(len(self.epri)))
         print ("The maximum entrainment rate for this fish is: %s"%(self.epri.FishPerMft3.max()))
         print ("--------------------------------------------------------------------------------------------")
     def ParetoFit(self):
-        ''' Function fits a Pareto distribution to the epri dataset relating to 
+        ''' Function fits a Pareto distribution to the epri dataset relating to
         the species of interest'''
 
         # fit a pareto and write to the object
@@ -1027,7 +1027,7 @@ class epri():
                                                                                                                        self.dist_pareto[1],
                                                                                                                        self.dist_pareto[2]),2)))
     def ExtremeFit(self):
-        ''' Function fits a generic extreme value distribution to the epri dataset relating to 
+        ''' Function fits a generic extreme value distribution to the epri dataset relating to
         the species of interest'''
 
         # fit a pareto and write to the object
@@ -1038,7 +1038,7 @@ class epri():
                                                                                                       round(self.dist_extreme[2],4)))
 
     def WeibullMinFit(self):
-       ''' Function fits a Frechet distribution to the epri dataset relating to 
+       ''' Function fits a Frechet distribution to the epri dataset relating to
        the species of interest'''
 
        # fit a pareto and write to the object
@@ -1051,7 +1051,7 @@ class epri():
 
     def LengthSummary(self):
         '''Function summarizes length for species of interest using EPRI database'''
-        
+
         # sum up the number of observations within each size cohort
         cm_0_5 = np.int(self.epri['0_5'].sum())
         cm_5_10 = np.int(self.epri['5_10'].sum())
@@ -1063,7 +1063,7 @@ class epri():
         cm_51_64 = np.int(self.epri['51_64'].sum())
         cm_64_76 = np.int(self.epri['64_76'].sum())
         cm_GT76 = np.int(self.epri['GT76'].sum())
-        
+
         # sample from uniform distribution within each size cohort
         cm_0_5_arr = np.random.uniform(low = 0, high = 5.0, size = cm_0_5)
         cm_5_10_arr = np.random.uniform(low = 5.0, high = 10.0, size = cm_5_10)
@@ -1090,14 +1090,13 @@ class epri():
                                       axis = 0)
 
         # now fit that array to a log normal
-        self.len_dist = lognorm.fit(self.lengths)   
+        self.len_dist = lognorm.fit(self.lengths)
         print("The log normal distribution has a shape parameter s: %s, location: %s and scale: %s"%(round(self.len_dist[0],4),
                                                                                                      round(self.len_dist[1],4),
                                                                                                      round(self.len_dist[2],4)))
-        
-        
-        
-        
-        
 
-        
+
+
+
+
+
