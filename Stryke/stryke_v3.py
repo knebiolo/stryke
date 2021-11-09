@@ -263,73 +263,78 @@ class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility 
     specific simulation'''
     
-    def __init__ (self, proj_dir, wks, output_name):
-        self.wks_dir = os.path.join(proj_dir,wks)
-        # extract scenarios from input spreadsheet    
-        self.routing = pd.read_excel(self.wks_dir,'Routing',header = 0,index_col = None, usecols = "B:G", skiprows = 9)
+    def __init__ (self, proj_dir, wks, output_name, existing = False):
+        if existing == False:
+            self.wks_dir = os.path.join(proj_dir,wks)
+            # extract scenarios from input spreadsheet    
+            self.routing = pd.read_excel(self.wks_dir,'Routing',header = 0,index_col = None, usecols = "B:G", skiprows = 9)
+            
+            # import nodes and create a survival function dictionary
+            self.nodes = pd.read_excel(self.wks_dir,'Nodes',header = 0,index_col = None, usecols = "B:C", skiprows = 9)
+            #print (nodes.head())
+            self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
+            self.surv_fun_dict = self.surv_fun_df.to_dict('index')
+            
+            # get last river node
+            max_river_node = 0
+            for i in self.nodes.Location.values:
+                i_split = i.split("_")
+                if len(i_split) > 1:
+                    river_node = int(i_split[2])                            
+                    if river_node > max_river_node:
+                        max_river_node = river_node
+                        
+            
+            # make a movement graph from input spreadsheet
+            self.graph = create_route(self.wks_dir)
+            print ("created a graph")
+            
+            
+            # identify the number of moves that a fish can make
+            path_list = nx.all_shortest_paths(self.graph,'river_node_0','river_node_%s'%(max_river_node))
         
-        # import nodes and create a survival function dictionary
-        self.nodes = pd.read_excel(self.wks_dir,'Nodes',header = 0,index_col = None, usecols = "B:C", skiprows = 9)
-        #print (nodes.head())
-        self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
-        self.surv_fun_dict = self.surv_fun_df.to_dict('index')
+            max_len = 0
+            for i in path_list:
+                path_len = len(i)
+                if path_len > max_len:
+                    max_len = path_len
+            self.moves = np.arange(0,max_len-1,1)
+            print ("identified the number of moves, %s"%(self.moves))
+            
+            # import unit parameters
+            self.unit_params = pd.read_excel(self.wks_dir,'Unit Params', header = 0, index_col = None, usecols = "B:O", skiprows = 4)
+            
+            # join unit parameters to scenarios
+            self.scenario_dat = self.routing.join(self.unit_params, how = 'left', lsuffix = 'State', rsuffix = 'Unit')
         
-        # get last river node
-        max_river_node = 0
-        for i in self.nodes.Location.values:
-            i_split = i.split("_")
-            if len(i_split) > 1:
-                river_node = int(i_split[2])                            
-                if river_node > max_river_node:
-                    max_river_node = river_node
-                    
+            # get hydraulic capacity of facility
+            self.flow_cap = self.unit_params.Qcap.sum()
         
-        # make a movement graph from input spreadsheet
-        self.graph = create_route(self.wks_dir)
-        print ("created a graph")
+            # identify unique flow scenarios
+            self.scenarios_df = pd.read_excel(self.wks_dir,'Flow Scenarios',header = 0,index_col = None, usecols = "B:F", skiprows = 5)
+            self.scenarios = self.scenarios_df['Scenario'].unique()
+            
+            # import population data
+            self.pop = pd.read_excel(self.wks_dir,'Population',header = 0,index_col = None, usecols = "B:Q", skiprows = 11)
+            
+            # create output HDF file 
+            self.proj_dir = proj_dir
+            self.output_name = output_name
+            
+            # create hdf object with Pandas
+            self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))
+            
+            # write study set up data to hdf store
+            self.hdf['Scenarios'] = self.scenarios_df
+            self.hdf['Population'] = self.pop
+            self.hdf['Nodes'] = self.nodes
+            self.hdf['Edges'] = pd.read_excel(self.wks_dir,'Edges',header = 0,index_col = None, usecols = "B:D", skiprows = 8)
+            self.hdf['Unit_Parameters'] = self.unit_params
+            self.hdf['Routing'] = self.routing
         
-        
-        # identify the number of moves that a fish can make
-        path_list = nx.all_shortest_paths(self.graph,'river_node_0','river_node_%s'%(max_river_node))
-    
-        max_len = 0
-        for i in path_list:
-            path_len = len(i)
-            if path_len > max_len:
-                max_len = path_len
-        self.moves = np.arange(0,max_len-1,1)
-        print ("identified the number of moves, %s"%(self.moves))
-        
-        # import unit parameters
-        self.unit_params = pd.read_excel(self.wks_dir,'Unit Params', header = 0, index_col = None, usecols = "B:O", skiprows = 4)
-        
-        # join unit parameters to scenarios
-        self.scenario_dat = self.routing.join(self.unit_params, how = 'left', lsuffix = 'State', rsuffix = 'Unit')
-    
-        # get hydraulic capacity of facility
-        self.flow_cap = self.unit_params.Qcap.sum()
-    
-        # identify unique flow scenarios
-        self.scenarios_df = pd.read_excel(self.wks_dir,'Flow Scenarios',header = 0,index_col = None, usecols = "B:F", skiprows = 5)
-        self.scenarios = self.scenarios_df['Scenario'].unique()
-        
-        # import population data
-        self.pop = pd.read_excel(self.wks_dir,'Population',header = 0,index_col = None, usecols = "B:Q", skiprows = 11)
-        
-        # create output HDF file 
-        self.proj_dir = proj_dir
-        self.output_name = output_name
-        
-        # create hdf object with Pandas
-        self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))
-        
-        # write study set up data to hdf store
-        self.hdf['Scenarios'] = self.scenarios_df
-        self.hdf['Population'] = self.pop
-        self.hdf['Nodes'] = self.nodes
-        self.hdf['Edges'] = pd.read_excel(self.wks_dir,'Edges',header = 0,index_col = None, usecols = "B:D", skiprows = 8)
-        self.hdf['Unit_Parameters'] = self.unit_params
-        self.hdf['Routing'] = self.routing
+        else:
+            # create hdf object with Pandas
+            self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))            
 
     def run(self):
         # create some empty holders
@@ -610,6 +615,7 @@ class simulation():
             summary['num_entrained_%s'%(u)] = []
             summary['num_killed_%s'%(u)] = []
 
+        
         # now loop over dem species, scenarios, iterations and days then calculate them stats
         for i in species:
             for j in scens:
@@ -711,7 +717,8 @@ class simulation():
         
         self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])                        
         self.summ_dat = pd.DataFrame.from_dict(data = summary, orient = 'columns')                   
-
+        #self.length_df = 
+        
 class hydrologic():
     '''python class object that conducts flow exceedance analysis using recent USGS data as afunction of the contributing watershed size.  
     We have develped a strong linear relationship between drainage area and flow exceedances for the 100 nearest gages to the dam.  With 
