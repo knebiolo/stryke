@@ -612,13 +612,18 @@ class simulation():
         summary['iteration'] = []
         summary['day'] = []
         summary['pop_size'] = []
+        #summary['length'] = []
         summary['length_median'] = []
         summary['length_min'] = []
         summary['length_max'] = []
+        summary['length_q1'] = []
+        summary['length_q3'] = []
+
         for u in units:
             summary['num_entrained_%s'%(u)] = []
             summary['num_killed_%s'%(u)] = []
-
+            
+        length_dict = {}
         # now loop over dem species, scenarios, iterations and days then calculate them stats
         for i in species:
             for j in scens:
@@ -718,9 +723,19 @@ class simulation():
                             st_95ci = (0.,1.)
                         self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,st_95ci[0],st_95ci[1]]
 
+            # calculate length stats for this species
+            length_dict[i] = [spc_length.population.min(),
+                              spc_length.population.quantile(q = 0.25),
+                              spc_length.population.median(),
+                              spc_length.population.quantile(q = 0.75),
+                              spc_length.population.max()]
+
+
         self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])
         self.summ_dat = pd.DataFrame.from_dict(data = summary, orient = 'columns')
-        #self.length_dat = 
+        self.length_df = pd.DataFrame.from_dict(data = length_dict,orient = 'index', columns = ['min','q1','median','q3','max'])
+        self.hdf.flush()
+        self.hdf.close()
 
 class hydrologic():
     '''python class object that conducts flow exceedance analysis using recent USGS data as afunction of the contributing watershed size.
