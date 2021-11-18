@@ -311,7 +311,7 @@ class simulation():
             self.flow_cap = self.unit_params.Qcap.sum()
     
             # identify unique flow scenarios
-            self.scenarios_df = pd.read_excel(self.wks_dir,'Flow Scenarios',header = 0,index_col = None, usecols = "B:F", skiprows = 5)
+            self.scenarios_df = pd.read_excel(self.wks_dir,'Flow Scenarios',header = 0,index_col = None, usecols = "B:G", skiprows = 5)
             self.scenarios = self.scenarios_df['Scenario'].unique()
     
             # import population data
@@ -355,6 +355,7 @@ class simulation():
             months = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Months'].values[0]
             months = len(months.split(","))
             flow = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Flow'].values[0]
+            hours = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Hours'].values[0]
 
             # identify the species we need to simulate for this scenario
             species = self.pop[self.pop['Season'] == season].Species.unique()
@@ -478,7 +479,7 @@ class simulation():
                         #     Mft3 = (60 * 60 * 24 * flow)/1000000
 
                         # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
-                        Mft3 = (60 * 60 * 24 * flow)/1000000
+                        Mft3 = (60 * 60 * hours * flow)/1000000
 
                         # calcualte sample size
                         n = np.int(Mft3 * ent_rate)
