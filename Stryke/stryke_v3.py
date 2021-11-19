@@ -379,7 +379,10 @@ class simulation():
             scen_num = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Scenario Number'].values[0]
             season = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Season'].values[0]
             months = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Months'].values[0]
-            months = len(months.split(","))
+            if type(months) != np.int64:
+                months = len(months.split(","))
+            else:
+                months = 1
             flow = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Flow'].values[0]
             hours = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Hours'].values[0]
 
@@ -497,93 +500,76 @@ class simulation():
                             ent_rate = np.abs(ent_rate / 10**magnitudes)
                             print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
 
-
-                        # calculate the amount of discharge through the units
-                        # if flow >= self.flow_cap:
-                        #     Mft3 = (60 * 60 * 24 * self.flow_cap)/1000000
-                        # else:
-                        #     Mft3 = (60 * 60 * 24 * flow)/1000000
-
                         # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
                         Mft3 = (60 * 60 * hours * flow)/1000000
 
                         # calcualte sample size
-                        n = np.int(Mft3 * ent_rate)
-                        if n == 0:
-                            n = 1
-                        # elif n > 100000:
-                        #     n = np.int(n / 2.)
+                        n = np.round(Mft3 * ent_rate,0)
+                        if n > 0:
+                            print ("Resulting in an entrainment event of %s %s"%(n,spc))
+    
+                            # create population of fish - IN CM!!!!!
+                            population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
+    
+                            # convert lengths in cm to feet
+                            population = population * 0.393701 / 12
+    
+                            print ("created population for %s iteration:%s day: %s"%(species,i,j))
+                            # start this iterations dataframe
+                            iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,n),
+                                                      'species':np.repeat(species,n),
+                                                      'flow_scenario':np.repeat(scen,n),
+                                                      'iteration':np.repeat(i,n),
+                                                      'day':np.repeat(j,n),
+                                                      'population':np.float32(population),
+                                                      'state_0':np.repeat('river_node_0',n)})
+    
+                            for k in self.moves:
+                                if k == 0:
+                                    # initial status
+                                    status = np.repeat(1,n)
+                                else:
+                                    status = iteration['survival_%s'%(k-1)].values
+    
+                                # initial location
+                                location = iteration['state_%s'%(k)].values
+    
+                                def surv_fun_att(state,surv_fun_dict):
+                                    fun_typ = surv_fun_dict[state]['Surv_Fun']
+                                    return fun_typ
+    
+                                v_surv_fun = np.vectorize(surv_fun_att,excluded = [1])
+                                surv_fun = v_surv_fun(location,self.surv_fun_dict)
 
-                        print ("Resulting in an entrainment event of %s %s"%(n,spc))
+                                # simulate survival draws
+                                dice = np.random.uniform(0.,1.,n)
 
-                        # create population of fish - IN CM!!!!!
-                        population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
+                                # vectorize STRYKE survival function
+                                v_surv_rate = np.vectorize(node_surv_rate, excluded = [4,5])
+                                rates = v_surv_rate(population,status,surv_fun,location,surv_dict,u_param_dict)
 
-                        # convert lengths in cm to feet
-                        population = population * 0.393701 / 12
+                                # calculate survival
+                                survival = np.where(dice <= rates,1,0)
 
-
-                        print ("created population for %s iteration:%s day: %s"%(species,i,j))
-                        # start this iterations dataframe
-                        iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,n),
-                                                  'species':np.repeat(species,n),
-                                                  'flow_scenario':np.repeat(scen,n),
-                                                  'iteration':np.repeat(i,n),
-                                                  'day':np.repeat(j,n),
-                                                  'population':np.float32(population),
-                                                  'state_0':np.repeat('river_node_0',n)})
-
-                        for k in self.moves:
-                            if k == 0:
-                                # initial status
-                                status = np.repeat(1,n)
-                            else:
-                                status = iteration['survival_%s'%(k-1)].values
-
-                            # initial location
-                            location = iteration['state_%s'%(k)].values
-
-                            def surv_fun_att(state,surv_fun_dict):
-                                fun_typ = surv_fun_dict[state]['Surv_Fun']
-                                return fun_typ
-
-                            v_surv_fun = np.vectorize(surv_fun_att,excluded = [1])
-                            surv_fun = v_surv_fun(location,self.surv_fun_dict)
-                            # simulate survival draws
-                            dice = np.random.uniform(0.,1.,n)
-                            #print (dice)
-                            # vectorize STRYKE survival function
-                            v_surv_rate = np.vectorize(node_surv_rate, excluded = [4,5])
-                            rates = v_surv_rate(population,status,surv_fun,location,surv_dict,u_param_dict)
-                            #print (rates)
-                            # calculate survival
-                            survival = np.where(dice <= rates,1,0)
-                            #print (survival)
-
-                            # simulate movement
-                            if k < max(self.moves):
-                                # vectorize movement function
-                                v_movement = np.vectorize(movement,excluded = [2])
-                                move = v_movement(location,survival,self.graph)
-
-                            # add onto iteration dataframe, attach columns
-                            iteration['draw_%s'%(k)] = np.float32(dice)
-                            iteration['rates_%s'%(k)] = np.float32(rates)
-                            iteration['survival_%s'%(k)] = np.float32(survival)
-
-                            if k < max(self.moves):
-                                iteration['state_%s'%(k+1)] = move
-
-                        # save that data
-                        self.hdf['simulations/%s/%s/%s/%s'%(scen,spc,i,j)] = iteration
-
-                        # if self.output_name is not None:
-                        #     if counter == 0:
-                        #         self.hdf.append('Iteration',iteration, data_columns = iteration.columns,min_itemsize = str_size)
-                        #     else:
-                        #         self.hdf.append('Iteration',iteration,min_itemsize = str_size)
-                        #         counter = counter + 1
-
+                                # simulate movement
+                                if k < max(self.moves):
+                                    # vectorize movement function
+                                    v_movement = np.vectorize(movement,excluded = [2])
+                                    move = v_movement(location,survival,self.graph)
+    
+                                # add onto iteration dataframe, attach columns
+                                iteration['draw_%s'%(k)] = np.float32(dice)
+                                iteration['rates_%s'%(k)] = np.float32(rates)
+                                iteration['survival_%s'%(k)] = np.float32(survival)
+    
+                                if k < max(self.moves):
+                                    iteration['state_%s'%(k+1)] = move
+    
+                            # save that data
+                            self.hdf['simulations/%s/%s/%s/%s'%(scen,spc,i,j)] = iteration
+                        
+                        else:
+                            print ("No fish this day")
 
                 print ("Completed Scenario %s %s"%(species,scen))
 
