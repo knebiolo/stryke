@@ -311,7 +311,7 @@ class simulation():
             self.flow_cap = self.unit_params.Qcap.sum()
 
             # identify unique flow scenarios
-            self.scenarios_df = pd.read_excel(self.wks_dir,'Flow Scenarios',header = 0,index_col = None, usecols = "B:F", skiprows = 5)
+            self.scenarios_df = pd.read_excel(self.wks_dir,'Flow Scenarios',header = 0,index_col = None, usecols = "B:G", skiprows = 5)
             self.scenarios = self.scenarios_df['Scenario'].unique()
 
             # import population data
@@ -331,6 +331,7 @@ class simulation():
             self.hdf['Edges'] = pd.read_excel(self.wks_dir,'Edges',header = 0,index_col = None, usecols = "B:D", skiprows = 8)
             self.hdf['Unit_Parameters'] = self.unit_params
             self.hdf['Routing'] = self.routing
+            self.hdf.flush()
         else:
             self.wks_dir = os.path.join(proj_dir,wks)
 
@@ -366,9 +367,6 @@ class simulation():
 
 
     def run(self):
-        # create some empty holders
-        self.beta_dict = {}
-
         str_size = dict()
         str_size['species'] = 30
         for i in self.moves:
@@ -395,9 +393,9 @@ class simulation():
                 spc_dat = self.pop[(self.pop['Season'] == season) & (self.pop.Species == spc)]
 
                 # get scipy log normal distribution paramters - note values in centimeters
-                s = spc_dat.s.values[0]
-                len_loc = spc_dat.location.values[0]
-                len_scale = spc_dat.scale.values[0]
+                s = spc_dat.shape_l.values[0]
+                len_loc = spc_dat.location_l.values[0]
+                len_scale = spc_dat.scale_l.values[0]
 
                 # get species name
                 species = spc_dat.Species.values[0]
@@ -467,14 +465,14 @@ class simulation():
                     for j in np.arange(0,months * 30,1):
 
                         # if we don't have pareto parameters, we are passing a population
-                        if math.isnan(spc_dat.param1.values[0]):
+                        if math.isnan(spc_dat.event_shape.values[0]):
                             n = np.int(spc_dat.Fish.values[0])
 
                         # fit a pareto or generalized pareto using scipy
                         else:
-                            shape = spc_dat.param1.values[0]
-                            loc = spc_dat.param2.values[0]
-                            scale = spc_dat.param3.values[0]
+                            shape = spc_dat.event_shape.values[0]
+                            loc = spc_dat.location.values[0]
+                            scale = spc_dat.scale.values[0]
                             if spc_dat.dist.values[0] == 'pareto':
                                 ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
                             elif spc_dat.dist.values[0] == 'extreme':
@@ -504,45 +502,48 @@ class simulation():
                         Mft3 = (60 * 60 * hours * flow)/1000000
 
                         # calcualte sample size
-                        n = np.round(Mft3 * ent_rate,0)
+                        n = np.round(Mft3 * ent_rate,0)[0]
                         if n > 0:
-                            print ("Resulting in an entrainment event of %s %s"%(n,spc))
-    
-                            # create population of fish - IN CM!!!!!
-                            population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
-    
+                            print ("Resulting in an entrainment event of %s %s"%(np.int(n),spc))
+
+                            if math.isnan(s) == False:
+                                # create population of fish - IN CM!!!!!
+                                population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
+                            else:
+                                population = np.abs(np.random.normal(spc_dat.Length_mean.values[0], spc_dat.Length_sd.values[0], np.int(n)))
+
                             # convert lengths in cm to feet
                             population = population * 0.393701 / 12
-    
+
                             print ("created population for %s iteration:%s day: %s"%(species,i,j))
                             # start this iterations dataframe
-                            iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,n),
-                                                      'species':np.repeat(species,n),
-                                                      'flow_scenario':np.repeat(scen,n),
-                                                      'iteration':np.repeat(i,n),
-                                                      'day':np.repeat(j,n),
+                            iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int(n)),
+                                                      'species':np.repeat(species,np.int(n)),
+                                                      'flow_scenario':np.repeat(scen,np.int(n)),
+                                                      'iteration':np.repeat(i,np.int(n)),
+                                                      'day':np.repeat(j,np.int(n)),
                                                       'population':np.float32(population),
-                                                      'state_0':np.repeat('river_node_0',n)})
-    
+                                                      'state_0':np.repeat('river_node_0',np.int(n))})
+
                             for k in self.moves:
                                 if k == 0:
                                     # initial status
-                                    status = np.repeat(1,n)
+                                    status = np.repeat(1,np.int(n))
                                 else:
                                     status = iteration['survival_%s'%(k-1)].values
-    
+
                                 # initial location
                                 location = iteration['state_%s'%(k)].values
-    
+
                                 def surv_fun_att(state,surv_fun_dict):
                                     fun_typ = surv_fun_dict[state]['Surv_Fun']
                                     return fun_typ
-    
+
                                 v_surv_fun = np.vectorize(surv_fun_att,excluded = [1])
                                 surv_fun = v_surv_fun(location,self.surv_fun_dict)
 
                                 # simulate survival draws
-                                dice = np.random.uniform(0.,1.,n)
+                                dice = np.random.uniform(0.,1.,np.int(n))
 
                                 # vectorize STRYKE survival function
                                 v_surv_rate = np.vectorize(node_surv_rate, excluded = [4,5])
@@ -556,30 +557,34 @@ class simulation():
                                     # vectorize movement function
                                     v_movement = np.vectorize(movement,excluded = [2])
                                     move = v_movement(location,survival,self.graph)
-    
+
                                 # add onto iteration dataframe, attach columns
                                 iteration['draw_%s'%(k)] = np.float32(dice)
                                 iteration['rates_%s'%(k)] = np.float32(rates)
                                 iteration['survival_%s'%(k)] = np.float32(survival)
-    
+
                                 if k < max(self.moves):
                                     iteration['state_%s'%(k+1)] = move
-    
+
                             # save that data
                             self.hdf['simulations/%s/%s/%s/%s'%(scen,spc,i,j)] = iteration
-                        
+                            self.hdf.flush()
                         else:
                             print ("No fish this day")
 
                 print ("Completed Scenario %s %s"%(species,scen))
 
         print ("Completed Simulations - view results")
-
+        self.hdf.flush()
+        self.hdf.close()
 
     def summary(self):
         '''Function summarizes entrainment risk hdf file'''
         # create hdf store
         self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))
+
+        # create some empty holders
+        self.beta_dict = {}
 
         tree = dict(dict(dict()))
 
@@ -618,125 +623,147 @@ class simulation():
         self.daily_summary = pd.DataFrame()
 
         # create a summary dictionary to pandas data frame by column
-        summary = dict()
-        summary['species'] = []
-        summary['scenario'] = []
-        summary['iteration'] = []
-        summary['day'] = []
-        summary['pop_size'] = []
-        #summary['length'] = []
-        summary['length_median'] = []
-        summary['length_min'] = []
-        summary['length_max'] = []
-        summary['length_q1'] = []
-        summary['length_q3'] = []
+        self.summary = dict()
+        self.summary['species'] = []
+        self.summary['scenario'] = []
+        self.summary['iteration'] = []
+        self.summary['day'] = []
+        self.summary['pop_size'] = []
+        self.summary['length_median'] = []
+        self.summary['length_min'] = []
+        self.summary['length_max'] = []
+        self.summary['length_q1'] = []
+        self.summary['length_q3'] = []
 
         for u in units:
-            summary['num_entrained_%s'%(u)] = []
-            summary['num_killed_%s'%(u)] = []
-            
+            self.summary['num_entrained_%s'%(u)] = []
+            self.summary['num_killed_%s'%(u)] = []
+
         length_dict = {}
+
         # now loop over dem species, scenarios, iterations and days then calculate them stats
         for i in species:
-            spc_length = pd.DataFrame()
+            # create empty dataframe to hold all lengths for this particular species
+            spc_length = pd.DataFrame(columns = ['population','flow_scenario','iteration','day'])
+
             for j in scens:
+                # create empty dataframe for summary
                 dat = pd.DataFrame()
 
-                # identify the number of iterations this species/scenario ran for
-                iters = tree[j][i].keys()
+                try:
+                    # identify the number of iterations this species/scenario ran for
+                    iters = tree[j][i].keys()
 
-                for k in iters:
-                    days = tree[j][i][k]
+                    for k in iters:
+                        days = tree[j][i][k]
 
-                    for d in days:
-                        key = "simulations/" + j + "/" + i + "/" + k + "/" + d
-                        day_dat = pd.read_hdf(self.hdf, key = key)
-                        dat = dat.append(day_dat)
-                        length_dat = day_dat[['population','flow_scenario']]
-                        spc_length = spc_length.append(length_dat)
+                        for d in days:
+                            # generate hdf key
+                            key = "simulations/" + j + "/" + i + "/" + k + "/" + d
 
-                        # start filling in that summary dictionary
-                        summary['species'].append(i)
-                        summary['scenario'].append(j)
-                        summary['iteration'].append(k)
-                        summary['day'].append(d)
-                        summary['pop_size'].append(day_dat.population.count())
-                        summary['length_median'].append(day_dat.population.median())
-                        summary['length_min'].append(day_dat.population.min())
-                        summary['length_max'].append(day_dat.population.max())
+                            # extract key to pandas dataframe
+                            day_dat = pd.read_hdf(self.hdf, key = key)
 
-                        # figure out number entrained and number suvived
-                        counts = day_dat.groupby(by = ['state_2'])['survival_2']\
-                            .count().to_frame().reset_index().rename(columns = {'survival_2':'entrained'})
-                        sums = day_dat.groupby(by = ['state_2'])['survival_2']\
-                            .sum().to_frame().reset_index().rename(columns = {'survival_2':'survived'})
+                            # append to summary data frame
+                            dat = dat.append(day_dat)
 
-                        # merge and calculate entrainment survival
-                        ent_stats = counts.merge(sums,how = 'left',on ='state_2', copy = False)
-                        ent_stats.fillna(0,inplace = True)
-                        ent_stats['mortality'] = ent_stats.entrained - ent_stats.survived
+                            # extract population and iteration
+                            length_dat = day_dat[['population','flow_scenario','iteration','day']]
 
-                        for u in units:
-                            udat = ent_stats[ent_stats.state_2 == u]
-                            if len(udat) > 0:
-                                summary['num_entrained_%s'%(u)].append(udat.entrained.values[0])
-                                summary['num_killed_%s'%(u)].append(udat.mortality.values[0])
+                            # append to species length dataframe
+                            spc_length = spc_length.append(length_dat, ignore_index = True)
+
+                            # start filling in that summary dictionary
+                            self.summary['species'].append(i)
+                            self.summary['scenario'].append(j)
+                            self.summary['iteration'].append(k)
+                            self.summary['day'].append(d)
+                            self.summary['pop_size'].append(len(day_dat))
+                            self.summary['length_median'].append(day_dat.population.median())
+                            self.summary['length_min'].append(day_dat.population.min())
+                            self.summary['length_max'].append(day_dat.population.max())
+                            self.summary['length_q1'].append(day_dat.population.quantile(0.25))
+                            self.summary['length_q3'].append(day_dat.population.quantile(0.75))
+
+                            # figure out number entrained and number suvived
+                            counts = day_dat.groupby(by = ['state_2'])['survival_2']\
+                                .count().to_frame().reset_index().rename(columns = {'survival_2':'entrained'})
+                            sums = day_dat.groupby(by = ['state_2'])['survival_2']\
+                                .sum().to_frame().reset_index().rename(columns = {'survival_2':'survived'})
+
+                            # merge and calculate entrainment survival
+                            ent_stats = counts.merge(sums,how = 'left',on ='state_2', copy = False)
+                            ent_stats.fillna(0,inplace = True)
+                            ent_stats['mortality'] = ent_stats.entrained - ent_stats.survived
+
+                            # for each unit, calculate the number entrained and the number killed
+                            for u in units:
+                                udat = ent_stats[ent_stats.state_2 == u]
+                                if len(udat) > 0:
+                                    self.summary['num_entrained_%s'%(u)].append(udat.entrained.values[0])
+                                    self.summary['num_killed_%s'%(u)].append(udat.mortality.values[0])
+                                else:
+                                    self.summary['num_entrained_%s'%(u)].append(0)
+                                    self.summary['num_killed_%s'%(u)].append(0)
+
+
+                        # summarize species-scenario - whole project
+                        whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
+                            .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'successes'})
+                        whole_proj_count = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
+                            .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'count'})
+
+                        # merge successes and counts
+                        whole_summ = whole_proj_succ.merge(whole_proj_count)
+
+                        # calculate probabilities, fit to beta, write to dictionary summarizing results
+                        whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
+                        whole_params = beta.fit(whole_summ.prob.values)
+                        whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
+                        whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
+                        whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
+
+                        self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,whole_95ci[0],whole_95ci[1]]
+                        print ("whole project survival for %s in scenario %s expected to be %s (%s,%s)"%(i,j,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
+                        for l in self.moves:
+                            # we need to remove the fish that died at the previous state
+                            if l > 0:
+                                sub_dat = dat[dat['survival_%s'%(l-1)] == 1]
                             else:
-                                summary['num_entrained_%s'%(u)].append(0)
-                                summary['num_killed_%s'%(u)].append(0)
+                                sub_dat = dat
 
-                # summarize species-scenario - whole project
-                whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
-                    .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'successes'})
-                whole_proj_count = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
-                    .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'count'})
+                            # group by iteration and state
+                            route_succ = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
+                                .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'successes'})
+                            route_count = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
+                                .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'count'})
 
-                # merge successes and counts
-                whole_summ = whole_proj_succ.merge(whole_proj_count)
+                            # merge successes and counts
+                            route_summ = route_succ.merge(route_count)
 
-                # calculate probabilities, fit to beta, write to dictionary summarizing results
-                whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
-                whole_params = beta.fit(whole_summ.prob.values)
-                whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
+                            # calculate probabilities
+                            route_summ['prob'] = route_summ['successes']/route_summ['count']
 
-                self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,whole_95ci[0],whole_95ci[1]]
-                print ("whole project survival for %s in scenario %s expected to be %s (%s,%s)"%(i,j,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
-                for l in self.moves:
-                    # we need to remove the fish that died at the previous state
-                    if l > 0:
-                        sub_dat = dat[dat['survival_%s'%(l-1)] == 1]
-                    else:
-                        sub_dat = dat
+                            # extract route specific dataframes and fit beta
+                            states = route_summ['state_%s'%(l)].unique()
+                            for m in states:
 
-                    # group by iteration and state
-                    route_succ = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
-                        .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'successes'})
-                    route_count = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
-                        .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'count'})
 
-                    # merge successes and counts
-                    route_summ = route_succ.merge(route_count)
+                                st_df = route_summ[route_summ['state_%s'%(l)] == m]
+                                try:
+                                    st_params = beta.fit(st_df.prob.values)
+                                    st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
+                                    st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
+                                    st_95ci = beta.interval(alpha = 0.95,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
+                                except:
+                                    st_median = 0.5
+                                    st_std = 1.0
+                                    st_95ci = (0.,1.)
 
-                    # calculate probabilities
-                    route_summ['prob'] = route_summ['successes']/route_summ['count']
-
-                    # extract route specific dataframes and fit beta
-                    states = route_summ['state_%s'%(l)].unique()
-                    for m in states:
-                        st_df = route_summ[route_summ['state_%s'%(l)] == m]
-                        try:
-                            st_params = beta.fit(st_df.prob.values)
-                            st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
-                            st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
-                            st_95ci = beta.interval(alpha = 0.95,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
-                        except:
-                            st_median = 0.5
-                            st_std = 1.0
-                            st_95ci = (0.,1.)
-                        self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,st_95ci[0],st_95ci[1]]
-
+                                # add results to beta dictionary
+                                self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,st_95ci[0],st_95ci[1]]
+                except KeyError:
+                    continue
             # calculate length stats for this species
             length_dict[i] = [spc_length.population.min(),
                               spc_length.population.quantile(q = 0.25),
@@ -746,7 +773,7 @@ class simulation():
 
 
         self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])
-        self.summ_dat = pd.DataFrame.from_dict(data = summary, orient = 'columns')
+        self.summ_dat = pd.DataFrame.from_dict(data = self.summary, orient = 'columns')
         self.length_df = pd.DataFrame.from_dict(data = length_dict,orient = 'index', columns = ['min','q1','median','q3','max'])
         self.hdf.flush()
         self.hdf.close()
