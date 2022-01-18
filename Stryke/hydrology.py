@@ -4,19 +4,19 @@ Created on Sun Sep 12 18:32:39 2021
 
 @author: KNebiolo
 
-Script Intent: Perform hydrologic analysis by extracting information from the 
-last 10 years at the 100 closest gages.  Then calculate the 10, 50 and 90% 
-exceedance flows by season.  With a data frame of watershed size and exceedance 
-flow by season, fit a linear regression with exceedance discharge as a funtion 
-of watershed size.  Examine for linearity, if assumption holds we can use the 
+Script Intent: Perform hydrologic analysis by extracting information from the
+last 10 years at the 100 closest gages.  Then calculate the 10, 50 and 90%
+exceedance flows by season.  With a data frame of watershed size and exceedance
+flow by season, fit a linear regression with exceedance discharge as a funtion
+of watershed size.  Examine for linearity, if assumption holds we can use the
 function generated to predict exceedance flow at the project.
 
-The major inputs are to filter the National Inventory of Dams feature class to 
-those dams impacted by the project.  
+The major inputs are to filter the National Inventory of Dams feature class to
+those dams impacted by the project.
 """
 
 # import moduels
-import stryke_v3 as stryke
+import stryke
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -44,8 +44,8 @@ flow.seasonal_exceedance({'Winter':[12,1,2],
 
 print ("Calculated seasonal exceedance values")
 
-# loop over exceedance flows, seasons, and dams, interpolate exceedance 
-# write to output 
+# loop over exceedance flows, seasons, and dams, interpolate exceedance
+# write to output
 scenarios = pd.DataFrame()
 
 # generate lists to iterate over
@@ -69,13 +69,13 @@ for dam in dams:
             ax.set_ylabel('%s Percent Exceedance Flow'%(exceedance.split("_")[1]))
             ax.set_title("%s %s Percent Exceedance at Dam %s"%(season,exceedance.split("_")[1],dam))
             plt.savefig(os.path.join(dataWS,'Output','%s_%s_%s.png'%(dam,season,exceedance)),bbox_inches = 'tight', dpi = 900)
-            
+
             plt.plot()
-            
+
             # write to output file
             row = np.array([dam, season, exceedance, flow.DamX, flow.DamY, "%s %s %s Flow"%(dam,season,exceedance)])
             newRow = pd.DataFrame(np.array([row]),columns = ['NIDID','Season','Exceedance','Drain_sqkm','cfs','Scenario Name'])
-            scenarios = scenarios.append(newRow)  
+            scenarios = scenarios.append(newRow)
 
 scenarios.to_csv(os.path.join(dataWS,'Output','scenarios.csv'))
 

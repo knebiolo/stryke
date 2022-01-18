@@ -8,7 +8,7 @@ Script Intent: Work with EPRI entrainment database, filter and fit Pareto
 """
 
 # import moduels
-import stryke_v3 as stryke
+import stryke
 import matplotlib.pyplot as plt
 from scipy.stats import pareto, lognorm, genextreme, ks_2samp, weibull_min
 import os
@@ -42,16 +42,16 @@ t3 = ks_2samp(observations,weibull_sample,alternative = 'two-sided')
 figSize = (4,4)
 plt.figure()
 fig, axs = plt.subplots(2,2,tight_layout = True,figsize = figSize)
-axs[0,0].hist(observations, color='darkorange', density = True) 
-axs[0,0].set_title('Observations')                  
+axs[0,0].hist(observations, color='darkorange', density = True)
+axs[0,0].set_title('Observations')
 axs[0,0].set_xlabel('org per Mft3')
-axs[0,1].hist(pareto_sample, color='blue',lw=2, density = True)   
-axs[0,1].set_title('Pareto p = %s'%(round(t1[1],4)))                    
+axs[0,1].hist(pareto_sample, color='blue',lw=2, density = True)
+axs[0,1].set_title('Pareto p = %s'%(round(t1[1],4)))
 axs[0,1].set_xlabel('org per Mft3')
-axs[1,0].hist(genextreme_sample, color='blue',lw=2, density = True)                   
+axs[1,0].hist(genextreme_sample, color='blue',lw=2, density = True)
 axs[1,0].set_title('Extreme Value p = %s'%(round(t2[1],4)))
 axs[1,0].set_xlabel('org per Mft3')
-axs[1,1].hist(weibull_sample, color='darkorange',lw=2, density = True)                   
+axs[1,1].hist(weibull_sample, color='darkorange',lw=2, density = True)
 axs[1,1].set_title('Weibull p = %s'%(round(t3[1],4)))
 axs[1,1].set_xlabel('org per Mft3')
 
