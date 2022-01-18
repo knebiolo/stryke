@@ -7,7 +7,7 @@ Created on Wed Jan 29 20:40:39 2020
 Create an Upper Barker Model to test out Stryke
 """
 # Import Dependencies
-import stryke_v3
+import stryke
 import os
 import pandas as pd
 from matplotlib import pyplot as plt
