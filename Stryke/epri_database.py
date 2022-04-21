@@ -20,7 +20,7 @@ rcParams['font.size'] = 6
 rcParams['font.family'] = 'serif'
 
 # connect to data pass simple filter to EPRI class
-fish = stryke.epri(Feeding_Guild = 'FF', Habitat = 'Pel', Month = [12,1,2])
+fish = stryke.epri(Species = 'Notropis atherinoides', Habitat = 'RRP', Month = [9,10,11])
 fish.ParetoFit()
 fish.ExtremeFit()
 fish.WeibullMinFit()
@@ -55,7 +55,7 @@ axs[1,1].hist(weibull_sample, color='darkorange',lw=2, density = True)
 axs[1,1].set_title('Weibull p = %s'%(round(t3[1],4)))
 axs[1,1].set_xlabel('org per Mft3')
 
-#plt.savefig(os.path.join(r"J:\4287\001\Calcs\Entrainment\Output",'yellow_perch_sample.png'), dpi = 700)
+plt.savefig(os.path.join(r"C:\Users\Colin Dinken\Desktop\Beaver Falls entrainment\fall",'emerald_shiner.png'), dpi = 700)
 plt.show()
 
 # # ok, now do lengths

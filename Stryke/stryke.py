@@ -37,7 +37,7 @@ from scipy.stats import beta
 import xlrd
 import networkx as nx
 import hydrofunctions as hf
-import geopandas as gp
+#import geopandas as gp
 import statsmodels.api as sm
 import math
 from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min
@@ -783,7 +783,7 @@ class hydrologic():
     We have develped a strong linear relationship between drainage area and flow exceedances for the 100 nearest gages to the dam.  With
     this relationship we can predict what a wet spring looks like.'''
 
-    def __init__(self, dam_dir, gage_dir, nid_near_gage_dir, output_dir):
+    def __init__(self, nid_near_gage_dir, output_dir):
         ''' to initialize the hydrologic class, provide:
             dam_dir = a shapefile directory for affected dams, must be subset of National Inventory of Dams (USACE 2004)
             gage_dir = a shapefile directory of USGS gages active since 2009
@@ -793,19 +793,16 @@ class hydrologic():
         self.output_dir = output_dir
 
         # import dams, gages, and the near table and construct the exceedance table
-        self.nid = gp.read_file(dam_dir)
-        self.dams = self.nid.NIDID.values.tolist()
-        self.gages_shp = gp.read_file(gage_dir)
+        #self.nid = gp.read_file(dam_dir)
+        #self.gages_shp = gp.read_file(gage_dir)
         self.NID_to_gage = pd.read_csv(nid_near_gage_dir, dtype={'STAID': object})
         self.DAvgFlow = pd.DataFrame()
+        self.dams = self.NID_to_gage.NIDID.values.tolist()
+
         print("Data imported, proceed to data extraction and exceedance calculation ")
-        self.gages = self.gages_shp.STAID.unique()
-
-        self.nearest_gages = []
-
-        for d in self.nid.NIDID.values:
-            near_gages = self.NID_to_gage[self.NID_to_gage.NIDID == d].STAID.values.tolist()
-            self.nearest_gages.extend(near_gages)
+        #self.gages = self.gages_shp.STAID.unique()
+        self.gages = self.NID_to_gage.STAID.unique() 
+        self.nearest_gages = self.NID_to_gage.STAID.values.tolist()
 
         self.nearest_gages = set(self.nearest_gages)
         print ("There are %s near gages"%(len(self.nearest_gages)))
@@ -835,7 +832,7 @@ class hydrologic():
                 # extract month
                 df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month
 
-                curr_gage = self.gages_shp[self.gages_shp.STAID == i]
+                curr_gage = self.NID_to_gage[self.NID_to_gage.STAID == i]
 
                 curr_name = curr_gage.iloc[0]['STANAME']
 
@@ -892,7 +889,7 @@ class hydrologic():
                     print ("Gage %s has a 90 percent exceedance flow of %s in %s"%(i,exc90,key))
 
                     # get gage information from gage shapefile
-                    curr_gage = self.gages_shp[self.gages_shp.STAID == str(i)]
+                    curr_gage = self.NID_to_gage[self.NID_to_gage.STAID == str(i)]
                     curr_name = curr_gage.iloc[0]['STANAME']
                     curr_huc = np.int(curr_gage.iloc[0]['HUC02'])
                     drain_sqkm = np.float(curr_gage.iloc[0]['DRAIN_SQKM'])
@@ -909,7 +906,7 @@ class hydrologic():
                 exccednace = string object pulling specific exceedance column, 'exc_90','exc_50','exc_10' '''
 
         # get dam data
-        dam_df = self.nid[self.nid.NIDID == dam]
+        dam_df = self.NID_to_gage[self.NID_to_gage.NIDID == dam]
 
         # get feature id
         nidid = dam_df.iloc[0]['NIDID']
