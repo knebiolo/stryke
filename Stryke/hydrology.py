@@ -24,23 +24,23 @@ import numpy as np
 
 
 # create directories for data
-dataWS = r"E:\Rye_Entrainment_4287001\stryke"
+dataWS = r"J:\577\036\Calcs\entrainment\stryke"
 
 # connect to the data
-nid = os.path.join(dataWS,'Data', 'rye_dams.shp')
-gages = os.path.join(dataWS,'Data', 'gages.shp')
-NID_to_gage = os.path.join(dataWS,'Data', 'NID_Near_Gage_200.csv')
+#nid = os.path.join(dataWS,'Data', 'rye_dams.shp')
+#gages = os.path.join(dataWS,'Data', 'gages.shp')
+NID_to_gage = os.path.join(dataWS,'Data', 'Townsend_NearTable_RyeGages.csv')
 
 # initialize the hydrologic analysis
-flow = stryke.hydrologic(nid, gages, NID_to_gage, os.path.join(dataWS,'Output'))
+flow = stryke.hydrologic(NID_to_gage, os.path.join(dataWS,'Output'))
 print("Initialized hydrologic functions")
 
 # calculate seasonal flow exceedances
 flow.seasonal_exceedance({'Winter':[12,1,2],
                           'Spring':[3,4,5],
                           'Summer':[6,7,8],
-                          'Fall':[9,10,11]},
-                         HUC = '05')
+                          'Fall':[9,10,11]})#,
+                       #  HUC = '05')
 
 print ("Calculated seasonal exceedance values")
 
