@@ -37,12 +37,16 @@ from scipy.stats import beta
 import xlrd
 import networkx as nx
 import hydrofunctions as hf
+<<<<<<< Updated upstream
 #import geopandas as gp
+=======
+
+>>>>>>> Stashed changes
 import statsmodels.api as sm
 import math
 from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min
 import h5py
-import tables
+#import tables
 from numpy.random import default_rng
 rng = default_rng()
 
@@ -124,7 +128,7 @@ def Francis(length, param_dict):
     RPM = param_dict['RPM']
     D = param_dict['D']
     Q = param_dict['Q']
-    Q_per = param_dict['Q_per']
+    Q_per = param_dict['Qper']
     ada = param_dict['ada']
     N = param_dict['N']
     iota = param_dict['iota']
@@ -393,9 +397,9 @@ class simulation():
                 spc_dat = self.pop[(self.pop['Season'] == season) & (self.pop.Species == spc)]
 
                 # get scipy log normal distribution paramters - note values in centimeters
-                s = spc_dat.shape_l.values[0]
-                len_loc = spc_dat.location_l.values[0]
-                len_scale = spc_dat.scale_l.values[0]
+                s = spc_dat.s.values[0]
+                len_loc = spc_dat.location.values[0]
+                len_scale = spc_dat.scale.values[0]
 
                 # get species name
                 species = spc_dat.Species.values[0]
@@ -447,6 +451,22 @@ class simulation():
                                           '_lambda':float(row[1]['lambda'])}
                             u_param_dict[state] = param_dict
                         #print (u_param_dict)
+                        elif runner_type == 'Francis':
+                            # built a parameter dictionary for the Francis function
+                            param_dict = {'H':float(row[1]['H']),
+                                          'RPM':float(row[1]['RPM']),
+                                          'D':float(row[1]['D']),
+                                          'Q':float(row[1]['Q']),
+                                          'ada':float(row[1]['ada']),
+                                          'N':float(row[1]['N']),
+                                          'Qper':float (row[1]['Qper']),
+                                          'iota' : float (row[1]['iota']),
+                                          'D1' : float (row[1]['D1']),
+                                          'D2' : float (row[1]['D2']),
+                                          'B' : float (row[1]['B']),
+                                          '_lambda':float(row[1]['lambda'])}
+                            u_param_dict[state] = param_dict
+
                         #fuck
 
                     else:
@@ -465,17 +485,17 @@ class simulation():
                     for j in np.arange(0,months * 30,1):
 
                         # if we don't have pareto parameters, we are passing a population
-                        if math.isnan(spc_dat.event_shape.values[0]):
+                        if math.isnan(spc_dat.param1.values[0]):
                             n = np.int(spc_dat.Fish.values[0])
 
                         # fit a pareto or generalized pareto using scipy
                         else:
-                            shape = spc_dat.event_shape.values[0]
-                            loc = spc_dat.location.values[0]
-                            scale = spc_dat.scale.values[0]
-                            if spc_dat.dist.values[0] == 'pareto':
+                            shape = spc_dat.param1.values[0]
+                            loc = spc_dat.param2.values[0]
+                            scale = spc_dat.param3.values[0]
+                            if spc_dat.dist.values[0] == 'Pareto':
                                 ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
-                            elif spc_dat.dist.values[0] == 'extreme':
+                            elif spc_dat.dist.values[0] == 'Extreme':
                                 ent_rate = genextreme.rvs(shape, loc, scale, 1, random_state=rng)
                             else:
                                 ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
@@ -912,7 +932,7 @@ class hydrologic():
         nidid = dam_df.iloc[0]['NIDID']
 
         # get drainage area in sq miles
-        drain_sqmi = dam_df.iloc[0]['Drainage_a']
+        drain_sqmi = dam_df.iloc[0]['Drainage_A']
         drain_sqkm = drain_sqmi * 2.58999
 
         # extract the 100 nearest gages associated with this NID feature
@@ -1005,7 +1025,7 @@ class epri():
         '''
 
         # import EPRI database
-        self.epri = pd.read_csv(r"J:\4287\002\Calcs\Data\epri1997.csv",  encoding= 'unicode_escape')
+        self.epri = pd.read_csv(r"J:\1508\028\Calcs\Entrainment\stryke\Data\epri1997.csv",  encoding= 'unicode_escape')
         ''' I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame'''
 
         if states is not None:
