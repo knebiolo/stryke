@@ -12,12 +12,12 @@ import os
 import pandas as pd
 
 # read scenario worksheet
-ws = r'E:\Rye_Entrainment_4287001\Entrainment\Data'
-wks = 'Rye_Stryke_Allegheny.xlsx'
+ws = r'C:\Users\knebiolo\Desktop\YH_stryke'
+wks = 'Stryke.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke_v3.simulation(ws,wks, output_name = 'allegheny', existing = True)
+simulation = stryke.simulation(ws,wks, output_name = 'york_haven3', existing = False)
 
 simulation.run()
 simulation.summary()
