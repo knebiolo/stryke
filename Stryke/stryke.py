@@ -128,7 +128,12 @@ def Francis(length, param_dict):
     RPM = param_dict['RPM']
     D = param_dict['D']
     Q = param_dict['Q']
+<<<<<<< Updated upstream
     Q_per = param_dict['Qper']
+=======
+    Q_per = param_dict['Q_per']
+    Q_opt = param_dict['Q_opt']
+>>>>>>> Stashed changes
     ada = param_dict['ada']
     N = param_dict['N']
     iota = param_dict['iota']
@@ -147,7 +152,7 @@ def Francis(length, param_dict):
     alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
 
     # probability of strike * length of fish
-    p_strike = _lambda * (N / D) * (((np.sin(alpha) * (B/D1))/(2*Qwd)) + (np.cos(alpha)/np.pi))
+    p_strike = _lambda * (N * length/ D) * (((np.sin(alpha) * (B/D1))/(2*Qwd)) + (np.cos(alpha)/np.pi))
 
     return 1 - (p_strike * length)
 
@@ -309,7 +314,7 @@ class simulation():
             self.unit_params = pd.read_excel(self.wks_dir,'Unit Params', header = 0, index_col = None, usecols = "B:O", skiprows = 4)
 
             # join unit parameters to scenarios
-            self.scenario_dat = self.routing.join(self.unit_params, how = 'left', lsuffix = 'State', rsuffix = 'Unit')
+            self.scenario_dat = self.routing.merge(self.unit_params, how = 'left', left_on = 'State', right_on = 'Unit')
 
             # get hydraulic capacity of facility
             self.flow_cap = self.unit_params.Qcap.sum()
@@ -400,6 +405,12 @@ class simulation():
                 s = spc_dat.s.values[0]
                 len_loc = spc_dat.location.values[0]
                 len_scale = spc_dat.scale.values[0]
+<<<<<<< Updated upstream
+=======
+                # get a priori 
+                mean_len = spc_dat.Length_mean.values[0]
+                sd_len = spc_dat.Length_sd.values[0]
+>>>>>>> Stashed changes
 
                 # get species name
                 species = spc_dat.Species.values[0]
@@ -450,6 +461,24 @@ class simulation():
                                           'Qper':row[1]['Qper'],
                                           '_lambda':float(row[1]['lambda'])}
                             u_param_dict[state] = param_dict
+
+                        elif runner_type == 'Francis':
+                            # built a parameter dictionary for the kaplan function
+                            param_dict = {'H':float(row[1]['H']),
+                                          'RPM':float(row[1]['RPM']),
+                                          'D':float(row[1]['D']),
+                                          'Q':float(row[1]['Q']),
+                                          'ada':float(row[1]['ada']),
+                                          'N':float(row[1]['N']),
+                                          'Q_opt':float(row[1]['Qopt']),
+                                          'Q_per':float(row[1]['Qper']),
+                                          'iota':float(row[1]['iota']),
+                                          'D1':float(row[1]['D1']),
+                                          'D2':float(row[1]['D2']),
+                                          'B':float(row[1]['B']),
+                                          '_lambda':float(row[1]['lambda'])}
+                            u_param_dict[state] = param_dict                            
+                            
                         #print (u_param_dict)
                         elif runner_type == 'Francis':
                             # built a parameter dictionary for the Francis function
@@ -500,29 +529,29 @@ class simulation():
                             else:
                                 ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
 
-                        ent_rate = np.abs(ent_rate)
-                        print ("Entrainment rate of %s %s during %s simulated"%(round(ent_rate[0],4),spc,scen))
+                            ent_rate = np.abs(ent_rate)
+                            print ("Entrainment rate of %s %s during %s simulated"%(round(ent_rate[0],4),spc,scen))
+    
+                            # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
+                            max_ent_rate = spc_dat.max_ent_rate.values[0]
+    
+                            if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
+    
+                                # how many orders of magnitude larger is the simulated entrainment rate than the largest entrainment rate on record?
+                                magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) + 0.5
+    
+                                if magnitudes < 1.:
+                                    magnitudes = 1.
+    
+                                # reduce by at least 1 order of magnitude
+                                ent_rate = np.abs(ent_rate / 10**magnitudes)
+                                print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
+    
+                            # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
+                            Mft3 = (60 * 60 * hours * flow)/1000000
 
-                        # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
-                        max_ent_rate = spc_dat.max_ent_rate.values[0]
-
-                        if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
-
-                            # how many orders of magnitude larger is the simulated entrainment rate than the largest entrainment rate on record?
-                            magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) + 0.5
-
-                            if magnitudes < 1.:
-                                magnitudes = 1.
-
-                            # reduce by at least 1 order of magnitude
-                            ent_rate = np.abs(ent_rate / 10**magnitudes)
-                            print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
-
-                        # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
-                        Mft3 = (60 * 60 * hours * flow)/1000000
-
-                        # calcualte sample size
-                        n = np.round(Mft3 * ent_rate,0)[0]
+                            # calcualte sample size
+                            n = np.round(Mft3 * ent_rate,0)[0]
                         if n > 0:
                             print ("Resulting in an entrainment event of %s %s"%(np.int(n),spc))
 
@@ -530,7 +559,7 @@ class simulation():
                                 # create population of fish - IN CM!!!!!
                                 population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
                             else:
-                                population = np.abs(np.random.normal(spc_dat.Length_mean.values[0], spc_dat.Length_sd.values[0], np.int(n)))
+                                population = np.abs(np.random.normal(mean_len, sd_len, np.int(n)))
 
                             # convert lengths in cm to feet
                             population = population * 0.393701 / 12
