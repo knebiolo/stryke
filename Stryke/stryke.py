@@ -37,11 +37,7 @@ from scipy.stats import beta
 import xlrd
 import networkx as nx
 import hydrofunctions as hf
-<<<<<<< Updated upstream
-#import geopandas as gp
-=======
-
->>>>>>> Stashed changes
+import geopandas as gp
 import statsmodels.api as sm
 import math
 from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min
@@ -128,12 +124,8 @@ def Francis(length, param_dict):
     RPM = param_dict['RPM']
     D = param_dict['D']
     Q = param_dict['Q']
-<<<<<<< Updated upstream
     Q_per = param_dict['Qper']
-=======
-    Q_per = param_dict['Q_per']
     Q_opt = param_dict['Q_opt']
->>>>>>> Stashed changes
     ada = param_dict['ada']
     N = param_dict['N']
     iota = param_dict['iota']
@@ -148,7 +140,9 @@ def Francis(length, param_dict):
     Qwd = Q/ (omega * D**3)
 
     # part 2 - calculate alpha and beta
-    beta = np.arctan((0.707 * np.pi/8)/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
+    #beta = np.arctan((0.707 * (np.pi/8))/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
+    beta = (0.707 * (np.pi/8))/(iota * Qwd * Q_per * np.power(D1/D2,3)) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
+    
     alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
 
     # probability of strike * length of fish
@@ -405,12 +399,10 @@ class simulation():
                 s = spc_dat.s.values[0]
                 len_loc = spc_dat.location.values[0]
                 len_scale = spc_dat.scale.values[0]
-<<<<<<< Updated upstream
-=======
-                # get a priori 
+
+                # get a priori length 
                 mean_len = spc_dat.Length_mean.values[0]
                 sd_len = spc_dat.Length_sd.values[0]
->>>>>>> Stashed changes
 
                 # get species name
                 species = spc_dat.Species.values[0]
@@ -462,22 +454,22 @@ class simulation():
                                           '_lambda':float(row[1]['lambda'])}
                             u_param_dict[state] = param_dict
 
-                        elif runner_type == 'Francis':
-                            # built a parameter dictionary for the kaplan function
-                            param_dict = {'H':float(row[1]['H']),
-                                          'RPM':float(row[1]['RPM']),
-                                          'D':float(row[1]['D']),
-                                          'Q':float(row[1]['Q']),
-                                          'ada':float(row[1]['ada']),
-                                          'N':float(row[1]['N']),
-                                          'Q_opt':float(row[1]['Qopt']),
-                                          'Q_per':float(row[1]['Qper']),
-                                          'iota':float(row[1]['iota']),
-                                          'D1':float(row[1]['D1']),
-                                          'D2':float(row[1]['D2']),
-                                          'B':float(row[1]['B']),
-                                          '_lambda':float(row[1]['lambda'])}
-                            u_param_dict[state] = param_dict                            
+                        # elif runner_type == 'Francis':
+                        #     # built a parameter dictionary for the kaplan function
+                        #     param_dict = {'H':float(row[1]['H']),
+                        #                   'RPM':float(row[1]['RPM']),
+                        #                   'D':float(row[1]['D']),
+                        #                   'Q':float(row[1]['Q']),
+                        #                   'ada':float(row[1]['ada']),
+                        #                   'N':float(row[1]['N']),
+                        #                   'Q_opt':float(row[1]['Qopt']),
+                        #                   'Q_per':float(row[1]['Qper']),
+                        #                   'iota':float(row[1]['iota']),
+                        #                   'D1':float(row[1]['D1']),
+                        #                   'D2':float(row[1]['D2']),
+                        #                   'B':float(row[1]['B']),
+                        #                   '_lambda':float(row[1]['lambda'])}
+                        #     u_param_dict[state] = param_dict                            
                             
                         #print (u_param_dict)
                         elif runner_type == 'Francis':
@@ -562,7 +554,7 @@ class simulation():
                                 population = np.abs(np.random.normal(mean_len, sd_len, np.int(n)))
 
                             # convert lengths in cm to feet
-                            population = population * 0.393701 / 12
+                            population = population * 0.0328084
 
                             print ("created population for %s iteration:%s day: %s"%(species,i,j))
                             # start this iterations dataframe
