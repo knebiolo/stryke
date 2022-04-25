@@ -550,11 +550,13 @@ class simulation():
                             if math.isnan(s) == False:
                                 # create population of fish - IN CM!!!!!
                                 population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
+                                population = np.where(population > 150,150,population)
+                                # convert lengths in cm to feet
+                                population = population * 0.0328084
                             else:
                                 population = np.abs(np.random.normal(mean_len, sd_len, np.int(n)))
 
-                            # convert lengths in cm to feet
-                            population = population * 0.0328084
+
 
                             print ("created population for %s iteration:%s day: %s"%(species,i,j))
                             # start this iterations dataframe
