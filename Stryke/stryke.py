@@ -125,7 +125,7 @@ def Francis(length, param_dict):
     D = param_dict['D']
     Q = param_dict['Q']
     Q_per = param_dict['Qper']
-    Q_opt = param_dict['Q_opt']
+    #Q_opt = param_dict['Q_opt']
     ada = param_dict['ada']
     N = param_dict['N']
     iota = param_dict['iota']
@@ -140,8 +140,10 @@ def Francis(length, param_dict):
     Qwd = Q/ (omega * D**3)
 
     # part 2 - calculate alpha and beta
+    beta = np.arctan((0.707 * (np.pi/8))/(iota * Qwd * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
     #beta = np.arctan((0.707 * (np.pi/8))/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
-    beta = (0.707 * (np.pi/8))/(iota * Qwd * Q_per * np.power(D1/D2,3)) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
+
+    #beta = (0.707 * (np.pi/8))/(iota * Qwd * Q_per * np.power(D1/D2,3)) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
     
     alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
 
@@ -677,6 +679,7 @@ class simulation():
         self.summary['length_max'] = []
         self.summary['length_q1'] = []
         self.summary['length_q3'] = []
+        #self.summary['avg_strike_prob'] = []
 
         for u in units:
             self.summary['num_entrained_%s'%(u)] = []
@@ -727,6 +730,8 @@ class simulation():
                             self.summary['length_max'].append(day_dat.population.max())
                             self.summary['length_q1'].append(day_dat.population.quantile(0.25))
                             self.summary['length_q3'].append(day_dat.population.quantile(0.75))
+                            #self.summary['avg_strike_prob'].append(day_dat.rates_2.median())
+
 
                             # figure out number entrained and number suvived
                             counts = day_dat.groupby(by = ['state_2'])['survival_2']\
