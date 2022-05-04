@@ -37,7 +37,7 @@ from scipy.stats import beta
 import xlrd
 import networkx as nx
 import hydrofunctions as hf
-import geopandas as gp
+#import geopandas as gp
 import statsmodels.api as sm
 import math
 from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min
