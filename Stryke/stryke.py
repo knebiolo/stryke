@@ -37,7 +37,7 @@ from scipy.stats import beta
 import xlrd
 import networkx as nx
 import hydrofunctions as hf
-import geopandas as gp
+#import geopandas as gp
 import statsmodels.api as sm
 import math
 from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min
@@ -125,7 +125,7 @@ def Francis(length, param_dict):
     D = param_dict['D']
     Q = param_dict['Q']
     Q_per = param_dict['Qper']
-    Q_opt = param_dict['Q_opt']
+    #Q_opt = param_dict['Q_opt']
     ada = param_dict['ada']
     N = param_dict['N']
     iota = param_dict['iota']
