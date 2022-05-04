@@ -910,9 +910,6 @@ class hydrologic():
             for month in seasonal_dict[key]:
                 self.DAvgFlow.loc[self.DAvgFlow['month'] == month, 'season'] = key
 
-        if HUC is not None:
-            self.DAvgFlow = self.DAvgFlow[self.DAvgFlow.HUC02 == HUC]
-
         # seasonal exceedance probability
         self.DAvgFlow['SeasonalExcProb'] = self.DAvgFlow.groupby(['season','STAID'])['DAvgFlow'].rank(ascending = False, method = 'first',pct = True) * 100
 
@@ -920,6 +917,8 @@ class hydrologic():
             # extract exceedance probabilities and add to exceedance data frame
             for key in seasonal_dict:
                 season = self.DAvgFlow[(self.DAvgFlow.season == key) & (self.DAvgFlow.STAID == i)]
+                if HUC is not None:
+                    season = season[season.HUC02 == HUC]
                 season.sort_values(by = 'SeasonalExcProb', ascending = False, inplace = True)
                 print('length of season dataframe is %s'%(len(season.index)))
                 if len(season.index) > 0:
