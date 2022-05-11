@@ -20,11 +20,9 @@ rcParams['font.size'] = 6
 rcParams['font.family'] = 'serif'
 
 # connect to data pass simple filter to EPRI class
-<<<<<<< Updated upstream
-fish = stryke.epri(Species = 'Notropis atherinoides', Habitat = 'RRP', Month = [9,10,11])
-=======
+
 fish = stryke.epri(Family = 'Ictaluridae', Feeding_Guild = 'GE', Month = [12,1,2])
->>>>>>> Stashed changes
+
 fish.ParetoFit()
 fish.ExtremeFit()
 fish.WeibullMinFit()
@@ -59,12 +57,15 @@ axs[1,1].hist(weibull_sample, color='darkorange',lw=2, density = True)
 axs[1,1].set_title('Weibull p = %s'%(round(t3[1],4)))
 axs[1,1].set_xlabel('org per Mft3')
 
-plt.savefig(os.path.join(r"C:\Users\Colin Dinken\Desktop\Beaver Falls entrainment\fall",'emerald_shiner.png'), dpi = 700)
+#plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'emerald_shiner.png'), dpi = 700)
 plt.show()
 
 # # ok, now do lengths
 #fish = stryke.epri(Species = 'Ictalurus punctatus')
 fish.LengthSummary()
 
+plt.figure()
 plt.hist(fish.lengths,color = 'r')
-plt.hist(lognorm.rvs(fish.len_dist[0],fish.len_dist[1],fish.len_dist[2],len(fish.lengths)),color = 'b')
+plt.hist(lognorm.rvs(fish.len_dist[0],fish.len_dist[1],fish.len_dist[2],len(fish.lengths)),color = 'b', alpha = 0.5)
+#plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'fuck.png'), dpi = 700)
+plt.show()
