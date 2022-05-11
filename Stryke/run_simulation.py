@@ -12,12 +12,12 @@ import os
 import pandas as pd
 
 # read scenario worksheet
-ws = r'C:\Users\knebiolo\Desktop\YH_stryke'
-wks = 'Stryke.xlsx'
+ws = r'C:\Users\knebiolo\Desktop\Francis Qc\stryke'
+wks = 'Francis Testing v3.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke.simulation(ws,wks, output_name = 'york_haven3', existing = False)
+simulation = stryke.simulation(ws,wks, output_name = 'francis_why_3', existing = False)
 
 simulation.run()
 simulation.summary()
@@ -31,3 +31,4 @@ with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
     summary.to_excel(writer,sheet_name = 'summary')
     length.to_excel(writer,sheet_name = 'length data')
 
+summary.to_csv(os.path.join(wks_dir,'francis_why_3_summary.csv'))
