@@ -140,17 +140,19 @@ def Francis(length, param_dict):
     Qwd = Q/ (omega * D**3)
 
     # part 2 - calculate alpha and beta
-    beta = np.arctan((0.707 * (np.pi/8))/(iota * Qwd * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
+    #beta = np.arctan((0.707 * (np.pi/8))/(iota * Qwd * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
     #beta = np.arctan((0.707 * (np.pi/8))/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
 
-    #beta = (0.707 * (np.pi/8))/(iota * Qwd * Q_per * np.power(D1/D2,3)) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
+    tan_beta = (0.707 * (np.pi/8))/(iota * Qwd * np.power(D1/D2,3)) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
     
-    alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
+    #alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
+    alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * tan_beta * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
+
 
     # probability of strike * length of fish
     p_strike = _lambda * (N * length/ D) * (((np.sin(alpha) * (B/D1))/(2*Qwd)) + (np.cos(alpha)/np.pi))
 
-    return 1 - (p_strike * length)
+    return 1 - (p_strike)
 
 def Pump(length, param_dict):
     ''' pump mode calculations from fish entrainment analysis report:
@@ -242,7 +244,7 @@ def create_route(wks_dir):
     # return finished product and enjoy functionality of networkx
     return route
 
-def movement (location, status, graph):
+def movement (location, status, length, swim_speed, graph, intake_vel_dict):
     if status == 1:
         # get neighbors
         neighbors = graph[location]
@@ -257,26 +259,47 @@ def movement (location, status, graph):
             if graph[location][i]['weight'] > 0.0:
                 locs.append(i)
                 probs.append(graph[location][i]['weight'])
-        #print (locs,probs)
         new_loc = np.random.choice(locs,1,p = probs)[0]
+        # filter out those fish that can escape intake velocity
+        if np.sum(swim_speed) > 0:
+            if 'U' in new_loc:
+                if swim_speed > intake_vel_dict[new_loc]:
+                    new_loc = 'spill'
     else:
         new_loc = location
 
     return new_loc
 
+def speed (L,A,M):
+    '''vectorizable function to calculate swimming speed as a function of length.
+    
+    Sambilay 1990
+    
+    Inputs:
+        A = caudal fin aspect ratio (fishbase y'all)
+        L = fish length (cm)
+        M = swimming mode where 0 = sustained and 1 = burst
+        
+    Output is given in kilometers per hour, conversion to feet per second 
+    given by google.'''
+        
+    log_sa = -0.828 + 0.6196 * np.log10(L*30.48) + 0.3478 * np.log10(A) + 0.7621 * M
+    
+    return (10**log_sa) * 0.911344
+
 class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility
     specific simulation'''
-
     def __init__ (self, proj_dir, wks, output_name, existing = False):
         if existing == False:
+            # create workspace directory
             self.wks_dir = os.path.join(proj_dir,wks)
+            
             # extract scenarios from input spreadsheet
             self.routing = pd.read_excel(self.wks_dir,'Routing',header = 0,index_col = None, usecols = "B:G", skiprows = 9)
 
             # import nodes and create a survival function dictionary
             self.nodes = pd.read_excel(self.wks_dir,'Nodes',header = 0,index_col = None, usecols = "B:C", skiprows = 9)
-            #print (nodes.head())
             self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
             self.surv_fun_dict = self.surv_fun_df.to_dict('index')
 
@@ -289,11 +312,9 @@ class simulation():
                     if river_node > max_river_node:
                         max_river_node = river_node
 
-
             # make a movement graph from input spreadsheet
             self.graph = create_route(self.wks_dir)
             print ("created a graph")
-
 
             # identify the number of moves that a fish can make
             path_list = nx.all_shortest_paths(self.graph,'river_node_0','river_node_%s'%(max_river_node))
@@ -307,7 +328,7 @@ class simulation():
             print ("identified the number of moves, %s"%(self.moves))
 
             # import unit parameters
-            self.unit_params = pd.read_excel(self.wks_dir,'Unit Params', header = 0, index_col = None, usecols = "B:O", skiprows = 4)
+            self.unit_params = pd.read_excel(self.wks_dir,'Unit Params', header = 0, index_col = None, usecols = "B:P", skiprows = 4)
 
             # join unit parameters to scenarios
             self.scenario_dat = self.routing.merge(self.unit_params, how = 'left', left_on = 'State', right_on = 'Unit')
@@ -320,7 +341,7 @@ class simulation():
             self.scenarios = self.scenarios_df['Scenario'].unique()
 
             # import population data
-            self.pop = pd.read_excel(self.wks_dir,'Population',header = 0,index_col = None, usecols = "B:Q", skiprows = 11)
+            self.pop = pd.read_excel(self.wks_dir,'Population',header = 0,index_col = None, usecols = "B:R", skiprows = 11)
 
             # create output HDF file
             self.proj_dir = proj_dir
@@ -369,8 +390,6 @@ class simulation():
                     max_len = path_len
             self.moves = np.arange(0,max_len-1,1)
 
-
-
     def run(self):
         str_size = dict()
         str_size['species'] = 30
@@ -418,7 +437,7 @@ class simulation():
                 # create empty holders for some dictionaries
                 u_param_dict = {}
                 surv_dict = {}
-
+                intake_vel_dict = {}
                 # iterate through routing rows for this flow scenario
                 for row in sc_dat.iterrows():
 
@@ -428,7 +447,8 @@ class simulation():
                         # get this unit's parameters
                         u_dat = self.unit_params[self.unit_params.Unit == state]
                         runner_type = u_dat['Runner Type'].values[0]
-
+                        intake_vel_dict[u_dat.Unit.values[0]] = u_dat['intake_vel'].values[0]
+                        
                         # create parameter dictionary for every unit, a dictionary in a dictionary
                         if runner_type == 'Kaplan':
 
@@ -528,6 +548,12 @@ class simulation():
     
                             # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
                             max_ent_rate = spc_dat.max_ent_rate.values[0]
+                            
+                            # get max entrainment length cutoff (either too large to fit or too fast)
+                            # if math.isnan(spc_dat.caudal_AR.values[0]) == False:
+                            #     max_ent_len = spc_dat.ent_cutoff_in.values[0]/12.0
+                            # else:
+                            #     max_ent_len = 100.
     
                             if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
     
@@ -556,8 +582,15 @@ class simulation():
                                 # convert lengths in cm to feet
                                 population = population * 0.0328084
                             else:
-                                population = np.abs(np.random.normal(mean_len, sd_len, np.int(n)))
+                                population = np.abs(np.random.normal(mean_len, sd_len, np.int(n)))/12.0
 
+                            # calculate sustained swim speed (ft/s)
+                            if math.isnan(spc_dat.caudal_AR.values[0]) == False:
+                                AR = spc_dat.caudal_AR
+                                v_speed = np.vectorize(speed,excluded = [1,2])
+                                swim_speed = v_speed(population,AR,0)
+                            else:
+                                swim_speed = np.zeros(len(population))
 
 
                             print ("created population for %s iteration:%s day: %s"%(species,i,j))
@@ -600,8 +633,15 @@ class simulation():
                                 # simulate movement
                                 if k < max(self.moves):
                                     # vectorize movement function
-                                    v_movement = np.vectorize(movement,excluded = [2])
-                                    move = v_movement(location,survival,self.graph)
+                                    v_movement = np.vectorize(movement,excluded = [4,5,6])
+                                    
+                                    # have fish move to the next node
+                                    move = v_movement(location, 
+                                                      survival,
+                                                      population,
+                                                      swim_speed,
+                                                      self.graph,
+                                                      intake_vel_dict)
 
                                 # add onto iteration dataframe, attach columns
                                 iteration['draw_%s'%(k)] = np.float32(dice)
@@ -623,7 +663,7 @@ class simulation():
         self.hdf.flush()
         self.hdf.close()
 
-    def summary(self):
+    def summary(self,whole_project_surv = False):
         '''Function summarizes entrainment risk hdf file'''
         # create hdf store
         self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))
@@ -671,6 +711,8 @@ class simulation():
         self.summary = dict()
         self.summary['species'] = []
         self.summary['scenario'] = []
+        self.summary['flow_scen'] = []
+        self.summary['season'] = []
         self.summary['iteration'] = []
         self.summary['day'] = []
         self.summary['pop_size'] = []
@@ -695,7 +737,8 @@ class simulation():
             for j in scens:
                 # create empty dataframe for summary
                 dat = pd.DataFrame()
-
+                flow_scen = j.split(' ')[0]
+                season = j.split(' ')[2]
                 try:
                     # identify the number of iterations this species/scenario ran for
                     iters = tree[j][i].keys()
@@ -722,6 +765,8 @@ class simulation():
                             # start filling in that summary dictionary
                             self.summary['species'].append(i)
                             self.summary['scenario'].append(j)
+                            self.summary['flow_scen'].append(flow_scen)
+                            self.summary['season'].append(season)
                             self.summary['iteration'].append(k)
                             self.summary['day'].append(d)
                             self.summary['pop_size'].append(len(day_dat))
@@ -754,62 +799,67 @@ class simulation():
                                     self.summary['num_entrained_%s'%(u)].append(0)
                                     self.summary['num_killed_%s'%(u)].append(0)
 
-
-                        # summarize species-scenario - whole project
-                        whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
-                            .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'successes'})
-                        whole_proj_count = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
-                            .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'count'})
-
-                        # merge successes and counts
-                        whole_summ = whole_proj_succ.merge(whole_proj_count)
-
-                        # calculate probabilities, fit to beta, write to dictionary summarizing results
-                        whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
-                        whole_params = beta.fit(whole_summ.prob.values)
-                        whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                        whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                        whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
-
-                        self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,whole_95ci[0],whole_95ci[1]]
-                        print ("whole project survival for %s in scenario %s expected to be %s (%s,%s)"%(i,j,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
-                        for l in self.moves:
-                            # we need to remove the fish that died at the previous state
-                            if l > 0:
-                                sub_dat = dat[dat['survival_%s'%(l-1)] == 1]
-                            else:
-                                sub_dat = dat
-
-                            # group by iteration and state
-                            route_succ = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
-                                .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'successes'})
-                            route_count = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
-                                .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'count'})
-
+                        if whole_project_surv == True:
+                            # summarize species-scenario - whole project
+                            whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
+                                .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'successes'})
+                            whole_proj_count = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
+                                .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'count'})
+    
                             # merge successes and counts
-                            route_summ = route_succ.merge(route_count)
-
-                            # calculate probabilities
-                            route_summ['prob'] = route_summ['successes']/route_summ['count']
-
-                            # extract route specific dataframes and fit beta
-                            states = route_summ['state_%s'%(l)].unique()
-                            for m in states:
-
-
-                                st_df = route_summ[route_summ['state_%s'%(l)] == m]
-                                try:
-                                    st_params = beta.fit(st_df.prob.values)
-                                    st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
-                                    st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
-                                    st_95ci = beta.interval(alpha = 0.95,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
-                                except:
-                                    st_median = 0.5
-                                    st_std = 1.0
-                                    st_95ci = (0.,1.)
-
-                                # add results to beta dictionary
-                                self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,st_95ci[0],st_95ci[1]]
+                            whole_summ = whole_proj_succ.merge(whole_proj_count)
+    
+                            # calculate probabilities, fit to beta, write to dictionary summarizing results
+                            whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
+                            whole_params = beta.fit(whole_summ.prob.values)
+                            whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
+                            whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
+                            
+                            #whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
+                            lcl = beta.ppf(0.025,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
+                            ucl = beta.ppf(0.975,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])  
+                            self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,lcl,ucl]
+                            #print ("whole project survival for %s in scenario %s iteraton %s expected to be %s (%s,%s)"%(i,j,k,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
+                            for l in self.moves:
+                                # we need to remove the fish that died at the previous state
+                                if l > 0:
+                                    sub_dat = dat[dat['survival_%s'%(l-1)] == 1]
+                                else:
+                                    sub_dat = dat
+    
+                                # group by iteration and state
+                                route_succ = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
+                                    .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'successes'})
+                                route_count = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
+                                    .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'count'})
+    
+                                # merge successes and counts
+                                route_summ = route_succ.merge(route_count)
+    
+                                # calculate probabilities
+                                route_summ['prob'] = route_summ['successes']/route_summ['count']
+    
+                                # extract route specific dataframes and fit beta
+                                states = route_summ['state_%s'%(l)].unique()
+                                for m in states:
+    
+    
+                                    st_df = route_summ[route_summ['state_%s'%(l)] == m]
+                                    try:
+                                        st_params = beta.fit(st_df.prob.values)
+                                        st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
+                                        st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
+                
+                                        lcl = beta.ppf(0.025,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
+                                        ucl = beta.ppf(0.975,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])                                    
+                                    except:
+                                        st_median = 0.5
+                                        st_std = 1.0
+                                        lcl = 0.
+                                        ucl = 1.
+    
+                                    # add results to beta dictionary
+                                    self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,lcl,ucl]
                 except KeyError:
                     continue
             # calculate length stats for this species
@@ -819,12 +869,88 @@ class simulation():
                               spc_length.population.quantile(q = 0.75),
                               spc_length.population.max()]
 
-
-        self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])
+        if whole_project_surv == True:
+            self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])
         self.summ_dat = pd.DataFrame.from_dict(data = self.summary, orient = 'columns')
         self.length_df = pd.DataFrame.from_dict(data = length_dict,orient = 'index', columns = ['min','q1','median','q3','max'])
         self.hdf.flush()
         self.hdf.close()
+        
+        # calculate total killed and total entrained
+        self.summ_dat['total_killed'] = self.summ_dat.filter(regex = 'num_killed', axis = 'columns').sum(axis = 1)
+        self.summ_dat['total_entrained'] = self.summ_dat.filter(regex = 'num_entrained', axis = 'columns').sum(axis = 1)
+        yearly_summary = self.summ_dat.groupby(by = ['species','flow_scen','iteration'])['pop_size','total_killed','total_entrained'].sum()
+        yearly_summary.reset_index(inplace = True)
+
+        cum_sum_dict = {'species':[],
+                        'flow_scen':[],
+                        'med_population':[],
+                        'med_entrained':[], 
+                        'med_dead':[],
+                        'median_ent':[],
+                        'lcl_ent':[],
+                        'ucl_ent':[],
+                        'prob_gt_10_entrained':[],
+                        'prob_gt_100_entrained':[],
+                        'prob_gt_1000_entrained':[],
+                        'median_killed':[],
+                        'lcl_killed':[],
+                        'ucl_killed':[],
+                        'prob_gt_10_killed':[],
+                        'prob_gt_100_killed':[],
+                        'prob_gt_1000_killed':[]}
+        # daily summary
+        for fishy in yearly_summary.species.unique():
+            #iterate over scenarios
+            for scen in yearly_summary.flow_scen.unique():
+                # get data
+                idat = yearly_summary[(yearly_summary.species == fishy) & (yearly_summary.flow_scen == scen)]
+                
+                # get cumulative sums and append to dictionary
+                cum_sum_dict['species'].append(fishy)
+                cum_sum_dict['flow_scen'].append(scen)
+                cum_sum_dict['med_population'].append(idat.pop_size.median())
+                cum_sum_dict['med_entrained'].append(idat.total_entrained.median())
+                cum_sum_dict['med_dead'].append(idat.total_killed.median())
+                
+                day_dat = self.summ_dat[(self.summ_dat.species == fishy) & (self.summ_dat.flow_scen == scen)]
+                
+                # fit distribution to number entrained
+                dist = weibull_min.fit(day_dat.total_entrained)
+                probs = weibull_min.sf([10,100,1000],dist[0],dist[1],dist[2])
+                
+                median = weibull_min.median(dist[0],dist[1],dist[2])
+                lcl = weibull_min.ppf(0.025,dist[0],dist[1],dist[2])
+                ucl = weibull_min.ppf(0.975,dist[0],dist[1],dist[2])
+                
+                cum_sum_dict['median_ent'].append(median)
+                cum_sum_dict['lcl_ent'].append(lcl)
+                cum_sum_dict['ucl_ent'].append(ucl)
+                cum_sum_dict['prob_gt_10_entrained'].append(probs[0])
+                cum_sum_dict['prob_gt_100_entrained'].append(probs[1])
+                cum_sum_dict['prob_gt_1000_entrained'].append(probs[2])
+                
+                # fit distribution to number killed
+                dist = weibull_min.fit(day_dat.total_killed)
+                probs = weibull_min.sf([10,100,1000],dist[0],dist[1],dist[2])
+                
+                median = weibull_min.median(dist[0],dist[1],dist[2])
+                lcl = weibull_min.ppf(0.025,dist[0],dist[1],dist[2])
+                ucl = weibull_min.ppf(0.975,dist[0],dist[1],dist[2])
+                
+                cum_sum_dict['median_killed'].append(median)
+                cum_sum_dict['lcl_killed'].append(lcl)
+                cum_sum_dict['ucl_killed'].append(ucl)
+                cum_sum_dict['prob_gt_10_killed'].append(probs[0])
+                cum_sum_dict['prob_gt_100_killed'].append(probs[1])
+                cum_sum_dict['prob_gt_1000_killed'].append(probs[2])
+                
+        # plt.figure()
+        # plt.hist(day_dat.total_entrained,color = 'r')
+        # #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'fuck.png'), dpi = 700)
+        # plt.show()        
+                
+        self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict,orient = 'columns')
 
 class hydrologic():
     '''python class object that conducts flow exceedance analysis using recent USGS data as afunction of the contributing watershed size.
