@@ -260,6 +260,7 @@ def movement (location, status, length, swim_speed, graph, intake_vel_dict):
                 locs.append(i)
                 probs.append(graph[location][i]['weight'])
         new_loc = np.random.choice(locs,1,p = probs)[0]
+        
         # filter out those fish that can escape intake velocity
         if np.sum(swim_speed) > 0:
             if 'U' in new_loc:
@@ -283,9 +284,13 @@ def speed (L,A,M):
     Output is given in kilometers per hour, conversion to feet per second 
     given by google.'''
         
-    log_sa = -0.828 + 0.6196 * np.log10(L*30.48) + 0.3478 * np.log10(A) + 0.7621 * M
+    # log_sa = -0.828 + 0.6196 * np.log10(L*30.48) + 0.3478 * np.log10(A) + 0.7621 * M
     
-    return (10**log_sa) * 0.911344
+    # return (10**log_sa) * 0.911344
+
+    sa = 10**(-0.828 + 0.6196 * np.log10(L*30.48) + 0.3478 * np.log10(A) + 0.7621 * M)
+    
+    return sa * 0.911344
 
 class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility
