@@ -12,12 +12,12 @@ import os
 import pandas as pd
 
 # read scenario worksheet
-ws = r'D:\Franklin Falls\Data'
-wks = 'Stryke Franklin Falls White Sucker.xlsx'
+ws = r'C:\Users\knebiolo\Desktop\Beaver_Falls_Entrainment\Species Specific'
+wks = 'Yellow Perch.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke.simulation(ws,wks, output_name = 'ff white sucker', existing = False)
+simulation = stryke.simulation(ws,wks, output_name = 'yellow_perch', existing = False)
 
 simulation.run()
 simulation.summary(whole_project_surv = True)
@@ -35,5 +35,4 @@ with pd.ExcelWriter(wks_dir,engine = 'openpyxl', mode = 'a') as writer:
     year_sum.to_excel(writer,sheet_name = 'yearly summary')
     length.to_excel(writer,sheet_name = 'length data')
 
-day_sum.to_csv(os.path.join(ws,'francis_why_3_summary.csv'))
 
