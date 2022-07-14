@@ -1500,6 +1500,7 @@ class epri():
                  plant_cap = None,
                  Month = None,
                  Family = None,
+                 Genus = None,
                  Species = None,
                  Feeding_Guild = None,
                  Habitat = None,
@@ -1561,7 +1562,7 @@ class epri():
             if isinstance(NIDID,str):
                 self.epri = self.epri[self.epri.NIDID != NIDID]
             else:
-                self.epri = self.epri[self.epri['NIDID'].isnotin(NIDID)]
+                self.epri = self.epri[~self.epri['NIDID'].isin(NIDID)]
 
         if states is not None:
             if isinstance(states,str):
@@ -1592,6 +1593,12 @@ class epri():
                 self.epri = self.epri[self.epri.Species == Species]
             else:
                 self.epri = self.epri[self.epri['Species'].isin(Species)]
+                
+        if Genus is not None:
+            if isinstance(Genus,str):
+                self.epri = self.epri[self.epri.Genus == Genus]
+            else:
+                self.epri = self.epri[self.epri['Genus'].isin(Genus)]
 
         if Feeding_Guild is not None:
             if isinstance(Feeding_Guild,str):
