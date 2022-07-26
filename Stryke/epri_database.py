@@ -21,7 +21,7 @@ rcParams['font.family'] = 'serif'
 
 # connect to data pass simple filter to EPRI class
 
-fish = stryke.epri(Species = 'Perca flavescens', Month = [9,10,11], HUC02 = [5,7])
+fish = stryke.epri(Family = 'Catostomidae', Feeding_Guild = 'IN', Month = [3,4,5], HUC02 = [5,7])
 
 fish.ParetoFit()
 fish.ExtremeFit()

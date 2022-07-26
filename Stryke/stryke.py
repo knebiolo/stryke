@@ -446,7 +446,7 @@ class simulation():
             self.scenarios = self.scenarios_df['Scenario'].unique()
 
             # import population data
-            self.pop = pd.read_excel(self.wks_dir,'Population',header = 0,index_col = None, usecols = "B:R", skiprows = 11)
+            self.pop = pd.read_excel(self.wks_dir,'Population',header = 0,index_col = None, usecols = "B:S", skiprows = 11)
 
             # create output HDF file
             self.proj_dir = proj_dir
@@ -501,13 +501,13 @@ class simulation():
         for i in self.moves:
             str_size['state_%s'%(i)] = 30
 
-
         for scen in self.scenarios:
             scen_num = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Scenario Number'].values[0]
             season = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Season'].values[0]
             months = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Months'].values[0]
             min_Q = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Min_Op_Flow'].values[0]
             env_Q = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Env_Flow'].values[0]
+            
             if type(months) != np.int64:
                 month_list = months.split(",") 
                 month_list = list(map(int, month_list))
@@ -586,9 +586,12 @@ class simulation():
 
                 # get the number of times we are going to iterate this thing
                 iterations = spc_dat['Iterations'].values[0]
-
-                # get scenario routing and node survival data for this species/flow scenario
-                #sc_dat = self.scenario_dat[self.scenario_dat['Scenario'] == scen]
+                
+                # get probability of occurence
+                if math.isnan(spc_dat.occur_prob.values[0]):
+                    occur_prob = 1.0
+                else:
+                    occur_prob = spc_dat.occur_prob.values[0]
 
                 # create empty holders for some dictionaries
                 u_param_dict = {}
@@ -629,7 +632,6 @@ class simulation():
                                       '_lambda':float(row[1]['lambda'])}
                         u_param_dict[unit] = param_dict                       
                         
-                    #print (u_param_dict)
                     elif runner_type == 'Francis':
                         # built a parameter dictionary for the Francis function
                         param_dict = {'H':float(row[1]['H']),
@@ -645,12 +647,13 @@ class simulation():
                                       '_lambda':float(row[1]['lambda'])}
                         u_param_dict[unit] = param_dict
 
-                    #fuck
-
                 # create survival dictionary, which is a dictionary of a priori surival rates
                 for row in self.nodes.iterrows():
                     if row[1]['Surv_Fun'] == 'a priori':
                         surv_dict[row[1]['Location']] = row[1]['Survival']
+                
+                # create an empty dataframe to hold length 
+                spc_length = pd.DataFrame()
 
                 # create an iterator
                 for i in np.arange(0,iterations,1):
@@ -677,48 +680,60 @@ class simulation():
                                 
                             Q_dict['sta_cap'] = sta_cap
     
-                            # if we don't have pareto parameters, we are passing a population
-                            if math.isnan(spc_dat.param1.values[0]):
-                                n = np.int(spc_dat.Fish.values[0])
-    
-                            # fit a pareto or generalized pareto using scipy
-                            else:
-                                shape = spc_dat.param1.values[0]
-                                loc = spc_dat.param2.values[0]
-                                scale = spc_dat.param3.values[0]
-                                if spc_dat.dist.values[0] == 'Pareto':
-                                    ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
-                                elif spc_dat.dist.values[0] == 'Extreme':
-                                    ent_rate = genextreme.rvs(shape, loc, scale, 1, random_state=rng)
+                            '''we need to roll the dice here and determine whether or not fish are present at site'''
+                            presence_seed = np.random.uniform(0,1)
+                            
+                            if occur_prob >= presence_seed:
+
+                                
+                                # if we don't have pareto parameters, we are passing a population
+                                if math.isnan(spc_dat.param1.values[0]):
+                                    n = np.int(spc_dat.Fish.values[0])
+        
+                                # fit a pareto or generalized pareto using scipy
                                 else:
-                                    ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
-    
-                                ent_rate = np.abs(ent_rate)
-                                print ("Entrainment rate of %s %s during %s simulated"%(round(ent_rate[0],4),spc,scen))
+                                    shape = spc_dat.param1.values[0]
+                                    loc = spc_dat.param2.values[0]
+                                    scale = spc_dat.param3.values[0]
+                                    if spc_dat.dist.values[0] == 'Pareto':
+                                        ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
+                                    elif spc_dat.dist.values[0] == 'Extreme':
+                                        ent_rate = genextreme.rvs(shape, loc, scale, 1, random_state=rng)
+                                    else:
+                                        ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
         
-                                # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
-                                max_ent_rate = spc_dat.max_ent_rate.values[0]
+                                    ent_rate = np.abs(ent_rate)
+                                    print ("Entrainment rate of %s %s during %s simulated"%(round(ent_rate[0],4),spc,scen))
+            
+                                    # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
+                                    max_ent_rate = spc_dat.max_ent_rate.values[0]
+            
+                                    if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
+            
+                                        # how many orders of magnitude larger is the simulated entrainment rate than the largest entrainment rate on record?
+                                        magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) + 0.5
+            
+                                        if magnitudes < 1.:
+                                            magnitudes = 1.
+            
+                                        # reduce by at least 1 order of magnitude
+                                        ent_rate = np.abs(ent_rate / 10**magnitudes)
+                                        print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
+            
+                                    # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
+                                    Mft3 = (60 * 60 * hours * curr_Q)/1000000
         
-                                if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
-        
-                                    # how many orders of magnitude larger is the simulated entrainment rate than the largest entrainment rate on record?
-                                    magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) + 0.5
-        
-                                    if magnitudes < 1.:
-                                        magnitudes = 1.
-        
-                                    # reduce by at least 1 order of magnitude
-                                    ent_rate = np.abs(ent_rate / 10**magnitudes)
-                                    print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
-        
-                                # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
-                                Mft3 = (60 * 60 * hours * curr_Q)/1000000
-    
-                                # calcualte sample size
-                                n = np.round(Mft3 * ent_rate,0)[0]
+                                    # calcualte sample size
+                                    n = np.round(Mft3 * ent_rate,0)[0]
+                            else:
+                                n = 0
+                                
                             if n > 0:
                                 print ("Resulting in an entrainment event of %s %s"%(np.int(n),spc))
     
+                                flow_scen = scen.split(' ')[0]
+                                season = scen.split(' ')[2] 
+                                
                                 if math.isnan(s) == False:
                                     # create population of fish - IN CM!!!!!
                                     population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
@@ -742,11 +757,13 @@ class simulation():
                                 iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int(n)),
                                                           'species':np.repeat(species,np.int(n)),
                                                           'flow_scenario':np.repeat(scen,np.int(n)),
+                                                          'season':np.repeat(season,np.int(n)),
                                                           'iteration':np.repeat(i,np.int(n)),
                                                           'day':np.repeat(day,np.int(n)),
                                                           'flow':np.repeat(curr_Q,np.int(n)),
                                                           'population':np.float32(population),
                                                           'state_0':np.repeat('river_node_0',np.int(n))})
+                                
     
                                 for k in self.moves:
                                     if k == 0:
@@ -798,10 +815,64 @@ class simulation():
                                         iteration['state_%s'%(k+1)] = move
     
                                 # save that data
-                                self.hdf['simulations/%s/%s/%s/%s'%(scen,spc,i,day)] = iteration
-                                self.hdf.flush()
+                                iteration.to_hdf(self.hdf,'simulations/%s/%s'%(scen,spc), mode = 'a', format = 'table', append = True)
+                                self.hdf.flush()                               
+                                
+
+                                # start filling in that summary dictionary
+                                row = [spc,scen,flow_scen,season,str(i),day,curr_Q,str(len(iteration))]
+                                columns = ['species','scenario','flow_scen','season','iteration','day','flow','pop_size']
+
+                                # figure out number entrained and number suvived
+                                counts = iteration.groupby(by = ['state_2'])['survival_2']\
+                                    .count().to_frame().reset_index().rename(columns = {'survival_2':'entrained'})
+                                sums = iteration.groupby(by = ['state_2'])['survival_2']\
+                                    .sum().to_frame().reset_index().rename(columns = {'survival_2':'survived'})
+
+                                # merge and calculate entrainment survival
+                                ent_stats = counts.merge(sums,how = 'left',on ='state_2', copy = False)
+                                ent_stats.fillna(0,inplace = True)
+                                ent_stats['mortality'] = ent_stats.entrained - ent_stats.survived
+
+                                # for each unit, calculate the number entrained and the number killed
+                                for u in units:
+                                    udat = ent_stats[ent_stats.state_2 == u]
+                                    if len(udat) > 0:
+                                        columns.append('num_entrained_%s'%(u))
+                                        row.append(str(udat.entrained.values[0]))
+                                        columns.append('num_killed_%s'%(u))
+                                        row.append(str(udat.mortality.values[0]))
+                                    else:
+                                        columns.append('num_entrained_%s'%(u))
+                                        row.append(str(0))
+                                        columns.append('num_killed_%s'%(u))
+                                        row.append(str(0))
+                                # extract population and iteration
+                                length_dat = iteration[['population','flow_scenario','season','iteration','day','state_2','survival_2']]
+    
+                                # append to species length dataframe
+                                spc_length = spc_length.append(length_dat, ignore_index = True)
+                                    
                             else:
-                                print ("No fish this day")
+                                print ("No fish of this species on %s"%(day))
+                                flow_scen = scen.split(' ')[0]
+                                season = scen.split(' ')[2] 
+                                row = [spc,scen,flow_scen,season,str(i),day,curr_Q,str(0)]
+                                columns = ['species','scenario','flow_scen','season','iteration','day','flow','pop_size']
+
+                                # for each unit, calculate the number entrained and the number killed
+                                for u in units:
+                                    columns.append('num_entrained_%s'%(u))
+                                    row.append(str(0))
+                                    columns.append('num_killed_%s'%(u))
+                                    row.append(str(0))
+                            
+                            # write daily summary to hdf - first convert to dataframe
+                            daily = pd.DataFrame(columns = columns)
+                            daily.loc[0] = row
+                            daily.to_hdf(self.hdf,'Daily',mode = 'a',format = 'table', append = True)
+                            self.hdf.flush()
+                        
                     else:
                         #create an iterator to simulate days for the number of months passed to the season
                         for j in np.arange(0,months * 30,1):
@@ -826,51 +897,52 @@ class simulation():
                                 
                             Q_dict['sta_cap'] = sta_cap
                             
-                            # if we don't have pareto parameters, we are passing a population
-                            if math.isnan(spc_dat.param1.values[0]):
-                                n = np.int(spc_dat.Fish.values[0])
-    
-                            # fit a pareto or generalized pareto using scipy
-                            else:
-                                shape = spc_dat.param1.values[0]
-                                loc = spc_dat.param2.values[0]
-                                scale = spc_dat.param3.values[0]
-                                if spc_dat.dist.values[0] == 'Pareto':
-                                    ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
-                                elif spc_dat.dist.values[0] == 'Extreme':
-                                    ent_rate = genextreme.rvs(shape, loc, scale, 1, random_state=rng)
+                            '''we need to roll the dice here and determine whether or not fish are present at site'''
+                            presence_seed = np.random.uniform(0,1)[0]
+                            
+                            if occur_prob >= presence_seed:
+                                # if we don't have pareto parameters, we are passing a population
+                                if math.isnan(spc_dat.param1.values[0]):
+                                    n = np.int(spc_dat.Fish.values[0])
+        
+                                # fit a pareto or generalized pareto using scipy
                                 else:
-                                    ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
-    
-                                ent_rate = np.abs(ent_rate)
-                                print ("Entrainment rate of %s %s during %s simulated"%(round(ent_rate[0],4),spc,scen))
+                                    shape = spc_dat.param1.values[0]
+                                    loc = spc_dat.param2.values[0]
+                                    scale = spc_dat.param3.values[0]
+                                    if spc_dat.dist.values[0] == 'Pareto':
+                                        ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
+                                    elif spc_dat.dist.values[0] == 'Extreme':
+                                        ent_rate = genextreme.rvs(shape, loc, scale, 1, random_state=rng)
+                                    else:
+                                        ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
         
-                                # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
-                                max_ent_rate = spc_dat.max_ent_rate.values[0]
-                                
-                                # get max entrainment length cutoff (either too large to fit or too fast)
-                                # if math.isnan(spc_dat.caudal_AR.values[0]) == False:
-                                #     max_ent_len = spc_dat.ent_cutoff_in.values[0]/12.0
-                                # else:
-                                #     max_ent_len = 100.
+                                    ent_rate = np.abs(ent_rate)
+                                    print ("Entrainment rate of %s %s during %s simulated"%(round(ent_rate[0],4),spc,scen))
+            
+                                    # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
+                                    max_ent_rate = spc_dat.max_ent_rate.values[0]
+            
+                                    if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
+            
+                                        # how many orders of magnitude larger is the simulated entrainment rate than the largest entrainment rate on record?
+                                        magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) + 0.5
+            
+                                        if magnitudes < 1.:
+                                            magnitudes = 1.
+            
+                                        # reduce by at least 1 order of magnitude
+                                        ent_rate = np.abs(ent_rate / 10**magnitudes)
+                                        print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
+            
+                                    # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
+                                    Mft3 = (60 * 60 * hours * curr_Q)/1000000
         
-                                if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
-        
-                                    # how many orders of magnitude larger is the simulated entrainment rate than the largest entrainment rate on record?
-                                    magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) + 0.5
-        
-                                    if magnitudes < 1.:
-                                        magnitudes = 1.
-        
-                                    # reduce by at least 1 order of magnitude
-                                    ent_rate = np.abs(ent_rate / 10**magnitudes)
-                                    print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
-        
-                                # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
-                                Mft3 = (60 * 60 * hours * flow)/1000000
-    
-                                # calcualte sample size
-                                n = np.round(Mft3 * ent_rate,0)[0]
+                                    # calcualte sample size
+                                    n = np.round(Mft3 * ent_rate,0)[0]
+                            else:
+                                n = 0                            
+                            
                             if n > 0:
                                 print ("Resulting in an entrainment event of %s %s"%(np.int(n),spc))
     
@@ -949,54 +1021,87 @@ class simulation():
                                     iteration['rates_%s'%(k)] = np.float32(rates)
                                     iteration['survival_%s'%(k)] = np.float32(survival)
     
-                                    if k < max(self.moves):
+                                    if k <= max(self.moves):
                                         iteration['state_%s'%(k+1)] = move
     
                                 # save that data
-                                self.hdf['simulations/%s/%s/%s/%s'%(scen,spc,i,j)] = iteration
+                                iteration.to_hdf(self.hdf,'simulations/%s/%s'%(scen,spc), mode = 'a', format = 'table', append = True)
                                 self.hdf.flush()
-                            else:
-                                print ("No fish this day")
                                 
+                                flow_scen = scen.split(' ')[0]
+                                season = scen.split(' ')[2]                                
+                                
+                                # start filling in that summary dictionary
+                                row = [spc,scen,flow_scen,season,i,day,curr_Q,len(iteration)]
+                                columns = ['species','scenario','flow_scen','season','iteration','day','flow','pop_size']
 
+                                # figure out number entrained and number suvived
+                                counts = iteration.groupby(by = ['state_2'])['survival_2']\
+                                    .count().to_frame().reset_index().rename(columns = {'survival_2':'entrained'})
+                                sums = iteration.groupby(by = ['state_2'])['survival_2']\
+                                    .sum().to_frame().reset_index().rename(columns = {'survival_2':'survived'})
 
+                                # merge and calculate entrainment survival
+                                ent_stats = counts.merge(sums,how = 'left',on ='state_2', copy = False)
+                                ent_stats.fillna(0,inplace = True)
+                                ent_stats['mortality'] = ent_stats.entrained - ent_stats.survived
 
-                print ("Completed Scenario %s %s"%(species,scen))
+                                # for each unit, calculate the number entrained and the number killed
+                                for u in units:
+                                    udat = ent_stats[ent_stats.state_2 == u]
+                                    if len(udat) > 0:
+                                        columns.append('num_entrained_%s'%(u))
+                                        row.append(udat.entrained.values[0])
+                                        columns.append('num_killed_%s'%(u))
+                                        row.append(udat.mortality.values[0])
+                                    else:
+                                        columns.append('num_entrained_%s'%(u))
+                                        row.append(0)
+                                        columns.append('num_killed_%s'%(u))
+                                        row.append(0)
+                                # extract population and iteration
+                                length_dat = iteration[['population','flow_scenario','season','iteration','day','state_2','survival_2']]
+                                length_dat = length_dat.rename(columns = {'state_2':'state','survival_2':'survival'}, inplace = True)
+    
+                                # append to species length dataframe
+                                spc_length = spc_length.append(length_dat, ignore_index = True)
+                                    
+                            else:
+                                print ("No fish of this species on %s"%(day))
+                                flow_scen = scen.split(' ')[0]
+                                season = scen.split(' ')[2] 
+                                row = [spc,scen,flow_scen,season,i,day,curr_Q,0]
+                                columns = ['species','scenario','flow_scen','season','iteration','day','flow','pop_size']
 
+                                # for each unit, calculate the number entrained and the number killed
+                                for u in units:
+                                    columns.append('num_entrained_%s'%(u))
+                                    row.append(0)
+                                    columns.append('num_killed_%s'%(u))
+                                    row.append(0)
+                            
+                            # write daily summary to hdf - first convert to dataframe
+                            daily = pd.DataFrame(columns = columns)
+                            daily.loc[0] = row
+                            daily.to_hdf(self.hdf,'Daily',mode = 'a',format = 'table', append = True)
+                            self.hdf.flush()
+            
+            # write species length to database
+            spc_length.to_hdf(self.hdf,key = 'Length', mode = 'a', format = 'table', append = True)
+            self.hdf.flush()
+            print ("Completed Scenario %s %s"%(species,scen))                            
+            
         print ("Completed Simulations - view results")
         self.hdf.flush()
         self.hdf.close()
 
-    def summary(self,whole_project_surv = False):
+    def summary(self):
         '''Function summarizes entrainment risk hdf file'''
         # create hdf store
         self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))
 
         # create some empty holders
         self.beta_dict = {}
-
-        tree = dict(dict(dict()))
-
-        print ("Iterate through database, develop simulation tree")
-        for key in self.hdf.keys():
-            if key[0:4] == '/sim':
-                levels = key.split("/")
-                scenario = levels[2]
-                species = levels[3]
-                iteration = levels[4]
-                day = levels[5]
-                # if this scenario isn't in the first key
-                if scenario not in tree.keys():
-                    tree['%s'%(scenario)] = {}
-
-                # if this species isn't in the first subkey
-                if species not in tree['%s'%(scenario)].keys():
-                    tree['%s'%(scenario)]['%s'%(species)] = {}
-
-                if iteration not in tree['%s'%(scenario)]['%s'%(species)].keys():
-                    tree['%s'%(scenario)]['%s'%(species)]['%s'%(iteration)] = []
-
-                tree['%s'%(scenario)]['%s'%(species)]['%s'%(iteration)].append(day)
 
         # get Population table
         pop = self.hdf['Population']
@@ -1009,251 +1114,99 @@ class simulation():
         # get units
         units = self.hdf['Unit_Parameters'].Unit.values
 
-        self.daily_summary = pd.DataFrame()
+        self.daily_summary = self.hdf['Daily']
+        self.daily_summary.iloc[:,6:] = self.daily_summary.iloc[:,6:].astype(float)
 
-        # create a summary dictionary to pandas data frame by column
-        self.summary = dict()
-        self.summary['species'] = []
-        self.summary['scenario'] = []
-        self.summary['flow_scen'] = []
-        self.summary['season'] = []
-        self.summary['iteration'] = []
-        self.summary['day'] = []
-        self.summary['flow'] = []
-        self.summary['pop_size'] = []
-        self.summary['length_median'] = []
-        self.summary['length_min'] = []
-        self.summary['length_max'] = []
-        self.summary['length_q1'] = []
-        self.summary['length_q3'] = []
-        #self.summary['avg_strike_prob'] = []
-
-        for u in units:
-            self.summary['num_entrained_%s'%(u)] = []
-            self.summary['num_killed_%s'%(u)] = []
-
-        length_dict = {}
-
+        print ("iterate through species and scenarios and summarize")
         # now loop over dem species, scenarios, iterations and days then calculate them stats
         for i in species:
             # create empty dataframe to hold all lengths for this particular species
-            spc_length = pd.DataFrame(columns = ['population','flow_scenario','iteration','day'])
+            spc_length = self.hdf['Length']
+            
+            # calculate length stats for this species
+            self.length_summ = spc_length.groupby(['season','state_2','survival_2']).population.describe()
+            print ("summarized length by season, state, and survival")
 
             for j in scens:
-                # create empty dataframe for summary
-                dat = pd.DataFrame()
-                flow_scen = j.split(' ')[0]
-                season = j.split(' ')[2]
+                # get daily data for this species/scenario
+                dat = self.hdf['simulations/%s/%s'%(j,i)]
+
+                # summarize species-scenario - whole project
+                whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
+                    .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'successes'})
+                whole_proj_count = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
+                    .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'count'})
+
+                # merge successes and counts
+                whole_summ = whole_proj_succ.merge(whole_proj_count)
+
+                # calculate probabilities, fit to beta, write to dictionary summarizing results
+                whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
                 try:
-                    # identify the number of iterations this species/scenario ran for
-                    iters = tree[j][i].keys()
-
-                    for k in iters:
-                        days = tree[j][i][k]
-
-                        for d in days:
-                            # generate hdf key
-                            key = "simulations/" + j + "/" + i + "/" + k + "/" + d
-
-                            # extract key to pandas dataframe
-                            day_dat = pd.read_hdf(self.hdf, key = key)
-
-                            # append to summary data frame
-                            dat = dat.append(day_dat)
-
-                            # extract population and iteration
-                            length_dat = day_dat[['population','flow_scenario','iteration','day']]
-
-                            # append to species length dataframe
-                            spc_length = spc_length.append(length_dat, ignore_index = True)
-
-                            # start filling in that summary dictionary
-                            self.summary['species'].append(i)
-                            self.summary['scenario'].append(j)
-                            self.summary['flow_scen'].append(flow_scen)
-                            self.summary['season'].append(season)
-                            self.summary['iteration'].append(k)
-                            self.summary['day'].append(d)
-                            self.summary['flow'].append(day_dat.flow.unique())
-                            self.summary['pop_size'].append(len(day_dat))
-                            self.summary['length_median'].append(day_dat.population.median())
-                            self.summary['length_min'].append(day_dat.population.min())
-                            self.summary['length_max'].append(day_dat.population.max())
-                            self.summary['length_q1'].append(day_dat.population.quantile(0.25))
-                            self.summary['length_q3'].append(day_dat.population.quantile(0.75))
-                            #self.summary['avg_strike_prob'].append(day_dat.rates_2.median())
-
-
-                            # figure out number entrained and number suvived
-                            counts = day_dat.groupby(by = ['state_2'])['survival_2']\
-                                .count().to_frame().reset_index().rename(columns = {'survival_2':'entrained'})
-                            sums = day_dat.groupby(by = ['state_2'])['survival_2']\
-                                .sum().to_frame().reset_index().rename(columns = {'survival_2':'survived'})
-
-                            # merge and calculate entrainment survival
-                            ent_stats = counts.merge(sums,how = 'left',on ='state_2', copy = False)
-                            ent_stats.fillna(0,inplace = True)
-                            ent_stats['mortality'] = ent_stats.entrained - ent_stats.survived
-
-                            # for each unit, calculate the number entrained and the number killed
-                            for u in units:
-                                udat = ent_stats[ent_stats.state_2 == u]
-                                if len(udat) > 0:
-                                    self.summary['num_entrained_%s'%(u)].append(udat.entrained.values[0])
-                                    self.summary['num_killed_%s'%(u)].append(udat.mortality.values[0])
-                                else:
-                                    self.summary['num_entrained_%s'%(u)].append(0)
-                                    self.summary['num_killed_%s'%(u)].append(0)
-                        # if whole_project_surv == True:
-                        #     # summarize species-scenario - whole project
-                        #     whole_proj_succ = dat.groupby(by = ['iteration'])['survival_%s'%(max(self.moves))]\
-                        #         .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'successes'})
-                        #     whole_proj_count = dat.groupby(by = ['iteration'])['survival_%s'%(max(self.moves))]\
-                        #         .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'count'})
-    
-                        #     # merge successes and counts
-                        #     whole_summ = whole_proj_succ.merge(whole_proj_count)
-    
-                        #     # calculate probabilities, fit to beta, write to dictionary summarizing results
-                        #     whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
-                        #     try:
-                        #         whole_params = beta.fit(whole_summ.prob.values)
-                        #         whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                        #         whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                                
-                        #         #whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
-                        #         lcl = beta.ppf(0.025,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
-                        #         ucl = beta.ppf(0.975,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])  
-                        #         self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,lcl,ucl]
-                        #     except:
-                        #         continue
-                        #     #print ("whole project survival for %s in scenario %s iteraton %s expected to be %s (%s,%s)"%(i,j,k,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
-                        #     for l in self.moves:
-                        #         # we need to remove the fish that died at the previous state
-                        #         if l > 0:
-                        #             sub_dat = dat[dat['survival_%s'%(l-1)] == 1]
-                        #         else:
-                        #             sub_dat = dat
-    
-                        #         # group by iteration and state
-                        #         route_succ = sub_dat.groupby(by = ['iteration','state_%s'%(l)])['survival_%s'%(l)]\
-                        #             .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'successes'})
-                        #         route_count = sub_dat.groupby(by = ['iteration','state_%s'%(l)])['survival_%s'%(l)]\
-                        #             .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'count'})
-    
-                        #         # merge successes and counts
-                        #         route_summ = route_succ.merge(route_count)
-    
-                        #         # calculate probabilities
-                        #         route_summ['prob'] = route_summ['successes']/route_summ['count']
-    
-                        #         # extract route specific dataframes and fit beta
-                        #         states = route_summ['state_%s'%(l)].unique()
-                        #         for m in states:
-    
-    
-                        #             st_df = route_summ[route_summ['state_%s'%(l)] == m]
-                        #             try:
-                        #                 st_params = beta.fit(st_df.prob.values)
-                        #                 st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
-                        #                 st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
-                
-                        #                 lcl = beta.ppf(0.025,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
-                        #                 ucl = beta.ppf(0.975,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])                                    
-                        #             except:
-                        #                 st_median = 0.5
-                        #                 st_std = 1.0
-                        #                 lcl = 0.
-                        #                 ucl = 1.
-    
-                        #             # add results to beta dictionary
-                        #             self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,lcl,ucl]
-
-
-                        if whole_project_surv == True:
-                            # summarize species-scenario - whole project
-                            whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
-                                .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'successes'})
-                            whole_proj_count = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
-                                .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(max(self.moves)):'count'})
-    
-                            # merge successes and counts
-                            whole_summ = whole_proj_succ.merge(whole_proj_count)
-    
-                            # calculate probabilities, fit to beta, write to dictionary summarizing results
-                            whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
-                            try:
-                                whole_params = beta.fit(whole_summ.prob.values)
-                                whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                                whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                                
-                                #whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
-                                lcl = beta.ppf(0.025,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
-                                ucl = beta.ppf(0.975,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])  
-                                self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,lcl,ucl]
-                            except:
-                                continue
-                            #print ("whole project survival for %s in scenario %s iteraton %s expected to be %s (%s,%s)"%(i,j,k,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
-                            for l in self.moves:
-                                # we need to remove the fish that died at the previous state
-                                if l > 0:
-                                    sub_dat = dat[dat['survival_%s'%(l-1)] == 1]
-                                else:
-                                    sub_dat = dat
-    
-                                # group by iteration and state
-                                route_succ = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
-                                    .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'successes'})
-                                route_count = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
-                                    .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'count'})
-    
-                                # merge successes and counts
-                                route_summ = route_succ.merge(route_count)
-    
-                                # calculate probabilities
-                                route_summ['prob'] = route_summ['successes']/route_summ['count']
-    
-                                # extract route specific dataframes and fit beta
-                                states = route_summ['state_%s'%(l)].unique()
-                                for m in states:
-    
-    
-                                    st_df = route_summ[route_summ['state_%s'%(l)] == m]
-                                    try:
-                                        st_params = beta.fit(st_df.prob.values)
-                                        st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
-                                        st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
-                
-                                        lcl = beta.ppf(0.025,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
-                                        ucl = beta.ppf(0.975,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])                                    
-                                    except:
-                                        st_median = 0.5
-                                        st_std = 1.0
-                                        lcl = 0.
-                                        ucl = 1.
-    
-                                    # add results to beta dictionary
-                                    self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,lcl,ucl]
-                except KeyError:
+                    whole_params = beta.fit(whole_summ.prob.values)
+                    whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
+                    whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
+                    
+                    #whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
+                    lcl = beta.ppf(0.025,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
+                    ucl = beta.ppf(0.975,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])  
+                    self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,lcl,ucl]
+                except:
                     continue
-            # calculate length stats for this species
-            length_dict[i] = [spc_length.population.min(),
-                              spc_length.population.quantile(q = 0.25),
-                              spc_length.population.median(),
-                              spc_length.population.quantile(q = 0.75),
-                              spc_length.population.max()]
+                #print ("whole project survival for %s in scenario %s iteraton %s expected to be %s (%s,%s)"%(i,j,k,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
+                for l in self.moves:
+                    # we need to remove the fish that died at the previous state
+                    if l > 0:
+                        sub_dat = dat[dat['survival_%s'%(l-1)] == 1]
+                    else:
+                        sub_dat = dat
 
-        if whole_project_surv == True:
-            self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])
-        self.summ_dat = pd.DataFrame.from_dict(data = self.summary, orient = 'columns')
-        self.length_df = pd.DataFrame.from_dict(data = length_dict,orient = 'index', columns = ['min','q1','median','q3','max'])
+                    # group by iteration and state
+                    route_succ = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
+                        .sum().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'successes'})
+                    route_count = sub_dat.groupby(by = ['iteration','day','state_%s'%(l)])['survival_%s'%(l)]\
+                        .count().to_frame().reset_index(drop = False).rename(columns = {'survival_%s'%(l):'count'})
+
+                    # merge successes and counts
+                    route_summ = route_succ.merge(route_count)
+
+                    # calculate probabilities
+                    route_summ['prob'] = route_summ['successes']/route_summ['count']
+
+                    # extract route specific dataframes and fit beta
+                    states = route_summ['state_%s'%(l)].unique()
+                    for m in states:
+                        st_df = route_summ[route_summ['state_%s'%(l)] == m]
+                        try:
+                            st_params = beta.fit(st_df.prob.values)
+                            st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
+                            st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
+    
+                            lcl = beta.ppf(0.025,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
+                            ucl = beta.ppf(0.975,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])                                    
+                        except:
+                            st_median = 0.5
+                            st_std = 1.0
+                            lcl = 0.
+                            ucl = 1.
+
+                        # add results to beta dictionary
+                        self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,lcl,ucl]
+                print ("Fit beta distributions to states")
+                del dat
+
+        self.beta_df = pd.DataFrame.from_dict(data = self.beta_dict, orient = 'index', columns = ['scenario number','species','state','survival rate','variance','ll','ul'])
+        
         self.hdf.flush()
         self.hdf.close()
         
         # calculate total killed and total entrained
-        self.summ_dat['total_killed'] = self.summ_dat.filter(regex = 'num_killed', axis = 'columns').sum(axis = 1)
-        self.summ_dat['total_entrained'] = self.summ_dat.filter(regex = 'num_entrained', axis = 'columns').sum(axis = 1)
-        yearly_summary = self.summ_dat.groupby(by = ['species','flow_scen','iteration'])['pop_size','total_killed','total_entrained'].sum()
+        self.daily_summary['total_killed'] = self.daily_summary.filter(regex = 'num_killed', axis = 'columns').sum(axis = 1)
+        self.daily_summary['total_entrained'] = self.daily_summary.filter(regex = 'num_entrained', axis = 'columns').sum(axis = 1)
+        self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
+        
+        # create yearly summary by summing on species, flow scenario, and iteration
+        yearly_summary = self.daily_summary.groupby(by = ['species','flow_scen','iteration'])['pop_size','total_killed','total_entrained'].sum()
         yearly_summary.reset_index(inplace = True)
 
         cum_sum_dict = {'species':[],
@@ -1287,7 +1240,7 @@ class simulation():
                 cum_sum_dict['med_entrained'].append(idat.total_entrained.median())
                 cum_sum_dict['med_dead'].append(idat.total_killed.median())
                 
-                day_dat = self.summ_dat[(self.summ_dat.species == fishy) & (self.summ_dat.flow_scen == scen)]
+                day_dat = self.daily_summary[(self.daily_summary.species == fishy) & (self.daily_summary.flow_scen == scen)]
                 
                 # fit distribution to number entrained
                 dist = weibull_min.fit(day_dat.total_entrained)
@@ -1318,7 +1271,7 @@ class simulation():
                 cum_sum_dict['prob_gt_10_killed'].append(probs[0])
                 cum_sum_dict['prob_gt_100_killed'].append(probs[1])
                 cum_sum_dict['prob_gt_1000_killed'].append(probs[2])
-                
+        print ("Yearly summary complete")        
         # plt.figure()
         # plt.hist(day_dat.total_entrained,color = 'r')
         # #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'fuck.png'), dpi = 700)
@@ -1635,9 +1588,18 @@ class epri():
                 self.epri = self.epri[self.epri.HUC02 == HUC02]
             else:
                 self.epri = self.epri[self.epri['HUC02'].isin(HUC02)]
-
-        self.epri.fillna(0,inplace = True)
+                
+        # calculate probability of presence
+        success = self.epri.Present.sum()
+        trials = len(self.epri)
+        print ("--------------------------------------------------------------------------------------------")        
+        print ("out of %s potential samples %s had this species present for %s probability of presence"%(trials,success,round(float(success/trials),4)))
         print ("--------------------------------------------------------------------------------------------")
+ 
+        self.epri.fillna(0,inplace = True)
+        self.epri = self.epri[self.epri.Present == 1]
+
+        
         #print ("With a maximum entrainment rate of %s and only %s percent of records acount for 80 percent of the entrainment"%(self.epri.FishPerMft3.max(),
         #                                                                                                                round(len(self.epri[self.epri.FishPerMft3 > self.epri.FishPerMft3.max()*0.8]) / len(self.epri) * 100,2)))
         print ("There are %s records left to describe entrainment rates"%(len(self.epri)))
@@ -1649,24 +1611,22 @@ class epri():
 
         # fit a pareto and write to the object
         self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values)
-
         print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
                                                                                                       round(self.dist_pareto[1],4),
                                                                                                       round(self.dist_pareto[2],4)))
-        print ("%s percent of the entrainment events had 80 percent of the total entrainment impact"%(round(pareto.cdf(0.8,
-                                                                                                                       self.dist_pareto[0],
-                                                                                                                       self.dist_pareto[1],
-                                                                                                                       self.dist_pareto[2]),2)))
+        print ("--------------------------------------------------------------------------------------------")
+
+
     def ExtremeFit(self):
         ''' Function fits a generic extreme value distribution to the epri dataset relating to
         the species of interest'''
 
         # fit a pareto and write to the object
         self.dist_extreme = genextreme.fit(self.epri.FishPerMft3.values)
-
         print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
                                                                                                       round(self.dist_extreme[1],4),
                                                                                                       round(self.dist_extreme[2],4)))
+        print ("--------------------------------------------------------------------------------------------")
 
     def WeibullMinFit(self):
        ''' Function fits a Frechet distribution to the epri dataset relating to
@@ -1674,10 +1634,10 @@ class epri():
 
        # fit a pareto and write to the object
        self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values)
-
        print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
                                                                                                      round(self.dist_weibull[1],4),
                                                                                                      round(self.dist_weibull[2],4)))
+       print ("--------------------------------------------------------------------------------------------")
 
 
     def LengthSummary(self):
