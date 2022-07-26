@@ -72,3 +72,31 @@ exc_90 = df[df.year == 1999]
 exc_10.to_csv(os.path.join(dataWS,'exc_10.csv'))
 exc_50.to_csv(os.path.join(dataWS,'exc_50.csv'))
 exc_90.to_csv(os.path.join(dataWS,'exc_90.csv'))
+
+emp_rates = pd.read_csv(r"C:\Users\knebiolo\Desktop\Beaver_Falls_Production\validation\yearly_ent_rate.csv")
+yellow_perch = emp_rates[emp_rates.Common == 'Yellow perch']
+
+exc_50['Month'] = pd.DatetimeIndex(exc_50.datetimeUTC).month
+
+fish_ext = pd.DataFrame(columns = ['Date','Flow','Fish'])
+idx = 0
+for row in exc_50.iterrows():
+    
+    date = row[1]['datetimeUTC']
+    flow = row[1]['DAvgFlow_prorate']
+    month = row[1]['Month']
+    if month == 12 or month == 1 or month == 2:
+        fish = flow * yellow_perch[yellow_perch.season == 'winter'].AvgOfFishPerMft3.values
+    elif month == 3 or month == 4 or month == 5:
+        fish = flow * yellow_perch[yellow_perch.season == 'spring'].AvgOfFishPerMft3.values
+    elif month == 6 or month == 7 or month == 8:
+        fish = flow * yellow_perch[yellow_perch.season == 'summer'].AvgOfFishPerMft3.values 
+    else: 
+        fish = flow * yellow_perch[yellow_perch.season == 'fall'].AvgOfFishPerMft3.values
+    if len(fish) == 0:
+        new_row = [date,flow,0]
+    else:
+        new_row = [date,flow,fish[0]]
+    fish_ext.loc[idx] = new_row
+    idx = idx+1
+print ('expansion complete')    

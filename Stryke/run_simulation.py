@@ -12,20 +12,20 @@ import os
 import pandas as pd
 
 # read scenario worksheet
-ws = r'C:\Users\knebiolo\Desktop\Beaver_Falls_Entrainment\Species Specific'
-wks = 'Yellow Perch.xlsx'
+ws = r'C:\Users\knebiolo\Desktop\Beaver_Falls_Production'
+wks = 'Bluegill.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke.simulation(ws,wks, output_name = 'yellow_perch', existing = False)
+simulation = stryke.simulation(ws,wks, output_name = 'bluegill')
 
 simulation.run()
-simulation.summary(whole_project_surv = True)
+simulation.summary()
 
 results = simulation.beta_df
-day_sum = simulation.summ_dat
+day_sum = simulation.daily_summary
 year_sum = simulation.cum_sum
-length = simulation.length_df
+length = simulation.length_summ
 
 # summarize over iterations by Species and Flow Scenario
 

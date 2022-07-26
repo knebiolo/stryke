@@ -13,11 +13,11 @@ import stryke
 import os
 
 # connect to workspace
-inputWS = r"D:\Franklin Falls\Stryke Testing"
+inputWS = r"C:\Users\knebiolo\Desktop\Beaver_Falls_Production"
 
 # get list of files
 files = os.listdir(inputWS)
-files.remove('~$Stryke Franklin Falls Banded Killifish.xlsx')
+#files.remove('~$Stryke Franklin Falls Banded Killifish.xlsx')
 
 # beta distribution 
 beta = pd.DataFrame()
