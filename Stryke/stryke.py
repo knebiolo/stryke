@@ -148,7 +148,7 @@ def Francis(length, param_dict):
     #alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
     alpha = np.radians(90) + np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
 
-    #alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * tan_beta * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
+    #alpha = np.radians(90) + np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * tan_beta * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
 
 
     # probability of strike * length of fish
@@ -504,6 +504,7 @@ class simulation():
         for scen in self.scenarios:
             scen_num = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Scenario Number'].values[0]
             season = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Season'].values[0]
+            scenario = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Scenario'].values[0]
             months = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Months'].values[0]
             min_Q = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Min_Op_Flow'].values[0]
             env_Q = self.scenarios_df[self.scenarios_df['Scenario'] == scen]['Env_Flow'].values[0]
@@ -731,8 +732,8 @@ class simulation():
                             if n > 0:
                                 print ("Resulting in an entrainment event of %s %s"%(np.int(n),spc))
     
-                                flow_scen = scen.split(' ')[0]
-                                season = scen.split(' ')[2] 
+                                #flow_scen = scen
+                                #season = scen.split(' ')[2] 
                                 
                                 if math.isnan(s) == False:
                                     # create population of fish - IN CM!!!!!
@@ -756,7 +757,7 @@ class simulation():
                                 # start this iterations dataframe
                                 iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int(n)),
                                                           'species':np.repeat(species,np.int(n)),
-                                                          'flow_scenario':np.repeat(scen,np.int(n)),
+                                                          'flow_scenario':np.repeat(scenario,np.int(n)),
                                                           'season':np.repeat(season,np.int(n)),
                                                           'iteration':np.repeat(i,np.int(n)),
                                                           'day':np.repeat(day,np.int(n)),
@@ -820,8 +821,8 @@ class simulation():
                                 
 
                                 # start filling in that summary dictionary
-                                row = [spc,scen,flow_scen,season,str(i),day,curr_Q,str(len(iteration))]
-                                columns = ['species','scenario','flow_scen','season','iteration','day','flow','pop_size']
+                                row = [spc,scenario,season,str(i),day,curr_Q,str(len(iteration))]
+                                columns = ['species','scenario','season','iteration','day','flow','pop_size']
 
                                 # figure out number entrained and number suvived
                                 counts = iteration.groupby(by = ['state_2'])['survival_2']\
@@ -855,10 +856,8 @@ class simulation():
                                     
                             else:
                                 print ("No fish of this species on %s"%(day))
-                                flow_scen = scen.split(' ')[0]
-                                season = scen.split(' ')[2] 
-                                row = [spc,scen,flow_scen,season,str(i),day,curr_Q,str(0)]
-                                columns = ['species','scenario','flow_scen','season','iteration','day','flow','pop_size']
+                                row = [spc,scenario,season,str(i),day,curr_Q,str(0)]
+                                columns = ['species','scenario','season','iteration','day','flow','pop_size']
 
                                 # for each unit, calculate the number entrained and the number killed
                                 for u in units:
@@ -877,7 +876,7 @@ class simulation():
                         #create an iterator to simulate days for the number of months passed to the season
                         for j in np.arange(0,months * 30,1):
                             curr_Q = flow
-                            day = row[1]['datetimeUTC']
+                            #day = row[1]['datetimeUTC']
                             '''this is where we need to introduce daily flow, rather than 30 days
                             
                             we can also build the Q_dict here
@@ -898,7 +897,7 @@ class simulation():
                             Q_dict['sta_cap'] = sta_cap
                             
                             '''we need to roll the dice here and determine whether or not fish are present at site'''
-                            presence_seed = np.random.uniform(0,1)[0]
+                            presence_seed = np.random.uniform(0,1)
                             
                             if occur_prob >= presence_seed:
                                 # if we don't have pareto parameters, we are passing a population
@@ -969,6 +968,7 @@ class simulation():
                                 iteration = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int(n)),
                                                           'species':np.repeat(species,np.int(n)),
                                                           'flow_scenario':np.repeat(scen,np.int(n)),
+                                                          'season':np.repeat(season,np.int(n)),
                                                           'iteration':np.repeat(i,np.int(n)),
                                                           'day':np.repeat(j,np.int(n)),
                                                           'flow':np.repeat(flow,np.int(n)),
@@ -1005,7 +1005,7 @@ class simulation():
                                     # simulate movement
                                     if k < max(self.moves):
                                         # vectorize movement function
-                                        v_movement = np.vectorize(movement,excluded = [4,5,6])
+                                        v_movement = np.vectorize(movement,excluded = [3,4,5,6])
                                         
                                         # have fish move to the next node
                                         move = v_movement(location, 
@@ -1027,13 +1027,11 @@ class simulation():
                                 # save that data
                                 iteration.to_hdf(self.hdf,'simulations/%s/%s'%(scen,spc), mode = 'a', format = 'table', append = True)
                                 self.hdf.flush()
-                                
-                                flow_scen = scen.split(' ')[0]
-                                season = scen.split(' ')[2]                                
+                                                           
                                 
                                 # start filling in that summary dictionary
-                                row = [spc,scen,flow_scen,season,i,day,curr_Q,len(iteration)]
-                                columns = ['species','scenario','flow_scen','season','iteration','day','flow','pop_size']
+                                row = [spc,scenario,season,i,j,curr_Q,len(iteration)]
+                                columns = ['species','scenario','season','iteration','day','flow','pop_size']
 
                                 # figure out number entrained and number suvived
                                 counts = iteration.groupby(by = ['state_2'])['survival_2']\
@@ -1061,17 +1059,16 @@ class simulation():
                                         row.append(0)
                                 # extract population and iteration
                                 length_dat = iteration[['population','flow_scenario','season','iteration','day','state_2','survival_2']]
-                                length_dat = length_dat.rename(columns = {'state_2':'state','survival_2':'survival'}, inplace = True)
+                                length_dat.rename(columns = {'state_2':'state','survival_2':'survival'}, inplace = True)
     
                                 # append to species length dataframe
                                 spc_length = spc_length.append(length_dat, ignore_index = True)
                                     
                             else:
                                 print ("No fish of this species on %s"%(day))
-                                flow_scen = scen.split(' ')[0]
-                                season = scen.split(' ')[2] 
-                                row = [spc,scen,flow_scen,season,i,day,curr_Q,0]
-                                columns = ['species','scenario','flow_scen','season','iteration','day','flow','pop_size']
+
+                                row = [spc,scenario,season,i,day,curr_Q,0]
+                                columns = ['species','scenario','season','iteration','day','flow','pop_size']
 
                                 # for each unit, calculate the number entrained and the number killed
                                 for u in units:
@@ -1083,11 +1080,17 @@ class simulation():
                             # write daily summary to hdf - first convert to dataframe
                             daily = pd.DataFrame(columns = columns)
                             daily.loc[0] = row
+                            daily['iteration'] = daily.iteration.astype(int)
+                            daily['day'] = daily.day.astype(str)
+                            daily['flow'] = daily.flow.astype(str)
+                            daily['pop_size'] = daily.pop_size.astype(str)
+                            daily['num_entrained_U1'] = daily.num_entrained_U1.astype(str)
+                            daily.astype(dtype = {'iteration':np.int}, copy = False)
                             daily.to_hdf(self.hdf,'Daily',mode = 'a',format = 'table', append = True)
                             self.hdf.flush()
             
-            # write species length to database
-            spc_length.to_hdf(self.hdf,key = 'Length', mode = 'a', format = 'table', append = True)
+                # write species length to database
+                spc_length.to_hdf(self.hdf,key = 'Length', mode = 'a', format = 'table', append = True)
             self.hdf.flush()
             print ("Completed Scenario %s %s"%(species,scen))                            
             
@@ -1124,7 +1127,7 @@ class simulation():
             spc_length = self.hdf['Length']
             
             # calculate length stats for this species
-            self.length_summ = spc_length.groupby(['season','state_2','survival_2']).population.describe()
+            self.length_summ = spc_length.groupby(['season','state','survival']).population.describe()
             print ("summarized length by season, state, and survival")
 
             for j in scens:
@@ -1203,14 +1206,17 @@ class simulation():
         # calculate total killed and total entrained
         self.daily_summary['total_killed'] = self.daily_summary.filter(regex = 'num_killed', axis = 'columns').sum(axis = 1)
         self.daily_summary['total_entrained'] = self.daily_summary.filter(regex = 'num_entrained', axis = 'columns').sum(axis = 1)
-        self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
+        try:
+            self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
+        except:
+            pass
         
         # create yearly summary by summing on species, flow scenario, and iteration
-        yearly_summary = self.daily_summary.groupby(by = ['species','flow_scen','iteration'])['pop_size','total_killed','total_entrained'].sum()
+        yearly_summary = self.daily_summary.groupby(by = ['species','scenario','iteration'])['pop_size','total_killed','total_entrained'].sum()
         yearly_summary.reset_index(inplace = True)
 
         cum_sum_dict = {'species':[],
-                        'flow_scen':[],
+                        'scenario':[],
                         'med_population':[],
                         'med_entrained':[], 
                         'med_dead':[],
@@ -1229,18 +1235,18 @@ class simulation():
         # daily summary
         for fishy in yearly_summary.species.unique():
             #iterate over scenarios
-            for scen in yearly_summary.flow_scen.unique():
+            for scen in yearly_summary.scenario.unique():
                 # get data
-                idat = yearly_summary[(yearly_summary.species == fishy) & (yearly_summary.flow_scen == scen)]
+                idat = yearly_summary[(yearly_summary.species == fishy) & (yearly_summary.scenario == scen)]
                 
                 # get cumulative sums and append to dictionary
                 cum_sum_dict['species'].append(fishy)
-                cum_sum_dict['flow_scen'].append(scen)
+                cum_sum_dict['scenario'].append(scen)
                 cum_sum_dict['med_population'].append(idat.pop_size.median())
                 cum_sum_dict['med_entrained'].append(idat.total_entrained.median())
                 cum_sum_dict['med_dead'].append(idat.total_killed.median())
                 
-                day_dat = self.daily_summary[(self.daily_summary.species == fishy) & (self.daily_summary.flow_scen == scen)]
+                day_dat = self.daily_summary[(self.daily_summary.species == fishy) & (self.daily_summary.scenario == scen)]
                 
                 # fit distribution to number entrained
                 dist = weibull_min.fit(day_dat.total_entrained)
