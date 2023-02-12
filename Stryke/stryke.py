@@ -40,7 +40,7 @@ import hydrofunctions as hf
 #import geopandas as gp
 import statsmodels.api as sm
 import math
-from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min
+from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r
 import h5py
 #import tables
 from numpy.random import default_rng
@@ -731,9 +731,6 @@ class simulation():
                                 
                             if n > 0:
                                 print ("Resulting in an entrainment event of %s %s"%(np.int(n),spc))
-    
-                                #flow_scen = scen
-                                #season = scen.split(' ')[2] 
                                 
                                 if math.isnan(s) == False:
                                     # create population of fish - IN CM!!!!!
@@ -822,6 +819,7 @@ class simulation():
 
                                 # start filling in that summary dictionary
                                 row = [spc,scenario,season,str(i),day,curr_Q,str(len(iteration))]
+
                                 columns = ['species','scenario','season','iteration','day','flow','pop_size']
 
                                 # figure out number entrained and number suvived
@@ -856,7 +854,10 @@ class simulation():
                                     
                             else:
                                 print ("No fish of this species on %s"%(day))
+
                                 row = [spc,scenario,season,str(i),day,curr_Q,str(0)]
+
+
                                 columns = ['species','scenario','season','iteration','day','flow','pop_size']
 
                                 # for each unit, calculate the number entrained and the number killed
@@ -1027,6 +1028,7 @@ class simulation():
                                 # save that data
                                 iteration.to_hdf(self.hdf,'simulations/%s/%s'%(scen,spc), mode = 'a', format = 'table', append = True)
                                 self.hdf.flush()
+
                                                            
                                 
                                 # start filling in that summary dictionary
@@ -1068,6 +1070,7 @@ class simulation():
                                 print ("No fish of this species on %s"%(day))
 
                                 row = [spc,scenario,season,i,day,curr_Q,0]
+
                                 columns = ['species','scenario','season','iteration','day','flow','pop_size']
 
                                 # for each unit, calculate the number entrained and the number killed
@@ -1084,7 +1087,10 @@ class simulation():
                             daily['day'] = daily.day.astype(str)
                             daily['flow'] = daily.flow.astype(str)
                             daily['pop_size'] = daily.pop_size.astype(str)
-                            daily['num_entrained_U1'] = daily.num_entrained_U1.astype(str)
+                            filter_cols = [col for col in daily if col.startswith('num_entrained')]
+                            for c in filter_cols:
+                                daily[c] = daily[c].astype(str)
+                            del c
                             daily.astype(dtype = {'iteration':np.int}, copy = False)
                             daily.to_hdf(self.hdf,'Daily',mode = 'a',format = 'table', append = True)
                             self.hdf.flush()
@@ -1304,7 +1310,7 @@ class hydrologic():
         #self.gages_shp = gp.read_file(gage_dir)
         self.NID_to_gage = pd.read_csv(nid_near_gage_dir, dtype={'STAID': object})
         self.DAvgFlow = pd.DataFrame()
-        self.dams = self.NID_to_gage.NIDID.values.tolist()
+        self.dams = self.NID_to_gage.NIDID.unique()
 
         print("Data imported, proceed to data extraction and exceedance calculation ")
         #self.gages = self.gages_shp.STAID.unique()
@@ -1314,57 +1320,60 @@ class hydrologic():
         self.nearest_gages = set(self.nearest_gages)
         print ("There are %s near gages"%(len(self.nearest_gages)))
         for i in self.nearest_gages:
-            try:
-                print ("Start analyzing gage %s"%(i))
-                # get gage data object from web
-                gage = hf.NWIS(site = str(i),service = 'dv', start_date = '2009-01-01')
+            active = self.NID_to_gage[self.NID_to_gage.STAID == i].ACTIVE09.values[0]
+            if active == 'yes':
+                try:
+                    print ("Start analyzing gage %s"%(i))
+                    # get gage data object from web
+                    gage = hf.NWIS(site = str(i),service = 'dv', start_date = '1900-01-01')
+    
+                    # extract dataframe
+                    df = gage.df()
+    
+                    # replace column names
+                    for j in gage.df().columns:
+                        if '00060' in j:
+                            if 'qualifiers' not in j:
+                                if ':00000' in j or ':00003' in j:
+                                    df.rename(columns = {j:'DAvgFlow'},inplace = True)            # reset index
+                    df.reset_index(inplace = True)
+    
+                    #extract what we need
+                    df = df[['datetimeUTC','DAvgFlow']]
+    
+                    # convert to datetime
+                    df['datetimeUTC'] = pd.to_datetime(df.datetimeUTC)
+    
+                    # extract month
+                    df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month
+    
+                    curr_gage = self.NID_to_gage[self.NID_to_gage.STAID == i]
+    
+                    curr_name = curr_gage.iloc[0]['STANAME']
+    
+                    curr_huc = curr_gage.iloc[0]['HUC02']
+    
+                    drain_sqkm = np.float(curr_gage.iloc[0]['DRAIN_SQKM'])
+    
+                    df['STAID'] = np.repeat(curr_gage.iloc[0]['STAID'], len(df.index))
+                    df['Name'] = np.repeat(curr_name, len(df.index))
+                    df['HUC02'] = np.repeat(curr_huc, len(df.index))
+                    df['Drain_sqkm'] = np.repeat(drain_sqkm, len(df.index))
+    
+                    self.DAvgFlow = self.DAvgFlow.append(df)
+    
+                    print ("stream gage %s with a drainage area of %s square kilometers added to flow data."%(i,drain_sqkm))
+                except:
+                    continue
 
-                # extract dataframe
-                df = gage.df()
-
-                # replace column names
-                for j in gage.df().columns:
-                    if '00060' in j:
-                        if 'qualifiers' not in j:
-                            if ':00000' in j or ':00003' in j:
-                                df.rename(columns = {j:'DAvgFlow'},inplace = True)            # reset index
-                df.reset_index(inplace = True)
-
-                #extract what we need
-                df = df[['datetimeUTC','DAvgFlow']]
-
-                # convert to datetime
-                df['datetimeUTC'] = pd.to_datetime(df.datetimeUTC)
-
-                # extract month
-                df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month
-
-                curr_gage = self.NID_to_gage[self.NID_to_gage.STAID == i]
-
-                curr_name = curr_gage.iloc[0]['STANAME']
-
-                curr_huc = curr_gage.iloc[0]['HUC02']
-
-                drain_sqkm = np.float(curr_gage.iloc[0]['DRAIN_SQKM'])
-
-                df['STAID'] = np.repeat(curr_gage.iloc[0]['STAID'], len(df.index))
-                df['Name'] = np.repeat(curr_name, len(df.index))
-                df['HUC02'] = np.repeat(curr_huc, len(df.index))
-                df['Drain_sqkm'] = np.repeat(drain_sqkm, len(df.index))
-
-                self.DAvgFlow = self.DAvgFlow.append(df)
-
-                print ("stream gage %s with a drainage area of %s square kilometers added to flow data."%(i,drain_sqkm))
-            except:
-                continue
-
-    def seasonal_exceedance(self, seasonal_dict, HUC = None):
+    def seasonal_exceedance(self, seasonal_dict, exceedence, HUC = None):
         '''function calculates the 90, 50, and 10 percent exceedance flows by season and writes to an output data frame.
 
         seasonal_dict = python dictionary consisting of season (key) with a Python list like object of month numbers (value)'''
 
         self.exceedance = pd.DataFrame()
         self.DAvgFlow['season'] = np.empty(len(self.DAvgFlow))
+        DAvgFlow = self.DAvgFlow
         for key in seasonal_dict:
             for month in seasonal_dict[key]:
                 self.DAvgFlow.loc[self.DAvgFlow['month'] == month, 'season'] = key
@@ -1378,30 +1387,27 @@ class hydrologic():
                 season = self.DAvgFlow[(self.DAvgFlow.season == key) & (self.DAvgFlow.STAID == i)]
                 if HUC is not None:
                     season = season[season.HUC02 == HUC]
-                season.sort_values(by = 'SeasonalExcProb', ascending = False, inplace = True)
-                print('length of season dataframe is %s'%(len(season.index)))
-                if len(season.index) > 0:
-
-                    exc10df = season[season.SeasonalExcProb <= 10.]
-                    exc10 = exc10df.DAvgFlow.min()
-                    print ("Gage %s has a 10 percent exceedance flow of %s in %s"%(i,exc10,key))
-
-                    exc50df = season[season.SeasonalExcProb <= 50.]
-                    exc50 = exc50df.DAvgFlow.min()
-                    print ("Gage %s has a 50 percent exceedance flow of %s in %s"%(i,exc50,key))
-
-                    exc90df = season[season.SeasonalExcProb <= 90.]
-                    exc90 = exc90df.DAvgFlow.min()
-                    print ("Gage %s has a 90 percent exceedance flow of %s in %s"%(i,exc90,key))
-
-                    # get gage information from gage shapefile
-                    curr_gage = self.NID_to_gage[self.NID_to_gage.STAID == str(i)]
-                    curr_name = curr_gage.iloc[0]['STANAME']
-                    curr_huc = np.int(curr_gage.iloc[0]['HUC02'])
-                    drain_sqkm = np.float(curr_gage.iloc[0]['DRAIN_SQKM'])
-                    row = np.array([i,curr_name,curr_huc,drain_sqkm,key,exc90,exc50,exc10])
-                    newRow = pd.DataFrame(np.array([row]),columns = ['STAID','Name','HUC02','Drain_sqkm','season','exc_90','exc_50','exc_10'])
-                    self.exceedance = self.exceedance.append(newRow)
+                if len(season) > 0:
+                    season.sort_values(by = 'SeasonalExcProb', ascending = False, inplace = True)
+                    print('length of season dataframe is %s'%(len(season.index)))
+                    for j in exceedence:
+                        if j == 0:
+                            exc = season.DAvgFlow.max()
+                        else:
+                            excdf = season[season.SeasonalExcProb <= np.float32(j)]
+                            exc = excdf.DAvgFlow.min()
+                            if exc < 0:
+                                exc = 0.
+                        print ("Gage %s has a %s percent exceedance flow of %s in %s"%(i,j,exc,key))
+        
+                        # get gage information from gage shapefile
+                        curr_gage = self.NID_to_gage[self.NID_to_gage.STAID == str(i)]
+                        curr_name = curr_gage.iloc[0]['STANAME']
+                        curr_huc = np.int(curr_gage.iloc[0]['HUC02'])
+                        drain_sqkm = np.float(curr_gage.iloc[0]['DRAIN_SQKM'])
+                        row = np.array([i,curr_name,curr_huc,drain_sqkm,key,exc,j])
+                        newRow = pd.DataFrame(np.array([row]),columns = ['STAID','Name','HUC02','Drain_sqkm','season','flow','exceedance'])
+                        self.exceedance = self.exceedance.append(newRow)
 
     def curve_fit(self, season, dam, exceedance):
         '''function uses statsmodels to perform OLS regaression and describe exceedance probablity as a function of watershed size,
@@ -1418,24 +1424,16 @@ class hydrologic():
         nidid = dam_df.iloc[0]['NIDID']
 
         # get drainage area in sq miles
-        drain_sqmi = dam_df.iloc[0]['Drainage_A']
+        drain_sqmi = dam_df.iloc[0]['Drainage_a']
         drain_sqkm = drain_sqmi * 2.58999
 
-        # extract the 100 nearest gages associated with this NID feature
-        gages = self.NID_to_gage[self.NID_to_gage.NIDID == nidid].STAID.values
-
         # filter exceedance
-        seasonal_exceedance_df = self.exceedance[self.exceedance.season == season]
-
-        gage_dat = pd.DataFrame()
-
-        for i in gages:
-            dat = seasonal_exceedance_df[seasonal_exceedance_df.STAID == i]
-            gage_dat = gage_dat.append(dat)
-
+        seasonal_exceedance_df = self.exceedance[(self.exceedance.season == season) & (self.exceedance.exceedance == str(exceedance))]
+        self.dat = seasonal_exceedance_df
+        
         # extract X and y arrays
-        self.X = gage_dat.Drain_sqkm.values.astype(np.float32)
-        self.Y = gage_dat['%s'%(exceedance)].values.astype(np.float32)
+        self.X = seasonal_exceedance_df.Drain_sqkm.values.astype(np.float32)
+        self.Y = seasonal_exceedance_df.flow.values.astype(np.float32)
 
         # fit a linear model
         model = sm.OLS(self.Y, self.X).fit()
@@ -1446,10 +1444,13 @@ class hydrologic():
         if model.f_pvalue < 0.05:
             coef = model.params[0]
             exc_flow = drain_sqkm * coef
-            self.DamX = drain_sqkm
-            self.DamY = exc_flow
-            print ("dam %s with a drainage area of %s sq km has a %s percent exceedance flow of %s in %s"%(dam,round(drain_sqkm,2),exceedance.split("_")[1],round(exc_flow,2),season))
-
+            self.DamX = np.float(drain_sqkm)
+            self.DamY = np.float(exc_flow)
+            print ("dam %s with a drainage area of %s sq km has a %s percent exceedance flow of %s in %s"%(dam,round(drain_sqkm,2),exceedance,round(exc_flow,2),season))
+        else:
+            print ("Model not significant, there is no exceedance flow estimate")
+            self.DamX = np.nan
+            self.DamY = np.nan
 class epri():
     '''python class object that queries the EPRI entrainment database and fits
     a pareto distribution to the observations.'''
@@ -1645,7 +1646,15 @@ class epri():
                                                                                                      round(self.dist_weibull[2],4)))
        print ("--------------------------------------------------------------------------------------------")
 
+    def GumbelFit(self):
+       ''' Function fits a Frechet distribution to the epri dataset relating to
+       the species of interest'''
 
+       # fit a pareto and write to the object
+       self.dist_gumbel = gumbel_r.fit(self.epri.FishPerMft3.values)
+       print ("The Gumbel distribution has a shape parameter of location: %s and scale: %s"%(round(self.dist_gumbel[0],4),
+                                                                                                     round(self.dist_gumbel[1],4)))
+       print ("--------------------------------------------------------------------------------------------")
     def LengthSummary(self):
         '''Function summarizes length for species of interest using EPRI database'''
 
