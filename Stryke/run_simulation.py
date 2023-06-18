@@ -7,17 +7,19 @@ Created on Wed Jan 29 20:40:39 2020
 Create an Upper Barker Model to test out Stryke
 """
 # Import Dependencies
+import sys
+sys.path.append(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\stryke")
 import stryke
 import os
 import pandas as pd
 
 # read scenario worksheet
 ws = r'C:\Users\knebiolo\Desktop\Beaver_Falls_Production'
-wks = 'Bluegill.xlsx'
+wks = 'Bluegill_test.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke.simulation(ws,wks, output_name = 'bluegill')
+simulation = stryke.simulation(ws,wks, output_name = 'Bluegill_test')
 
 simulation.run()
 simulation.summary()
