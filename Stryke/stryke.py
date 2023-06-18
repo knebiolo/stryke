@@ -1515,7 +1515,8 @@ class epri():
         '''
 
         # import EPRI database
-        self.epri = pd.read_csv(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Data\epri1997.csv",  encoding= 'unicode_escape')
+
+        self.epri = pd.read_csv("../Data/epri1997.csv",  encoding= 'unicode_escape')
         ''' I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame'''
 
         if NIDID is not None:
@@ -1621,6 +1622,9 @@ class epri():
         print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
                                                                                                       round(self.dist_pareto[1],4),
                                                                                                       round(self.dist_pareto[2],4)))
+        print ("The Pareto mean is: %s"% (pareto.mean(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
+        print ("The Pareto variance is: %s"% (pareto.var(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
+        print ("The Pareto standard deviation is: %s"% (pareto.std(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
         print ("--------------------------------------------------------------------------------------------")
 
 
@@ -1633,6 +1637,9 @@ class epri():
         print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
                                                                                                       round(self.dist_extreme[1],4),
                                                                                                       round(self.dist_extreme[2],4)))
+        print ("The Generic Extreme Value mean is: %s"% (genextreme.mean(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
+        print ("The Generic Extreme Value variance is: %s"% (genextreme.var(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
+        print ("The Generic Extreme Value standard deviation is: %s"% (genextreme.std(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
         print ("--------------------------------------------------------------------------------------------")
 
     def WeibullMinFit(self):
@@ -1644,6 +1651,9 @@ class epri():
        print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
                                                                                                      round(self.dist_weibull[1],4),
                                                                                                      round(self.dist_weibull[2],4)))
+       print ("The Weibull Max mean is: %s"% (weibull_min.mean(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
+       print ("The Weibull Max variance is: %s"% (weibull_min.var(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
+       print ("The Weibull Max standard deviation is: %s"% (weibull_min.std(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
        print ("--------------------------------------------------------------------------------------------")
 
     def GumbelFit(self):

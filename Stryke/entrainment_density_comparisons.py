@@ -29,7 +29,7 @@ camera = pd.read_csv(os.path.join(inputWS,"pump_storage_density.csv"))
 # plot alos egg density 
 
 # get eggs
-alos = alos[alos.LifeStage == 'E']
+alos = alos[(alos.LifeStage == 'E') & (alos.count > 0)]
 
 # create a linespace
 alos_x = np.linspace(0,alos.EggPerM3.max(),100)
