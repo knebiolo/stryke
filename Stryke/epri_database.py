@@ -6,7 +6,8 @@ Script Intent: Work with EPRI entrainment database, filter and fit Pareto
 
 @author: KNebiolo
 """
-
+import sys
+sys.path.append(r"C:\Users\Srogers\OneDrive - Kleinschmidt Associates, Inc\software\stryke")
 # import moduels
 import stryke
 import matplotlib.pyplot as plt
@@ -21,8 +22,10 @@ rcParams['font.family'] = 'serif'
 
 # connect to data pass simple filter to EPRI class
 
-fish = stryke.epri(Family = 'Catostomidae', Month = [12,1,2], HUC02 = [2,3,5,7], NIDID = 'PA83002')
 
+fish = stryke.epri(Species ='Perca flavescens', Month = [9,10,11],  River = 'Peshtigo')
+epri_dat=fish.epri
+epri_dat.to_csv(os.path.join(r"C:\Users\Srogers\Desktop\EpriOutput",'yellow_perch_peshtigo_fall'+'.csv'))
 fish.ParetoFit()
 fish.ExtremeFit()
 fish.WeibullMinFit()

@@ -36,7 +36,7 @@ warnings.filterwarnings("ignore")
 from scipy.stats import beta
 import xlrd
 import networkx as nx
-import hydrofunctions as hf
+#import hydrofunctions as hf
 #import geopandas as gp
 import statsmodels.api as sm
 import math
@@ -1468,7 +1468,8 @@ class epri():
                  Mussel_Host = None,
                  Seasonal_Migrant = None,
                  HUC02 = None,
-                 NIDID = None):
+                 NIDID = None,  
+                 River = None):
 
         '''The EPRI database can be queried many different ways.  Note, these are
         optional named arguments, meaning the end user doesn't have to query the
@@ -1516,7 +1517,10 @@ class epri():
 
         # import EPRI database
 
-        self.epri = pd.read_csv("../Data/epri1997.csv",  encoding= 'unicode_escape')
+
+   
+        self.epri = pd.read_csv(r"..\data\epri1997.csv",  encoding= 'unicode_escape')
+
         ''' I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame'''
 
         if NIDID is not None:
@@ -1596,7 +1600,11 @@ class epri():
                 self.epri = self.epri[self.epri.HUC02 == HUC02]
             else:
                 self.epri = self.epri[self.epri['HUC02'].isin(HUC02)]
-                
+        if River is not None:
+            if isinstance(River,str):
+                self.epri = self.epri[self.epri.River == River]
+            else:
+                self.epri = self.epri[~self.epri['River'].isin(River)]          
         # calculate probability of presence
         success = self.epri.Present.sum()
         trials = len(self.epri)
