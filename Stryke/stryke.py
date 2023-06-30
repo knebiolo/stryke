@@ -1600,11 +1600,12 @@ class epri():
                 self.epri = self.epri[self.epri.HUC02 == HUC02]
             else:
                 self.epri = self.epri[self.epri['HUC02'].isin(HUC02)]
+                
         if River is not None:
             if isinstance(River,str):
                 self.epri = self.epri[self.epri.River == River]
             else:
-                self.epri = self.epri[~self.epri['River'].isin(River)]          
+                self.epri = self.epri[self.epri['River'].isin(River)]          
         # calculate probability of presence
         success = self.epri.Present.sum()
         trials = len(self.epri)
@@ -1626,7 +1627,7 @@ class epri():
         the species of interest'''
 
         # fit a pareto and write to the object
-        self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values)
+        self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values, floc = 0)
         print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
                                                                                                       round(self.dist_pareto[1],4),
                                                                                                       round(self.dist_pareto[2],4)))
@@ -1641,7 +1642,7 @@ class epri():
         the species of interest'''
 
         # fit a pareto and write to the object
-        self.dist_extreme = genextreme.fit(self.epri.FishPerMft3.values)
+        self.dist_extreme = genextreme.fit(self.epri.FishPerMft3.values, floc = 0)
         print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
                                                                                                       round(self.dist_extreme[1],4),
                                                                                                       round(self.dist_extreme[2],4)))
@@ -1655,7 +1656,7 @@ class epri():
        the species of interest'''
 
        # fit a pareto and write to the object
-       self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values)
+       self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values, floc = 0)
        print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
                                                                                                      round(self.dist_weibull[1],4),
                                                                                                      round(self.dist_weibull[2],4)))
