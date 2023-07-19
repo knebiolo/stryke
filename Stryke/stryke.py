@@ -1665,6 +1665,20 @@ class epri():
        print ("The Weibull Max standard deviation is: %s"% (weibull_min.std(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
        print ("--------------------------------------------------------------------------------------------")
 
+    def LogNormalFit(self):
+        ''' Function fits a Log Normal distribution to the epri dataset relating to
+        the species of interest'''
+    
+        # fit a pareto and write to the object
+        self.dist_lognorm = lognorm.fit(self.epri.FishPerMft3.values, floc = 0)
+        print ("The Log Normal distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_lognorm[0],4),
+                                                                                                      round(self.dist_lognorm[1],4),
+                                                                                                      round(self.dist_lognorm[2],4)))
+        print ("The Log Normal mean is: %s"% (lognorm.mean(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
+        print ("The Log Normal variance is: %s"% (lognorm.var(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
+        print ("The Log Normal standard deviation is: %s"% (lognorm.std(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
+        print ("--------------------------------------------------------------------------------------------")
+
     def GumbelFit(self):
        ''' Function fits a Frechet distribution to the epri dataset relating to
        the species of interest'''
