@@ -670,8 +670,7 @@ class simulation():
                 location = ops_df.at[unit,'location']
                 scale = ops_df.at[unit,'scale']
                 
-                #TODO Bad Creek Analysis reduced hours by half - change back
-                hours_operated[unit] = lognorm.rvs(shape,location,scale,1000) / 2.
+                hours_operated[unit] = lognorm.rvs(shape,location,scale,1000)
                 
             else:
                 hours_dict[unit] = hours
@@ -691,7 +690,7 @@ class simulation():
 
                     else:
                         # TODO Bad Creek Analysis halved hours - change back
-                        hours = lognorm.rvs(shape,location,scale,1)[0] / 2.
+                        hours = lognorm.rvs(shape,location,scale,1)[0]
                         if hours > 24.:
                             hours = 24.
                         elif hours < 0:
@@ -708,7 +707,7 @@ class simulation():
     
                         else:
                             # TODO Bad Creek Analysis halved hours - change back
-                            hours = lognorm.rvs(shape,location,scale,1)[0] / 2.
+                            hours = lognorm.rvs(shape,location,scale,1)[0]
                             if hours > 24.:
                                 hours = 24.
                             elif hours < 0:
@@ -731,7 +730,7 @@ class simulation():
                                     flow_dict[unit] = 0.
                                 else:
                                     # TODO Bad Creek Analysis halved hours - change back
-                                    hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0]# / 2.
+                                    hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0]
                                     if hours > 24.:
                                         hours = 24.
                                     elif hours < 0:
@@ -744,6 +743,23 @@ class simulation():
                         else:
                             hours_dict[unit] = 0.
                             flow_dict[unit] = 0.
+                            
+        # implement Bad Creek algorithm here - is this method valid for new construction?
+        tot_hours = 0.
+        sum_pump_rate = 0.
+        bc1_sum_rate = 0.
+        for key in hours_operated:
+            if key == 'U1' or key == 'U2' or key == 'U3' or key == 'U4':
+                tot_hours = tot_hours + hours_operated[key]
+                bc1_sum_rate = bc1_sum_rate + ops_df.at[unit,'Qcap']
+            sum_pump_rate = sum_pump_rate + ops_df.at[unit,'Qcap']
+                
+        volume = tot_hours * 3600. * bc1_sum_rate 
+        tot_bc1_bc2_time = volume / sum_pump_rate / 3600.
+        time_ratio = tot_bc1_bc2_time / tot_hours
+        
+        for key in hours_operated:
+            hours_operated[key] * time_ratio
 
         tot_flow = 0       
         tot_hours = 0   
