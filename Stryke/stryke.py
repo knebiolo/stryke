@@ -25,10 +25,15 @@ Unfortunately units are in feet - wtf - why can't we get over ourselves and adop
 metric.  God damnit I hate us sometimes
 
 """
+
+
 # import dependencies
 import numpy as np
 import pandas as pd
 import os
+from matplotlib import rcParams
+rcParams['font.size'] = 6
+rcParams['font.family'] = 'serif'
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import warnings
@@ -40,16 +45,74 @@ import hydrofunctions as hf
 #import geopandas as gp
 import statsmodels.api as sm
 import math
-from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r
+from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r, ks_2samp
 import h5py
 #import tables
 from numpy.random import default_rng
 rng = default_rng()
 
+
+
+# Get the directory of the current script
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+def enable_matplotlib_inline():
+    try:
+        from IPython import get_ipython  # Import the function to get the current IPython instance
+        ipython_instance = get_ipython()  # Get the current IPython instance
+        if ipython_instance is not None:  # Check if we're running in an IPython environment
+            ipython_instance.run_line_magic('matplotlib', 'inline')  # Execute the magic command
+            print("Enabled inline matplotlib plotting.")
+    except ImportError:
+        print("IPython is not available; inline plotting cannot be enabled.")
+
+
 class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility
     specific simulation'''
     def __init__ (self, proj_dir, wks, output_name, existing = False):
+        """
+        Initializes a simulation class object to model individual-based entrainment 
+        impacts at hydroelectric projects.
+        
+        This method sets up the simulation environment by creating necessary directories, 
+        importing data from spreadsheets, creating data structures for simulation 
+        parameters, and setting up an HDF5 file for output. If the 'existing' flag 
+        is set to False, the method performs a full setup including directory 
+        creation, data importation, and HDF5 file preparation.  For existing 
+        simulations, it re-imports essential data and recreates the movement graph 
+        based on node information.
+        
+        Parameters:
+        - proj_dir (str): The root directory for the project where the workspace 
+        and output files will be stored.
+        - wks (str): The name of the workspace directory within the project directory 
+        where input data spreadsheets are located.
+        - output_name (str): The name of the output file (without extension) where 
+        the simulation results will be stored.
+        - existing (bool, optional): Flag to indicate whether this is a new simulation 
+        setup (False) or an existing one (True).
+          Default is False.
+        
+        Key Actions:
+        - Workspace directory creation (for new simulations).
+        - Data importation from Excel spreadsheets including nodes, survival 
+        functions, unit parameters, flow scenarios,
+          operating scenarios, and population data.
+        - Creation of survival function dictionary from node data.
+        - Calculation of the maximum river node to define the spatial boundary 
+        of the simulation.
+        - Hydraulic capacity calculation based on unit parameters.
+        - Setup of unique flow and operating scenarios for the simulation.
+        - HDF5 file creation for output, with storage of setup data for reproducibility 
+        and analysis.
+        - For existing simulations, re-imports node data and recreates the movement 
+        graph to simulate fish movement through the system.
+        
+        The method leverages pandas for data manipulation and storage, numpy for 
+        array operations, and networkx for graph-based movement simulations, 
+        ensuring efficient and scalable data handling.
+        """
         if existing == False:
             # create workspace directory
             self.wks_dir = os.path.join(proj_dir,wks)
@@ -182,8 +245,51 @@ class simulation():
             self.moves = np.arange(0,max_len-1,1)
             
     def Kaplan(length, param_dict):
-        '''Franke et al. TBS for Kaplan turbines.
-        Inputs are length of fish and dictionary of turbine parameters'''
+        
+        """
+        Calculates the probability of a fish surviving a blade strike in a Kaplan 
+        turbine based on the model proposed by Franke et al. 1997.
+    
+        The function takes into account various turbine parameters and the length 
+        of the fish to compute the survival probability.  It employs a blend of 
+        deterministic and stochastic elements to model the interaction between 
+        fish and turbine blades, particularly considering the location of the 
+        strike along the blade.
+    
+        Parameters:
+        - length (float): The length of the fish in meters.
+        - param_dict (dict): A dictionary containing key turbine parameters 
+        necessary for the calculation. Expected keys and their
+          meanings are as follows:
+            - 'H': The net head of water across the turbine (m).
+            - 'RPM': The revolutions per minute of the turbine.
+            - 'D': The diameter of the turbine (m).
+            - 'Q': The flow rate through the turbine (m^3/s).
+            - 'ada': The specific speed of the turbine.
+            - 'N': The number of blades on the turbine.
+            - '_lambda': The empirically derived constant for blade strike probability, 
+            suggested by the U.S. Fish and Wildlife Service.
+    
+        The function first computes the energy coefficient (Ewd) and discharge 
+        coefficient (Qwd) of the turbine, followed by the angle of absolute flow 
+        to the axis of rotation. Utilizing these parameters, it estimates the 
+        probability of a fish striking a blade and subsequently computes the 
+        survival probability by subtracting the strike probability from one.
+    
+        Returns:
+        - The probability of a fish surviving a blade strike in a Kaplan turbine, 
+        ranging from 0 (no survival) to 1 (certain survival).
+    
+        Note: The function assumes the position of the fish strike along the blade 
+        (rR) is uniformly distributed between 0.3 and 1.0, based on recommendations 
+        from Deng et al. (please refer to the specific study for more details). 
+    
+        Example:
+            param_dict = {'H': 30, 'RPM': 100, 'D': 5, 'Q': 200, 'ada': 0.8, 'N': 4, '_lambda': 0.2}
+            fish_length = 0.5  # 50 cm
+            survival_probability = Kaplan(fish_length, param_dict)
+            print(f'Survival Probability: {survival_probability}')
+        """
     
         # either sample parameters from statistical distributions, use a priori measures or extract from parameter dictionary
         g = 32.2
@@ -216,9 +322,59 @@ class simulation():
         return 1 - (p_strike)
     
     def Propeller(length, param_dict):
-        '''Franke et al. TBS for Kaplan turbines.
-        Inputs are length of fish and dictionary of turbine parameters'''
+        """
+        Estimates the survival probability of a fish passing through a propeller 
+        turbine, adapting the blade strike model from Franke et al. 1997. This 
+        function considers the physical characteristics of the fish and turbine 
+        operational parameters to calculate the likelihood of fish survival after 
+        potential blade strikes.
     
+        The calculation assumes a fixed position on the blade where the fish 
+        strike might occur and incorporates both deterministic and empirical 
+        parameters to model the interaction dynamics.
+    
+        Parameters:
+        - length (float): The length of the fish in meters, which is a critical 
+        factor in determining the probability of a blade strike.
+        - param_dict (dict): A dictionary containing essential turbine parameters 
+        for the calculation. Expected keys include:
+            - 'H': The net head of water across the turbine (m).
+            - 'RPM': The revolutions per minute of the turbine.
+            - 'D': The diameter of the turbine (m).
+            - 'Q': The actual flow rate through the turbine (m^3/s).
+            - 'ada': The specific speed of the turbine.
+            - 'N': The number of blades on the turbine.
+            - 'Qopt': The optimum flow rate through the turbine (m^3/s), used in
+            beta angle calculations.
+            - 'Qper': The percentage of the optimum flow rate, contributing to
+            the beta calculation.
+            - '_lambda': An empirical constant for blade strike probability, suggested 
+            by the U.S. Fish and Wildlife Service.
+    
+        The function computes the energy coefficient (Ewd) and discharge coefficient (Qwd)
+        to determine the turbine's operational state, followed by the calculation 
+        of the absolute flow angle to the rotation axis (a_a). The strike probability 
+        is then estimated using the fish length, turbine diameter, and the 
+        calculated flow angle, with the survival probability being the complement of
+        the strike probability.
+    
+        Returns:
+        - The probability of a fish surviving a blade strike in a propeller turbine, 
+        with values ranging from 0 (no survival) to 1 (certain survival).
+    
+        Note: The function assumes a fixed radial position (rR = 0.75) for the 
+        fish strike on the blade, simplifying the model while maintaining relevance 
+        to typical turbine conditions. This decision is based on empirical observations
+        and simplifies the model's complexity.
+    
+        Example:
+            param_dict = {'H': 25, 'RPM': 120, 'D': 3, 'Q': 180, 'ada': 0.7, 'N': 3, 
+                          'Qopt': 160, 'Qper': 0.8, '_lambda': 0.2}
+            fish_length = 0.4  # 40 cm
+            survival_probability = Propeller(fish_length, param_dict)
+            print(f'Survival Probability: {survival_probability}')
+        """
+        
         # either sample parameters from statistical distributions, use a priori measures or extract from parameter dictionary
         g = 32.2
         H = param_dict['H']
@@ -252,8 +408,52 @@ class simulation():
         return 1 - (p_strike)
     
     def Francis(length, param_dict):
-        '''Franke et al. TBS for Francis Turbines.
-        Inputs are length of fish and dictionary of turbine parameters'''
+        """
+        Calculates the survival probability of a fish passing through a Francis turbine,
+        based on the blade strike model developed by Franke et al. 1997. This model 
+        incorporates various turbine and biological parameters to estimate the likelihood 
+        of a fish surviving after potential blade strikes within a Francis turbine.
+    
+        Parameters:
+        - length (float): Length of the fish in feet. This parameter is crucial as it 
+          directly influences the probability of blade strike.
+        - param_dict (dict): A dictionary of turbine and operational parameters required 
+          for the survival probability calculation. The expected keys and their descriptions 
+          are as follows:
+            - 'H': Net head of water across the turbine (in feet).
+            - 'RPM': Rotational speed of the turbine runner (in revolutions per minute).
+            - 'D': Diameter of the turbine runner (in feet).
+            - 'Q': Volumetric flow rate through the turbine (in cubic feet per second).
+            - 'Qper': Percentage of the optimum flow rate, contributing to the relative 
+              flow angle calculation.
+            - 'ada': Efficiency of the turbine, a factor in calculating the tangential 
+              flow angle.
+            - 'N': Number of blades on the turbine.
+            - 'iota': Ratio between discharge with no exit swirl and optimum discharge, 
+              used in calculating the relative flow angle (β).
+            - 'D1': Diameter at the turbine entrance (in feet).
+            - 'D2': Diameter at the turbine exit (in feet).
+            - 'B': Width of a turbine blade (in feet).
+            - '_lambda': Empirical constant for blade strike probability, recommended by 
+              the U.S. Fish and Wildlife Service.
+    
+        The function first calculates the energy and discharge coefficients of the turbine, 
+        followed by the relative flow angle (β) and the tangential flow angle upstream of 
+        the runner (α). Utilizing these angles, it estimates the probability of a fish 
+        striking a blade. The survival probability is then derived as the complement of 
+        the strike probability.
+    
+        Returns:
+        - float: The probability of a fish surviving a blade strike in a Francis turbine, 
+          ranging from 0 (no survival) to 1 (certain survival).
+    
+        Example:
+            param_dict = {'H': 100, 'RPM': 100, 'D': 10, 'Q': 500, 'Qper': 1.1, 'ada': 0.8,
+                          'N': 4, 'iota': 1.1, 'D1': 5, 'D2': 10, 'B': 1, '_lambda': 0.2}
+            fish_length = 1  # 1 foot
+            survival_probability = Francis(fish_length, param_dict)
+            print(f'Survival Probability: {survival_probability}')
+        """
     
         # either sample parameters from statistical distributions, use a priori measures or extract from parameter dictionary
         g = 32.2
@@ -271,30 +471,23 @@ class simulation():
         B = param_dict['B']
         _lambda = param_dict['_lambda'] # use USFWS value of 0.2
     
-        # part 1 - calculate omega, the energy coefficient, discharge coefficient
-        omega = RPM * ((2 * np.pi)/60) # radians per second
-        Ewd = (g * H) / (omega * D)**2
-        Qwd = Q/ (omega * D**3)
+        # Calculations
+        omega = RPM * ((2 * np.pi) / 60)  # Angular velocity (rad/s)
+        Ewd = (g * H) / (omega * D)**2  # Energy coefficient
+        Qwd = Q / (omega * D**3)  # Discharge coefficient
     
-        # part 2 - calculate alpha and beta
-        beta = np.arctan((0.707 * (np.pi/8))/(iota * Qwd * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
-        #beta = np.arctan((0.707 * (np.pi/8))/(iota * Qwd * Q_per * np.power(D1/D2,3))) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
+        # Relative flow angle (beta)
+        beta = np.arctan((0.707 * (np.pi / 8)) / (iota * Q_per * (D1 / D2)**3))
     
-        #tan_beta = (0.707 * (np.pi/8))/(iota * Qwd * np.power(D1/D2,3)) #IPD: what is Qper? relook @ this equation ~ discussed 2/5/20
-        
-        #alpha = np.radians(90) - np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
-        alpha = np.radians(90) + np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) +\
-                                           (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) *\
-                                               (np.power(D2/D1,2)) - 4 * 0.707 *\
-                                                   np.tan(beta) * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
+        # Angle tangential of absolute flow (alpha)
+        alpha = np.arctan((2 * np.pi * Ewd * ada) / Qwd * (B / D1) +
+                          (np.pi * 0.707**2) / (2 * Qwd) * (B / D1) * (D2 / D1)**2 -
+                          4 * 0.707 * np.tan(beta) * (B / D1) * (D1 / D2))
     
-        #alpha = np.radians(90) + np.arctan((2 * np.pi * Ewd * ada)/Qwd * (B/D1) + (np.pi * 0.707**2)/(2 * Qwd) * (B/D1) * (np.power(D2/D1,2)) - 4 * 0.707 * tan_beta * (B/D1) * (D1/D2)) #IPD: should be tan(beta) ~ corrected 2/5/20
+        # Probability of mortality from blade strike (M^d)
+        p_strike = _lambda * (N * length / D) * ((np.sin(alpha) * (B / D1)) / (2 * Qwd) + np.cos(alpha) / np.pi)
     
-    
-        # probability of strike * length of fish
-        p_strike = _lambda * (N * length/ D) * (((np.sin(alpha) * (B/D1))/(2*Qwd)) + (np.cos(alpha)/np.pi))
-    
-        return 1 - (p_strike)
+        return 1 - p_strike  # Survival probability
     
     def Pump(length, param_dict):
         ''' pump mode calculations from fish entrainment analysis report:
@@ -328,6 +521,47 @@ class simulation():
         return 1 - (p_strike * length)
     
     def node_surv_rate(self,length,status,surv_fun,route,surv_dict,u_param_dict):
+        """
+        Calculates the survival probability of a fish passing through a node in 
+        the migratory network, taking into account the type of hydraulic structure 
+        encountered (e.g., Kaplan, Propeller, Francis turbines, or pump mode operation) 
+        and the fish's length. The method supports both predefined survival probabilities 
+        (a priori values) and dynamic calculations based on turbine parameters.
+        
+        Parameters:
+        - length (float): The length of the fish, which is a critical factor in 
+        calculating the blade strike probability.
+        - status (int): The status of the fish, where 0 indicates a condition 
+        (such as mortality) that precludes further survival calculation.
+        - surv_fun (str): The survival function or method to be used. This can be
+        'a priori' for predefined survival probabilities, or the name of a specific
+        turbine type ('Kaplan', 'Propeller', 'Francis') for dynamic survival 
+        probability calculation. 'Pump' mode is also supported for scenarios 
+        involving fish entrainment during pumping operations.
+        - route (str): The migratory route or node identifier. In the case of 
+        'a priori' survival probabilities, this corresponds to the key in the 
+        'surv_dict' dictionary. For dynamic calculations, it specifies the turbine 
+        for which parameters are provided in 'u_param_dict'.
+        - surv_dict (dict): A dictionary containing predefined survival probabilities 
+        for various routes or nodes, used when 'surv_fun' is set to 'a priori'. 
+        The keys correspond to route identifiers, and the values are the survival 
+        probabilities.
+        - u_param_dict (dict): A dictionary of dictionaries containing turbine 
+        parameters necessary for calculating survival probabilities. Each key
+        corresponds to a route or turbine identifier, with the associated value 
+        being another dictionary of parameters relevant to the specific turbine 
+        type indicated by 'surv_fun'.
+        
+        Returns:
+        - float: The calculated survival probability for the fish at the given 
+        node, converted to a 32-bit float. If the 'status' parameter is 0, 
+        indicating a non-survivable condition, the method immediately returns 0.0.
+        
+        This method integrates various survival probability models, including 
+        those based on empirical data ('a priori') and dynamic models for
+        different turbine types, providing a versatile tool for assessing fish
+        survival in hydroelectric project simulations.
+        """
     
         if status == 0:
             return 0.0
@@ -361,9 +595,42 @@ class simulation():
     
     # create function that builds networkx graph object from nodes and edges in project database
     def create_route(self,wks_dir):
-        '''function creates a networkx graph object from information provided by
-        nodes and edges found in standard project database.  the only input
-        is the standard project database.'''
+        """
+        Constructs a directed graph representing the migratory network of fish, 
+        using data from nodes and edges defined within a specified project database. 
+        The graph is built using the NetworkX library, allowing for the utilization 
+        of its extensive graph analysis functionalities.
+    
+        The method reads node and edge information from an Excel file located in the 
+        provided directory, 'wks_dir'. Nodes represent points within the migratory 
+        network (such as entry, exit, and decision points), while edges represent 
+        the possible paths a fish can take between these nodes, along with associated 
+        weights (e.g., probabilities or costs associated with each path).
+    
+        Parameters:
+        - wks_dir (str): The directory path where the project database Excel file is 
+          located. This file should contain 'Nodes' and 'Edges' sheets with the 
+          necessary data to construct the network graph.
+    
+        The method performs the following steps:
+        1. Reads the 'Nodes' and 'Edges' sheets from the Excel file, extracting relevant 
+           data for graph construction.
+        2. Initializes an empty directed graph (DiGraph) object using NetworkX.
+        3. Adds nodes to the graph based on locations specified in the 'Nodes' data.
+        4. Iterates over the 'Edges' data to add directed edges between nodes, assigning 
+           weights to these edges as specified in the data.
+        5. Calculates the maximum number of moves a fish can make within the network, 
+           based on all shortest paths from a predefined start node ('river_node_0') 
+           to the furthest node, identified by 'self.max_river_node'.
+    
+        The constructed graph and the maximum number of moves are stored in 'self.graph' 
+        and 'self.moves', respectively, for use in subsequent analyses or simulations 
+        within the broader context of the project.
+    
+        Note: This method assumes the presence of a start node labeled 'river_node_0' 
+        and relies on 'self.max_river_node' being set prior to its call to determine 
+        the endpoint for path calculations.
+        """
     
         nodes = pd.read_excel(wks_dir,'Nodes',header = 0,index_col = None, usecols = "B:D", skiprows = 9)
         edges = pd.read_excel(wks_dir,'Edges',header = 0,index_col = None, usecols = "B:D", skiprows = 8)
@@ -397,29 +664,38 @@ class simulation():
         self.moves = np.arange(0,max_len-1,1)
     
     def movement (self, location, status, swim_speed, graph, intake_vel_dict, Q_dict, op_order):
-        ''' 
-        since fish follow the flow, we can determine the probability
-        a fish will choose the powerhouse over spill if we knew the 
-        the min flow requirement, the min operating discharge, the unit 
-        capacity, and the current discharge.
-        
-        we need to apportion our movement probabilities by edge weights
-        iterate through neighbors and assign them ranges 0 - 1.0 based on
-        movement weights - (].
-                            
-        since we are only dealing with downstream oriented fish, if the 
-        current location is equal to forebay, then we need to do this fancy
-        logic.
-        
-        Discharge dictionary (Q_dict) contains the:  curr_Q =  current discharge,
-                                                     min_Q = minimum operating flow,
-                                                     env_Q = environmental flow,
-                                                     sta_cap_Q = station capacity, 
-                                                     then capacity by unit
-                                                     
-        Operation order dictionary (op_order), is a dictionary of unit (key) and 
-        operating order (value), ex: {'U1':1,'U2':2}
-        '''  
+        """
+        Simulates the movement of a fish through a hydroelectric project's
+        infrastructure, considering operational conditions, the fish's swimming
+        capabilities, and environmental requirements. It calculates the probability
+        of the fish choosing various paths based on water discharge and unit status.
+    
+        Parameters:
+        - location (str): Current location within the project infrastructure.
+        - status (int): Survival status of the fish, 1 for alive and 0 for dead.
+        - swim_speed (float): Swimming speed of the fish, for intake velocity resistance.
+        - graph (networkx.Graph): Directed graph of the project, with nodes as locations
+          and edges as paths between locations.
+        - intake_vel_dict (dict): Maps each turbine to its intake velocity.
+        - Q_dict (dict): Contains discharge information, including 'curr_Q' for current
+          discharge, 'min_Q' for minimum operating discharge, 'env_Q' for environmental
+          flow, 'sta_cap' for station capacity, and turbine capacities.
+        - op_order (dict): Maps each turbine to its operational order, for sequence
+          determination as discharge increases.
+    
+        Special logic is applied in the forebay area, considering the variety of paths
+        (turbines vs. spillway) and operational conditions. Movement probabilities are
+        calculated based on edge weights, apportioned by operational conditions and the
+        fish's swimming abilities.
+    
+        Returns:
+        - str: New location after movement simulation, which could be a specific turbine,
+          'spill' for the spillway, or the same location if the fish cannot move.
+    
+        This method provides a detailed simulation of fish movement, incorporating
+        environmental flows, operational priorities, and biological capabilities to
+        inform management decisions and impact assessments within hydroelectric projects.
+        """
         curr_Q = Q_dict['curr_Q']   # current discharge
         min_Q = Q_dict['min_Q']     # minimum operating discharge
         sta_cap = Q_dict['sta_cap'] # station capacity
@@ -511,10 +787,9 @@ class simulation():
                 probs.append(1)
     
             # generate a new location
-            if len(locs) == 0:
-                print ('debug statement - why locs empty?')
-                
+            probs = np.array(probs) / np.sum(np.array(probs))
             new_loc = np.random.choice(locs,1,p = probs)[0]
+
             del nbors, locs, probs
             
             # filter out those fish that can escape intake velocity
@@ -530,29 +805,55 @@ class simulation():
         return new_loc
     
     def speed (L,A,M):
-        '''vectorizable function to calculate swimming speed as a function of length.
-        
-        Sambilay 1990
-        
-        Inputs:
-            A = caudal fin aspect ratio (fishbase y'all)
-            L = fish length (cm)
-            M = swimming mode where 0 = sustained and 1 = burst
-            
-        Output is given in kilometers per hour, conversion to feet per second 
-        given by google.'''
-            
-        # log_sa = -0.828 + 0.6196 * np.log10(L*30.48) + 0.3478 * np.log10(A) + 0.7621 * M
-        
-        # return (10**log_sa) * 0.911344
+        """
+        Calculates swimming speed based on fish length, caudal fin aspect ratio,
+        and swimming mode, according to Sambilay 1990. The function is vectorizable,
+        allowing for efficient calculations over arrays of inputs.
+    
+        Parameters:
+        - L (float or array-like): Fish length in centimeters.
+        - A (float or array-like): Caudal fin aspect ratio (dimensionless), obtained
+          from fish morphological data.
+        - M (int or array-like): Swimming mode, where 0 represents sustained swimming
+          and 1 represents burst swimming.
+    
+        Returns:
+        - float or array-like: Swimming speed in kilometers per hour. The conversion
+          factor used (0.911344) translates the speed to feet per second for
+          compatibility with certain applications.
+    
+        This model provides an estimate of swimming speeds for fish based on physical
+        characteristics and behavior, useful in ecological and engineering studies
+        related to aquatic locomotion and habitat interactions.
+        """
     
         sa = 10**(-0.828 + 0.6196 * np.log10(L*30.48) + 0.3478 * np.log10(A) + 0.7621 * M)
         
         return sa * 0.911344
     
     def get_USGS_hydrograph(self, gage, prorate, flow_year): 
-        ''' function that gets and standardizes a hydrograph from the USGS based
-        on a flow year.  It then prorates the flow as a function of watershed size.'''
+        """
+        Retrieves and standardizes a hydrograph from the USGS for a specified flow year,
+        and adjusts the flow based on watershed size. The function fetches gage data
+        online, extracts relevant flow data, and applies a proration factor to account
+        for differences in watershed size.
+    
+        Parameters:
+        - gage (str): The USGS gage identifier for which the hydrograph is requested.
+        - prorate (float): Factor by which to adjust the flow data, typically based on
+          the relative size of the watershed of interest compared to that of the gage.
+        - flow_year (int): The year for which flow data is to be retrieved and processed.
+    
+        Returns:
+        - DataFrame: A pandas DataFrame containing the daily average flow data for the
+          specified flow year, adjusted by the proration factor. The DataFrame includes
+          columns for date, original daily average flow ('DAvgFlow'), prorated daily
+          average flow ('DAvgFlow_prorate'), year, and month.
+    
+        Note: The function assumes the availability of USGS gage data online and may
+        require internet access to fetch the data. The use of 'verify=False' in the
+        requests.get call may lead to security warnings and should be used with caution.
+        """
         # get gage data object from web
         start_date = '%s-01-01'%(flow_year)
         end_date = '%s-12-31'%(flow_year)
@@ -594,13 +895,32 @@ class simulation():
         return df
     
     def create_hydrograph(self, discharge_type, scen, scen_months, flow_scenarios_df, fixed_discharge = None):
-        ''' function creates a hydrograph for simulation based on the current scenario
-        
-        inputs are the discharge type (hydrograph or fixed discharge),
-        the scenario,
-        the scenario's months (list), 
-        the flow scenarios dataframe,
-        and the fixed discharge if we are modeling as a fixed discharge'''
+        """
+        Generates a hydrograph for simulation based on specified scenarios, either by
+        importing and adjusting actual hydrograph data or by simulating a hydrograph
+        with a fixed discharge rate across specified months.
+    
+        Parameters:
+        - discharge_type (str): Specifies the type of discharge data to use; can be
+          'hydrograph' for actual hydrograph data or 'fixed' for a constant discharge rate.
+        - scen (str): The scenario identifier to filter the relevant data in the flow
+          scenarios dataframe.
+        - scen_months (list): List of integers representing the months to include in the
+          hydrograph simulation.
+        - flow_scenarios_df (DataFrame): A dataframe containing flow scenario data,
+          including gage information, proration factors, and flow years for 'hydrograph'
+          type scenarios.
+        - fixed_discharge (float, optional): The fixed discharge rate (in cubic feet per
+          second) to use for 'fixed' discharge type simulations.
+    
+        Returns:
+        - DataFrame: A pandas DataFrame representing the hydrograph for the specified
+          scenario, containing columns for dates, prorated daily average flow, and month.
+    
+        The function handles two main types of simulations: importing and adjusting USGS
+        hydrograph data based on a proration factor or simulating a hydrograph with a
+        constant discharge rate across the specified months.
+        """
         flow_df = pd.DataFrame()
         
         scen_df = flow_scenarios_df[flow_scenarios_df.Scenario == scen]
@@ -641,20 +961,34 @@ class simulation():
         return flow_df
     
     def daily_hours(self, ops_df, q_cap_dict, op_order_dict, operations = 'independent'):
-        ''' unit operations can be simulated multiple ways.
-        
-        For Run-Of-River facilities - units are 'on' for 24 hours
-        a day.  If the discharge is below the minimal operating limit
-        then the movement function routes to spill.
-        
-        For peaking facilities - units can be operated for a fixed
-        number of hours every day.  Or hours can be described with 
-        a log normal distribution.  Or, you may find that units
-        are operated in a specific order and one operations
-        for unit #2 is dependent upon #1.  If units are dependent
-        pass dependent = True.'''
+        """
+        Simulates the daily operational hours of units in hydroelectric facilities,
+        considering the facility type (Run-Of-River or peaking) and operational
+        dependencies between units. The function adjusts flow rates based on operational
+        hours and unit capacities.
+    
+        Parameters:
+        - ops_df (DataFrame): Contains unit operation parameters, including potential
+          log-normal distribution parameters for operation hours and probability of
+          not operating.
+        - q_cap_dict (dict): Maps each unit to its flow capacity (cubic feet per second).
+        - op_order_dict (dict): Maps each unit to its operational order, important for
+          facilities with dependent unit operations.
+        - operations (str, optional): Defines the operational mode of the units; can be
+          'independent' for units operating independently or 'dependent' for units with
+          sequential dependencies. Defaults to 'independent'.
+    
+        Returns:
+        - tuple: Contains total operational hours, total flow, a dictionary of operational
+          hours per unit, and a dictionary of flow per unit.
+    
+        The function supports various operational scenarios, including fixed hours,
+        hours determined by a log-normal distribution, or dependent operations where
+        the operation of one unit depends on another. For Run-Of-River facilities,
+        units operate 24/7, while peaking facilities may vary.
+        """
         order_swap = {v: k for k, v in op_order_dict.items()}
-        ops_df.set_index(keys = 'Unit', inplace = True)
+        ops_df.set_index('Unit', inplace = True)
         
         # loop over units, build some dictionaries
         prev_unit_hours = None
@@ -694,7 +1028,8 @@ class simulation():
 
                     else:
                         # TODO Bad Creek Analysis halved hours - change back
-                        hours = lognorm.rvs(shape,location,scale,1)[0]
+                        hours = lognorm.rvs(shape,location,scale,1)[0] * 0.412290503
+
                         if hours > 24.:
                             hours = 24.
                         elif hours < 0:
@@ -711,7 +1046,8 @@ class simulation():
     
                         else:
                             # TODO Bad Creek Analysis halved hours - change back
-                            hours = lognorm.rvs(shape,location,scale,1)[0]
+                            hours = lognorm.rvs(shape,location,scale,1)[0] * 0.412290503
+
                             if hours > 24.:
                                 hours = 24.
                             elif hours < 0:
@@ -734,7 +1070,8 @@ class simulation():
                                     flow_dict[unit] = 0.
                                 else:
                                     # TODO Bad Creek Analysis halved hours - change back
-                                    hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0]
+                                    hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0] * 0.412290503
+
                                     if hours > 24.:
                                         hours = 24.
                                     elif hours < 0:
@@ -748,22 +1085,22 @@ class simulation():
                             hours_dict[unit] = 0.
                             flow_dict[unit] = 0.
                             
-        # implement Bad Creek algorithm here - is this method valid for new construction?
-        tot_hours = 0.
-        sum_pump_rate = 0.
-        bc1_sum_rate = 0.
-        for key in hours_operated:
-            if key == 'U1' or key == 'U2' or key == 'U3' or key == 'U4':
-                tot_hours = tot_hours + hours_operated[key]
-                bc1_sum_rate = bc1_sum_rate + ops_df.at[unit,'Qcap']
-            sum_pump_rate = sum_pump_rate + ops_df.at[unit,'Qcap']
+        # # implement Bad Creek algorithm here - is this method valid for new construction?
+        # tot_hours = 0.
+        # sum_pump_rate = 0.
+        # bc1_sum_rate = 0.
+        # for key in hours_operated:
+        #     if key == 'U1' or key == 'U2' or key == 'U3' or key == 'U4':
+        #         tot_hours = tot_hours + hours_operated[key]
+        #         bc1_sum_rate = bc1_sum_rate + ops_df.at[unit,'Qcap']
+        #     sum_pump_rate = sum_pump_rate + ops_df.at[unit,'Qcap']
                 
-        volume = tot_hours * 3600. * bc1_sum_rate 
-        tot_bc1_bc2_time = volume / sum_pump_rate / 3600.
-        time_ratio = tot_bc1_bc2_time / tot_hours
+        # volume = tot_hours * 3600. * bc1_sum_rate 
+        # tot_bc1_bc2_time = volume / sum_pump_rate / 3600.
+        # time_ratio = tot_bc1_bc2_time / tot_hours
         
-        for key in hours_operated:
-            hours_operated[key] * time_ratio
+        # for key in hours_operated:
+        #     hours_operated[key] * time_ratio
 
         tot_flow = 0       
         tot_hours = 0   
@@ -771,36 +1108,34 @@ class simulation():
         for u in op_order_dict.keys():
             tot_hours = tot_hours + hours_dict[u]
             tot_flow = tot_flow + flow_dict[u]
-            
-            
+               
         ops_df.reset_index(drop = False, inplace = True)
             
         return tot_hours, tot_flow, hours_dict, flow_dict
         
     def population_sim(self, spc_df, discharge_type, tot_hours, tot_flow, curr_Q):
-        '''
-        function simulates a population of fish as described witha distribution, 
-        discharge type, hours of operation and flow rates.
-
-        Parameters
-        ----------
-        spc_df : TYPE
-            DESCRIPTION.
-        discharge_type : TYPE
-            DESCRIPTION.
-        tot_hours : TYPE
-            DESCRIPTION.
-        tot_flow : TYPE
-            DESCRIPTION.
-        curr_Q : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        TYPE
-            DESCRIPTION.
-
-        '''
+        """
+        Simulates a population of fish based on species-specific parameters and
+        operational conditions of a hydroelectric facility. The function uses
+        distribution parameters to simulate entrainment rates, which are then
+        adjusted based on operational conditions and historical data.
+    
+        Parameters:
+        - spc_df (DataFrame): Contains species-specific parameters for simulating
+          entrainment rates, including distribution type and parameters.
+        - discharge_type (str): Type of discharge operation ('fixed' or variable).
+        - tot_hours (float): Total operational hours of the facility.
+        - tot_flow (float): Total flow through the facility in cubic feet.
+        - curr_Q (float): Current discharge rate in cubic feet per second.
+    
+        Returns:
+        - int: Simulated number of fish entrained, rounded to the nearest whole number.
+    
+        The simulation considers the discharge type, operational hours, and current
+        flow to estimate the volume of water interacting with the fish population.
+        The entrainment rate is drawn from the specified distribution and adjusted
+        for feasibility based on historical data.
+        """
         
         shape = spc_df.param1.values[0]
         loc = spc_df.param2.values[0]
@@ -841,6 +1176,39 @@ class simulation():
         return np.round(Mft3 * ent_rate,0)[0]
 
     def run(self):
+        """
+        Executes a comprehensive simulation of fish populations navigating through
+        a hydroelectric facility, accounting for various operational scenarios,
+        species-specific behaviors, and environmental conditions. The function
+        integrates multiple components including route creation, operational
+        parameters setup, and survival probability calculations.
+        
+        The simulation workflow includes:
+        1. Route creation for fish movement based on facility layout.
+        2. Initialization of dictionaries for operational parameters, survival
+           probabilities, intake velocities, unit capacities, and operational orders.
+        3. Iteration over hydroelectric units to populate dictionaries with unit-
+           specific operational data.
+        4. Scenario-based simulation, considering different flow conditions and
+           species presence.
+        5. Population simulation for each species under each scenario, including
+           entrainment rate calculations and survival assessments.
+        6. Movement and survival simulation for individual fish, with results
+           stored in a hierarchical data format (HDF) file for analysis.
+        
+        No parameters are passed directly to this function as it operates on
+        the class attributes set during initialization and updated through
+        other methods.
+        
+        The function logs progress and notable events (e.g., entrainment events,
+        units not operating) throughout the simulation, providing insights into
+        the simulation dynamics and outcomes.
+        
+        Outputs:
+        The function generates and stores detailed simulation results in an HDF file,
+        including daily summaries, entrainment statistics, and length distributions
+        for simulated fish populations across different scenarios.
+        """
         # create route and data object behind the scenes
         self.create_route(self.wks_dir)
         
@@ -1073,9 +1441,9 @@ class simulation():
                                     # initial location
                                     location = fishes['state_%s'%(k)].values
     
-                                    # def surv_fun_att(state,surv_fun_dict):
-                                    #     fun_typ = surv_fun_dict[state]['Surv_Fun']
-                                    #     return fun_typ
+                                    def surv_fun_att(state,surv_fun_dict):
+                                        fun_typ = surv_fun_dict[state]['Surv_Fun']
+                                        return fun_typ
     
                                     v_surv_fun = np.vectorize(surv_fun_att,excluded = [1])
                                     try:
@@ -1229,7 +1597,35 @@ class simulation():
         self.hdf.close()
 
     def summary(self):
-        '''Function summarizes entrainment risk hdf file'''
+        """
+        Summarizes the results of fish entrainment simulations stored in an HDF file.
+        This function aggregates and analyzes data across species, scenarios, and units
+        to provide insights into entrainment risks and outcomes.
+    
+        The summary process includes:
+        1. Accessing the HDF store and retrieving relevant data tables (Population,
+           Flow Scenarios, Unit Parameters, Daily summaries, and Length distributions).
+        2. Iterating through species and scenarios to calculate survival rates, length
+           statistics, and entrainment outcomes.
+        3. Fitting beta distributions to survival probabilities and summarizing the
+           results.
+        4. Aggregating daily data to provide cumulative summaries, including median
+           population sizes, entrainment and mortality rates, and confidence intervals.
+        5. Analyzing entrainment and mortality distributions to calculate probabilities
+           of exceeding certain thresholds (e.g., 10, 100, 1000 individuals).
+    
+        Outputs:
+        - Detailed summaries are printed to the console, providing an overview of
+          simulation outcomes.
+        - Key summary statistics, including beta distribution parameters and cumulative
+          sums, are stored as class attributes for further analysis or reporting.
+        - The function updates the HDF file with aggregated summary data and closes
+          the file upon completion.
+    
+        Note: This function assumes that the HDF file contains the necessary data
+        tables from previous simulation runs and that the file structure adheres to
+        the expected format.
+        """
         # create hdf store
         self.hdf = pd.HDFStore(os.path.join(self.proj_dir,'%s.h5'%(self.output_name)))
 
@@ -1422,16 +1818,33 @@ class simulation():
         self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict,orient = 'columns')
 
 class hydrologic():
-    '''python class object that conducts flow exceedance analysis using recent USGS data as afunction of the contributing watershed size.
-    We have develped a strong linear relationship between drainage area and flow exceedances for the 100 nearest gages to the dam.  With
-    this relationship we can predict what a wet spring looks like.'''
+    """
+    A Python class for conducting flow exceedance analysis using recent USGS data
+    in relation to the contributing watershed size. It utilizes a linear relationship
+    between drainage area and flow exceedances derived from the 100 nearest USGS
+    gages to a given dam. This relationship is used to predict flow conditions such
+    as what constitutes a wet spring.
+
+    The class is designed to import relevant data, including dam locations and
+    nearby USGS gages, and to calculate flow exceedances based on this data.
+    """
 
     def __init__(self, nid_near_gage_dir, output_dir):
-        ''' to initialize the hydrologic class, provide:
-            dam_dir = a shapefile directory for affected dams, must be subset of National Inventory of Dams (USACE 2004)
-            gage_dir = a shapefile directory of USGS gages active since 2009
-            nid_near_gage_dir = link to nid_near_gage table, csv file which lists the 100 nearest USGS gages to every NID dam
-            output_dir = link to the output directory'''
+        """
+        Initializes the hydrologic class with necessary data paths.
+
+        Parameters:
+        - nid_near_gage_dir (str): Path to the CSV file listing the 100 nearest
+          USGS gages to every dam listed in the National Inventory of Dams (NID).
+          The CSV should contain columns for NID dam identifiers, USGS gage
+          identifiers (STAID), and other relevant metadata.
+        - output_dir (str): Path to the directory where output files and analyses
+          will be stored.
+
+        Upon initialization, the class imports the NID-to-gage mapping data and
+        prepares for flow exceedance calculations by setting up data structures
+        for storing gage data and identified dams.
+        """
         # establish output directory
         self.output_dir = output_dir
 
@@ -1497,9 +1910,30 @@ class hydrologic():
                     continue
 
     def seasonal_exceedance(self, seasonal_dict, exceedence, HUC = None):
-        '''function calculates the 90, 50, and 10 percent exceedance flows by season and writes to an output data frame.
-
-        seasonal_dict = python dictionary consisting of season (key) with a Python list like object of month numbers (value)'''
+        """
+        Calculates seasonal flow exceedance probabilities for each gage and compiles
+        the results into a DataFrame. The method considers predefined seasons and
+        specific exceedance thresholds to evaluate flow rates.
+    
+        Parameters:
+        - seasonal_dict (dict): A dictionary mapping seasons to lists of month numbers,
+          defining the temporal scope of each season.
+        - exceedence (list): A list of exceedance thresholds (percentages) for which
+          flow rates are calculated.
+        - HUC (int, optional): Hydrologic Unit Code to filter the analysis to a specific
+          watershed or sub-watershed. If provided, only gages within the specified HUC
+          are considered.
+    
+        The method iterates through the gages, applying the seasonal definitions and
+        exceedance thresholds to calculate minimum flow rates that are exceeded at
+        the specified percentages of time within each season. Results include gage
+        identifiers, names, HUCs, drainage areas, seasons, calculated flow rates, and
+        exceedance percentages.
+    
+        Outputs:
+        - Updates the `exceedance` attribute of the class instance, storing the compiled
+          exceedance data as a DataFrame.
+        """
 
         self.exceedance = pd.DataFrame()
         self.DAvgFlow['season'] = np.empty(len(self.DAvgFlow))
@@ -1540,12 +1974,32 @@ class hydrologic():
                         self.exceedance = self.exceedance.append(newRow)
 
     def curve_fit(self, season, dam, exceedance):
-        '''function uses statsmodels to perform OLS regaression and describe exceedance probablity as a function of watershed size,
-
-            required inputs inlcude:
-                season = string object denoting current season
-                dam = string object denoting current dam
-                exccednace = string object pulling specific exceedance column, 'exc_90','exc_50','exc_10' '''
+        """
+        Performs an Ordinary Least Squares (OLS) regression to model the relationship
+        between watershed size and flow exceedance probability for a specific dam
+        and season. This method uses the statsmodels library to fit the model and
+        provides a summary of the regression results.
+    
+        Parameters:
+        - season (str): The season for which the analysis is conducted (e.g., 'Spring').
+        - dam (str): The identifier for the dam of interest, corresponding to entries
+          in the NID_to_gage DataFrame.
+        - exceedance (str): Specifies the exceedance threshold being modeled (e.g.,
+          'exc_90' for the 90th percentile exceedance flow).
+    
+        The function retrieves the relevant dam data, filters the exceedance DataFrame
+        for the specified season and exceedance threshold, and extracts the drainage
+        area and flow data for regression analysis.
+    
+        Outputs:
+        - Prints a summary of the regression model, including the p-value and model
+          coefficients. If the model is statistically significant (p-value < 0.05),
+          it calculates and prints the exceedance flow for the specified dam based
+          on its drainage area.
+        - Updates class attributes with the regression data (X, Y), the predicted
+          exceedance flow for the specified dam (DamY), and the dam's drainage area
+          (DamX) for potential further analysis.
+        """
 
         # get dam data
         dam_df = self.NID_to_gage[self.NID_to_gage.NIDID == dam]
@@ -1581,312 +2035,373 @@ class hydrologic():
             print ("Model not significant, there is no exceedance flow estimate")
             self.DamX = np.nan
             self.DamY = np.nan
+            
 class epri():
-    '''python class object that queries the EPRI entrainment database and fits
-    a pareto distribution to the observations.'''
-
-    def __init__(self,  
-                 states = None,
-                 plant_cap = None,
-                 Month = None,
-                 Family = None,
-                 Genus = None,
-                 Species = None,
-                 Feeding_Guild = None,
-                 Habitat = None,
-                 Water_Type = None,
-                 Mussel_Host = None,
-                 Seasonal_Migrant = None,
-                 HUC02 = None,
-                 HUC04 = None,
-                 HUC06 = None,
-                 HUC08 = None,
-                 NIDID = None,  
-                 River = None):
-
-        '''The EPRI database can be queried many different ways.  Note, these are
-        optional named arguments, meaning the end user doesn't have to query the
-        database at all.  In this instance the returned Pareto distribution
-        parameters will be representative of the entire dataset.
-
-        -states = list like object of state abbreviations or single state abbreviation
-        -plant_cap = tuple object indicating the plant capacity (cfs) cutoff and the direction, i.e. (1000,'gt')
-        -Month = list like object of Month integer or single Month integer object.
-        -Family = list like object of Scientific Families or single Family string object
-        -Feeding_Guild = list like object of abbreviated feeding guilds or single feeding guild string object.
-            List of appropriate feeding guilds:
-               CA = carnivore
-               FF = filter feeder
-               HE = herbivore
-               IC = insectivorous cyprinid
-               IN = invertivore
-               OM = omnivore
-               PR = parasite
-        -Species = list like object of common names or single common name string object
-        -Habitat = list like object of abbreviated habitat preferences or single preference string object
-            List of appropriate habitat types:
-                BEN = benthic
-                BFS = benthic fluvial specialist
-                FS = fluvial specialist
-                Lit = littoral (near cover/shorelines)
-                Pel = pelagic
-                Pool = pool (minnows)
-                RP = run/pool (minnows)
-                RRP = riffle/run/pool (minnows)
-        -Water_Type = list like object of abbreviated water size preferences or single preference string object
-            List of appropriate water sizes:
-                BW = big water
-                SS = small stream
-                Either = can be found in all river sizes
-        -Mussel_Host = is this fish a mussel host?
-            List of appropriate
-                Yes
-                No
-                null
-        -Seasonal Migrant = string object indicating migration season.
-            List of appropriate seasons:
-                'Spring', 'Spring/Fall', 'Spring-Summer','Fall','Fall-Winter'
-        '''
-
-        # import EPRI database
-
-
-   
-        self.epri = pd.read_csv(r"..\data\epri1997.csv",  encoding= 'unicode_escape')
-
-        ''' I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame'''
-
-        if NIDID is not None:
-            if isinstance(NIDID,str):
-                self.epri = self.epri[self.epri.NIDID != NIDID]
-            else:
-                self.epri = self.epri[~self.epri['NIDID'].isin(NIDID)]
-
-        if states is not None:
-            if isinstance(states,str):
-                self.epri = self.epri[self.epri.State == states]
-            else:
-                self.epri = self.epri[self.epri['State'].isin(states)]
-
-        if plant_cap is not None:
-            if plant_cap[1] == '>':
-                self.epri = self.epri[self.epri.Plant_cap_cfs > plant_cap[0]]
-            else:
-                self.epri = self.epri[self.epri.Plant_cap_cfs <= plant_cap[0]]
-
-        if Month is not None:
-            if isinstance(Month,str):
-                self.epri = self.epri[self.epri.Month == Month]
-            else:
-                self.epri = self.epri[self.epri['Month'].isin(Month)]
-
-        if Family is not None:
-            if isinstance(Family,str):
-                self.epri = self.epri[self.epri['Family'] == Family]
-            else:
-                self.epri = self.epri[self.epri['Family'].isin(Family)]
-
-        if Species is not None:
-            if isinstance(Species,str):
-                self.epri = self.epri[self.epri.Species == Species]
-            else:
-                self.epri = self.epri[self.epri['Species'].isin(Species)]
-                
-        if Genus is not None:
-            if isinstance(Genus,str):
-                self.epri = self.epri[self.epri.Genus == Genus]
-            else:
-                self.epri = self.epri[self.epri['Genus'].isin(Genus)]
-
-        if Feeding_Guild is not None:
-            if isinstance(Feeding_Guild,str):
-                self.epri = self.epri[self.epri.FeedingGuild == Feeding_Guild]
-            else:
-                self.epri = self.epri[self.epri['FeedingGuild'].isin(Feeding_Guild)]
-
-        if Habitat is not None:
-            if isinstance(Habitat,str):
-                self.epri = self.epri[self.epri.Habitat == Habitat]
-            else:
-                self.epri = self.epri[self.epri['Habitat'].isin(Habitat)]
-
-        if Water_Type is not None:
-            if isinstance(Water_Type,str):
-                self.epri = self.epri[self.epri.WaterType == Water_Type]
-            else:
-                self.epri = self.epri[self.epri['WaterType'].isin(Water_Type)]
-
-        if Mussel_Host is not None:
-            if isinstance(Mussel_Host,str):
-                self.epri = self.epri[self.epri.Host == Mussel_Host]
-            else:
-                self.epri = self.epri[self.epri['Host'].isin(Mussel_Host)]
-
-        if Seasonal_Migrant is not None:
-            if isinstance(Seasonal_Migrant,str):
-                self.epri = self.epri[self.epri.Migrant == Seasonal_Migrant]
-            else:
-                self.epri = self.epri[self.epri['Migrant'].isin(Seasonal_Migrant)]
-        
-        if HUC02 is not None:
-            if isinstance(HUC02,str):
-                self.epri = self.epri[self.epri.HUC02 == HUC02]
-            else:
-                self.epri = self.epri[self.epri['HUC02'].isin(HUC02)]
-                
-        if HUC04 is not None:
-            if isinstance(HUC04,str):
-                self.epri = self.epri[self.epri.HUC04 == HUC04]
-            else:
-                self.epri = self.epri[self.epri['HUC04'].isin(HUC04)]
-                
-        if HUC06 is not None:
-            if isinstance(HUC06,str):
-                self.epri = self.epri[self.epri.HUC06 == HUC06]
-            else:
-                self.epri = self.epri[self.epri['HUC06'].isin(HUC06)]
-                
-        if HUC08 is not None:
-            if isinstance(HUC08,int):
-                self.epri = self.epri[self.epri.HUC08 == HUC08]
-            else:
-                self.epri = self.epri[self.epri['HUC02'].isin(HUC08)]
-                
-        if River is not None:
-            if isinstance(River,str):
-                self.epri = self.epri[self.epri.River == River]
-            else:
-                self.epri = self.epri[self.epri['River'].isin(River)]          
-        # calculate probability of presence
-        success = self.epri.Present.sum()
-        trials = len(self.epri)
-        print ("--------------------------------------------------------------------------------------------")        
-        print ("out of %s potential samples %s had this species present for %s probability of presence"%(trials,success,round(float(success/trials),4)))
-        print ("--------------------------------------------------------------------------------------------")
- 
-        self.epri.fillna(0,inplace = True)
-        self.epri = self.epri[self.epri.Present == 1]
-
-        
-        #print ("With a maximum entrainment rate of %s and only %s percent of records acount for 80 percent of the entrainment"%(self.epri.FishPerMft3.max(),
-        #                                                                                                                round(len(self.epri[self.epri.FishPerMft3 > self.epri.FishPerMft3.max()*0.8]) / len(self.epri) * 100,2)))
-        print ("There are %s records left to describe entrainment rates"%(len(self.epri)))
-        print ("The maximum entrainment rate for this fish is: %s"%(self.epri.FishPerMft3.max()))
-        print ("--------------------------------------------------------------------------------------------")
-    def ParetoFit(self):
-        ''' Function fits a Pareto distribution to the epri dataset relating to
-        the species of interest'''
-
-        # fit a pareto and write to the object
-        self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values, floc = 0)
-        print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
-                                                                                                      round(self.dist_pareto[1],4),
-                                                                                                      round(self.dist_pareto[2],4)))
-        print ("The Pareto mean is: %s"% (pareto.mean(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
-        print ("The Pareto variance is: %s"% (pareto.var(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
-        print ("The Pareto standard deviation is: %s"% (pareto.std(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
-        print ("--------------------------------------------------------------------------------------------")
-
-
-    def ExtremeFit(self):
-        ''' Function fits a generic extreme value distribution to the epri dataset relating to
-        the species of interest'''
-
-        # fit a pareto and write to the object
-        self.dist_extreme = genextreme.fit(self.epri.FishPerMft3.values, floc = 0)
-        print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
-                                                                                                      round(self.dist_extreme[1],4),
-                                                                                                      round(self.dist_extreme[2],4)))
-        print ("The Generic Extreme Value mean is: %s"% (genextreme.mean(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
-        print ("The Generic Extreme Value variance is: %s"% (genextreme.var(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
-        print ("The Generic Extreme Value standard deviation is: %s"% (genextreme.std(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
-        print ("--------------------------------------------------------------------------------------------")
-
-    def WeibullMinFit(self):
-       ''' Function fits a Frechet distribution to the epri dataset relating to
-       the species of interest'''
-
-       # fit a pareto and write to the object
-       self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values, floc = 0)
-       print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
-                                                                                                     round(self.dist_weibull[1],4),
-                                                                                                     round(self.dist_weibull[2],4)))
-       print ("The Weibull Max mean is: %s"% (weibull_min.mean(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
-       print ("The Weibull Max variance is: %s"% (weibull_min.var(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
-       print ("The Weibull Max standard deviation is: %s"% (weibull_min.std(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
-       print ("--------------------------------------------------------------------------------------------")
-
-    def LogNormalFit(self):
-        ''' Function fits a Log Normal distribution to the epri dataset relating to
-        the species of interest'''
+        """
+        A Python class for querying the Electric Power Research Institute (EPRI)
+        entrainment database and fitting a distribution to the observed
+        entrainment rates. The class allows for flexible querying of the database
+        based on various ecological and hydrological parameters.
     
-        # fit a pareto and write to the object
-        self.dist_lognorm = lognorm.fit(self.epri.FishPerMft3.values, floc = 0)
-        print ("The Log Normal distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_lognorm[0],4),
-                                                                                                      round(self.dist_lognorm[1],4),
-                                                                                                      round(self.dist_lognorm[2],4)))
-        print ("The Log Normal mean is: %s"% (lognorm.mean(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
-        print ("The Log Normal variance is: %s"% (lognorm.var(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
-        print ("The Log Normal standard deviation is: %s"% (lognorm.std(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
-        print ("--------------------------------------------------------------------------------------------")
+        The class supports analysis by state, plant capacity, date, taxonomy,
+        feeding guild, habitat preference, water body type, and more, to explore
+        entrainment patterns across different environmental and operational conditions.
+        """
+        def __init__(self, states = None, plant_cap = None, Month = None, Family = None, Genus = None, Species = None, HUC02 = None, HUC04 = None, HUC06 = None, HUC08 = None, NIDID = None, River = None):
+            """
+            Initializes the epri class by querying the EPRI database based on the
+            provided criteria. Optional arguments allow for targeted analysis of
+            specific ecological or hydrological contexts.
+        
+            Parameters are used to filter the database for analysis. If no parameters
+            are provided, the analysis will consider the entire dataset.
+        
+            Parameters:
+            - states: State abbreviations to filter the data.
+            - plant_cap: Plant capacity (cfs) with a direction for filtering (> or <=).
+            - Month: Numeric representation of months for filtering.
+            - Family, Genus, Species: Taxonomic filters for the analysis..
+            - HUC02, HUC04, HUC06, HUC08: Hydrologic Unit Codes for geographic filtering.
+            - NIDID: National Inventory of Dams identifier for filtering by dams.
+            - River: River names for filtering the dataset.
+        
+            Upon initialization, the relevant subset of the EPRI database is loaded
+            for subsequent analysis.
+            """
+    
+            # import EPRI database
+    
+    
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..\data\epri1997.csv')
+            self.epri = pd.read_csv(data_dir,  encoding= 'unicode_escape')
+    
+            ''' I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame'''
+    
+            if NIDID is not None:
+                if isinstance(NIDID,str):
+                    self.epri = self.epri[self.epri.NIDID != NIDID]
+                else:
+                    self.epri = self.epri[~self.epri['NIDID'].isin(NIDID)]
+    
+            if states is not None:
+                if isinstance(states,str):
+                    self.epri = self.epri[self.epri.State == states]
+                else:
+                    self.epri = self.epri[self.epri['State'].isin(states)]
+    
+            if plant_cap is not None:
+                if plant_cap[1] == '>':
+                    self.epri = self.epri[self.epri.Plant_cap_cfs > plant_cap[0]]
+                else:
+                    self.epri = self.epri[self.epri.Plant_cap_cfs <= plant_cap[0]]
+    
+            if Month is not None:
+                if isinstance(Month,str):
+                    self.epri = self.epri[self.epri.Month == Month]
+                else:
+                    self.epri = self.epri[self.epri['Month'].isin(Month)]
+    
+            if Family is not None:
+                if isinstance(Family,str):
+                    self.epri = self.epri[self.epri['Family'] == Family]
+                else:
+                    self.epri = self.epri[self.epri['Family'].isin(Family)]
+    
+            if Species is not None:
+                if isinstance(Species,str):
+                    self.epri = self.epri[self.epri.Species == Species]
+                else:
+                    self.epri = self.epri[self.epri['Species'].isin(Species)]
+                    
+            if Genus is not None:
+                if isinstance(Genus,str):
+                    self.epri = self.epri[self.epri.Genus == Genus]
+                else:
+                    self.epri = self.epri[self.epri['Genus'].isin(Genus)]
+            
+            if HUC02 is not None:
+                if isinstance(HUC02,str):
+                    self.epri = self.epri[self.epri.HUC02 == HUC02]
+                else:
+                    self.epri = self.epri[self.epri['HUC02'].isin(HUC02)]
+                    
+            if HUC04 is not None:
+                if isinstance(HUC04,str):
+                    self.epri = self.epri[self.epri.HUC04 == HUC04]
+                else:
+                    self.epri = self.epri[self.epri['HUC04'].isin(HUC04)]
+                    
+            if HUC06 is not None:
+                if isinstance(HUC06,str):
+                    self.epri = self.epri[self.epri.HUC06 == HUC06]
+                else:
+                    self.epri = self.epri[self.epri['HUC06'].isin(HUC06)]
+                    
+            if HUC08 is not None:
+                if isinstance(HUC08,int):
+                    self.epri = self.epri[self.epri.HUC08 == HUC08]
+                else:
+                    self.epri = self.epri[self.epri['HUC02'].isin(HUC08)]
+                    
+            if River is not None:
+                if isinstance(River,str):
+                    self.epri = self.epri[self.epri.River == River]
+                else:
+                    self.epri = self.epri[self.epri['River'].isin(River)] 
+                    
 
-    def GumbelFit(self):
-       ''' Function fits a Frechet distribution to the epri dataset relating to
-       the species of interest'''
+            # calculate probability of presence
+            success = self.epri.Present.sum()
+            trials = len(self.epri)
+            print ("--------------------------------------------------------------------------------------------")        
+            print ("out of %s potential samples %s had this species present for %s probability of presence"%(trials,success,round(float(success/trials),4)))
+            print ("--------------------------------------------------------------------------------------------")
+     
+            self.epri.fillna(0,inplace = True)
+            self.epri = self.epri[self.epri.Present == 1]
+            self.family = Family
+            self.genus = Genus
+            self.species = Species
+            self.month = Month
+            self.presence = round(float(success/trials),4)
+            self.max_ent_rate = self.epri.FishPerMft3.max()
+            self.sample_size = len(self.epri)
+            self.HUC02 = HUC02
+            self.HUC04 = HUC04
 
-       # fit a pareto and write to the object
-       self.dist_gumbel = gumbel_r.fit(self.epri.FishPerMft3.values)
-       print ("The Gumbel distribution has a shape parameter of location: %s and scale: %s"%(round(self.dist_gumbel[0],4),
-                                                                                                     round(self.dist_gumbel[1],4)))
-       print ("--------------------------------------------------------------------------------------------")
-    def LengthSummary(self):
-        '''Function summarizes length for species of interest using EPRI database'''
+    
+            
+            #print ("With a maximum entrainment rate of %s and only %s percent of records acount for 80 percent of the entrainment"%(self.epri.FishPerMft3.max(),
+            #                                                                                                                round(len(self.epri[self.epri.FishPerMft3 > self.epri.FishPerMft3.max()*0.8]) / len(self.epri) * 100,2)))
+            print ("There are %s records left to describe entrainment rates"%(len(self.epri)))
+            print ("The maximum entrainment rate for this fish is: %s"%(self.epri.FishPerMft3.max()))
+            print ("--------------------------------------------------------------------------------------------")
+        
+        
+        def ParetoFit(self):
+            """
+            Fits a Pareto distribution to the filtered EPRI dataset to model entrainment
+            rates. This method provides an analysis of entrainment patterns based on
+            the shape, location, and scale parameters of the distribution.
+        
+            Outputs detailed statistics of the fitted Pareto distribution, including the
+            mean, variance, and standard deviation, offering insights into the
+            entrainment rates' distribution characteristics within the selected dataset.
+            """
+    
+            # fit a pareto and write to the object
+            self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values, floc = 0)
+            print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
+                                                                                                          round(self.dist_pareto[1],4),
+                                                                                                          round(self.dist_pareto[2],4)))
+            print ("The Pareto mean is: %s"% (pareto.mean(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
+            print ("The Pareto variance is: %s"% (pareto.var(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
+            print ("The Pareto standard deviation is: %s"% (pareto.std(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
+            print ("--------------------------------------------------------------------------------------------")
+    
+    
+        def ExtremeFit(self):
+            """
+            Fits an Extreme Value distribution to the filtered EPRI dataset to model entrainment
+            rates. This method provides an analysis of entrainment patterns based on
+            the shape, location, and scale parameters of the distribution.
+        
+            Outputs detailed statistics of the fitted Pareto distribution, including the
+            mean, variance, and standard deviation, offering insights into the
+            entrainment rates' distribution characteristics within the selected dataset.
+            """
+    
+            # fit a pareto and write to the object
+            self.dist_extreme = genextreme.fit(self.epri.FishPerMft3.values, floc = 0)
+            print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
+                                                                                                          round(self.dist_extreme[1],4),
+                                                                                                          round(self.dist_extreme[2],4)))
+            print ("The Generic Extreme Value mean is: %s"% (genextreme.mean(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
+            print ("The Generic Extreme Value variance is: %s"% (genextreme.var(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
+            print ("The Generic Extreme Value standard deviation is: %s"% (genextreme.std(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
+            print ("--------------------------------------------------------------------------------------------")
+    
+        def WeibullMinFit(self):
+            """
+            Fits a Frachet distribution to the filtered EPRI dataset to model entrainment
+            rates. This method provides an analysis of entrainment patterns based on
+            the shape, location, and scale parameters of the distribution.
+        
+            Outputs detailed statistics of the fitted Pareto distribution, including the
+            mean, variance, and standard deviation, offering insights into the
+            entrainment rates' distribution characteristics within the selected dataset.
+            """
+    
+            # fit a pareto and write to the object
+            self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values, floc = 0)
+            print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
+                                                                                                          round(self.dist_weibull[1],4),
+                                                                                                          round(self.dist_weibull[2],4)))
+            print ("The Weibull Max mean is: %s"% (weibull_min.mean(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
+            print ("The Weibull Max variance is: %s"% (weibull_min.var(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
+            print ("The Weibull Max standard deviation is: %s"% (weibull_min.std(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
+            print ("--------------------------------------------------------------------------------------------")
+    
+        def LogNormalFit(self):
+            """
+            Fits a Log Normal distribution to the filtered EPRI dataset to model entrainment
+            rates. This method provides an analysis of entrainment patterns based on
+            the shape, location, and scale parameters of the distribution.
+        
+            Outputs detailed statistics of the fitted Pareto distribution, including the
+            mean, variance, and standard deviation, offering insights into the
+            entrainment rates' distribution characteristics within the selected dataset.
+            """
+        
+            # fit a pareto and write to the object
+            self.dist_lognorm = lognorm.fit(self.epri.FishPerMft3.values, floc = 0)
+            print ("The Log Normal distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_lognorm[0],4),
+                                                                                                          round(self.dist_lognorm[1],4),
+                                                                                                          round(self.dist_lognorm[2],4)))
+            print ("The Log Normal mean is: %s"% (lognorm.mean(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
+            print ("The Log Normal variance is: %s"% (lognorm.var(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
+            print ("The Log Normal standard deviation is: %s"% (lognorm.std(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
+            print ("--------------------------------------------------------------------------------------------")
+    
+        def GumbelFit(self):
+            """
+            Fits a Gumbel distribution to the filtered EPRI dataset to model entrainment
+            rates. This method provides an analysis of entrainment patterns based on
+            the shape, location, and scale parameters of the distribution.
+        
+            Outputs detailed statistics of the fitted Pareto distribution, including the
+            mean, variance, and standard deviation, offering insights into the
+            entrainment rates' distribution characteristics within the selected dataset.
+            """
+    
+            # fit a pareto and write to the object
+            self.dist_gumbel = gumbel_r.fit(self.epri.FishPerMft3.values)
+            print ("The Gumbel distribution has a shape parameter of location: %s and scale: %s"%(round(self.dist_gumbel[0],4),
+                                                                                                          round(self.dist_gumbel[1],4)))
+            print ("--------------------------------------------------------------------------------------------")
+           
+        def LengthSummary(self):
+            """
+            Summarizes fish lengths from the filtered EPRI dataset, aggregating counts
+            across specified length cohorts and fitting the aggregated lengths to a
+            Log Normal distribution.
+        
+            The method samples uniformly within each size cohort to approximate the
+            distribution of lengths and then fits a Log Normal distribution to these
+            sampled lengths, providing an analysis of the size distribution of the
+            entrained fish in the studied dataset.
+            """
+    
+            # sum up the number of observations within each size cohort
+            cm_0_5 = np.int(self.epri['0_5'].sum())
+            cm_5_10 = np.int(self.epri['5_10'].sum())
+            cm_10_15 = np.int(self.epri['10_15'].sum())
+            cm_15_20 = np.int(self.epri['15_20'].sum())
+            cm_20_25 = np.int(self.epri['20_25'].sum())
+            cm_25_38 = np.int(self.epri['25_38'].sum())
+            cm_38_51 = np.int(self.epri['38_51'].sum())
+            cm_51_64 = np.int(self.epri['51_64'].sum())
+            cm_64_76 = np.int(self.epri['64_76'].sum())
+            cm_GT76 = np.int(self.epri['GT76'].sum())
+    
+            # sample from uniform distribution within each size cohort
+            cm_0_5_arr = np.random.uniform(low = 0, high = 5.0, size = cm_0_5)
+            cm_5_10_arr = np.random.uniform(low = 5.0, high = 10.0, size = cm_5_10)
+            cm_10_55_arr = np.random.uniform(low = 10.0, high = 15.0, size = cm_10_15)
+            cm_15_20_arr = np.random.uniform(low = 15.0, high = 20.0, size = cm_15_20)
+            cm_20_25_arr = np.random.uniform(low = 20.0, high = 25.0, size = cm_20_25)
+            cm_25_38_arr = np.random.uniform(low = 25.0, high = 38.0, size = cm_25_38)
+            cm_38_51_arr = np.random.uniform(low = 38.0, high = 51.0, size = cm_38_51)
+            cm_51_64_arr = np.random.uniform(low = 51.0, high = 64.0, size = cm_51_64)
+            cm_64_76_arr = np.random.uniform(low = 64.0, high = 76.0, size = cm_64_76)
+            cm_GT76_arr = np.random.uniform(low = 76.0, high = 100.0, size = cm_GT76)
+    
+            # append them all together into 1 array
+            self.lengths = np.concatenate((cm_0_5_arr,
+                                           cm_5_10_arr,
+                                           cm_10_55_arr,
+                                           cm_15_20_arr,
+                                           cm_20_25_arr,
+                                           cm_25_38_arr,
+                                           cm_38_51_arr,
+                                           cm_51_64_arr,
+                                           cm_64_76_arr,
+                                           cm_GT76_arr),
+                                          axis = 0)
+    
+            # now fit that array to a log normal
+            self.len_dist = lognorm.fit(self.lengths)
+            print("The log normal distribution has a shape parameter s: %s, location: %s and scale: %s"%(round(self.len_dist[0],4),
+                                                                                                         round(self.len_dist[1],4),
+                                                                                                         round(self.len_dist[2],4)))
+        def plot (self):
+            # get a sample
+            pareto_sample = pareto.rvs(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2],1000)
+            lognorm_sample = lognorm.rvs(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2],1000)
+            weibull_sample = weibull_min.rvs(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2],1000)
+    
+            # get our observations
+            observations = self.epri.FishPerMft3.values
+    
+            # KS test comnpare distribution with observations are they from the same distribution?
+            t1 = ks_2samp(observations,pareto_sample,alternative = 'two-sided')
+            t2 = ks_2samp(observations,lognorm_sample,alternative = 'two-sided')
+            t3 = ks_2samp(observations,weibull_sample,alternative = 'two-sided')
+            self.pareto_t = round(t1[1],4)
+            self.log_normal_t = round(t2[1],4)
+            self.weibull_t = round(t3[1],4)
+    
 
-        # sum up the number of observations within each size cohort
-        cm_0_5 = np.int(self.epri['0_5'].sum())
-        cm_5_10 = np.int(self.epri['5_10'].sum())
-        cm_10_15 = np.int(self.epri['10_15'].sum())
-        cm_15_20 = np.int(self.epri['15_20'].sum())
-        cm_20_25 = np.int(self.epri['20_25'].sum())
-        cm_25_38 = np.int(self.epri['25_38'].sum())
-        cm_38_51 = np.int(self.epri['38_51'].sum())
-        cm_51_64 = np.int(self.epri['51_64'].sum())
-        cm_64_76 = np.int(self.epri['64_76'].sum())
-        cm_GT76 = np.int(self.epri['GT76'].sum())
+            # make a figure
+            # Set rcParams within the plot function to ensure local application
+            plt.rcParams['font.size'] = 6
+            plt.rcParams['font.family'] = 'serif'
+            figSize = (4,4)
+            #plt.figure()
+            fig, axs = plt.subplots(2,2,tight_layout = True,figsize = figSize)
+            axs[0,0].hist(np.log(observations), color='darkorange', density = True)
+            axs[0,0].set_title('Observations')
+            axs[0,0].set_xlabel('org per Mft3')
+            axs[0,1].hist(np.log(pareto_sample), color='blue',lw=2, density = True)
+            axs[0,1].set_title('Pareto p = %s'%(round(t1[1],4)))
+            axs[0,1].set_xlabel('org per Mft3')
+            axs[1,0].hist(np.log(lognorm_sample), color='blue',lw=2, density = True)
+            axs[1,0].set_title('Log Normal p = %s'%(round(t2[1],4)))
+            axs[1,0].set_xlabel('org per Mft3')
+            axs[1,1].hist(np.log(weibull_sample), color='darkorange',lw=2, density = True)
+            axs[1,1].set_title('Weibull p = %s'%(round(t3[1],4)))
+            axs[1,1].set_xlabel('org per Mft3')
+    
+            #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'emerald_shiner.png'), dpi = 700)
+            plt.show()
 
-        # sample from uniform distribution within each size cohort
-        cm_0_5_arr = np.random.uniform(low = 0, high = 5.0, size = cm_0_5)
-        cm_5_10_arr = np.random.uniform(low = 5.0, high = 10.0, size = cm_5_10)
-        cm_10_55_arr = np.random.uniform(low = 10.0, high = 15.0, size = cm_10_15)
-        cm_15_20_arr = np.random.uniform(low = 15.0, high = 20.0, size = cm_15_20)
-        cm_20_25_arr = np.random.uniform(low = 20.0, high = 25.0, size = cm_20_25)
-        cm_25_38_arr = np.random.uniform(low = 25.0, high = 38.0, size = cm_25_38)
-        cm_38_51_arr = np.random.uniform(low = 38.0, high = 51.0, size = cm_38_51)
-        cm_51_64_arr = np.random.uniform(low = 51.0, high = 64.0, size = cm_51_64)
-        cm_64_76_arr = np.random.uniform(low = 64.0, high = 76.0, size = cm_64_76)
-        cm_GT76_arr = np.random.uniform(low = 76.0, high = 100.0, size = cm_GT76)
-
-        # append them all together into 1 array
-        self.lengths = np.concatenate((cm_0_5_arr,
-                                       cm_5_10_arr,
-                                       cm_10_55_arr,
-                                       cm_15_20_arr,
-                                       cm_20_25_arr,
-                                       cm_25_38_arr,
-                                       cm_38_51_arr,
-                                       cm_51_64_arr,
-                                       cm_64_76_arr,
-                                       cm_GT76_arr),
-                                      axis = 0)
-
-        # now fit that array to a log normal
-        self.len_dist = lognorm.fit(self.lengths)
-        print("The log normal distribution has a shape parameter s: %s, location: %s and scale: %s"%(round(self.len_dist[0],4),
-                                                                                                     round(self.len_dist[1],4),
-                                                                                                     round(self.len_dist[2],4)))
-
-
-
-
-
-
+            
+        def summary_output(self, ):
+            # species data
+            family = self.family
+            genus = self.genus 
+            species = self.species
+            
+            # months
+            month = self.month 
+            
+            huc02 = self.HUC02
+            
+            # presence and entrainment rate
+            presence = self.presence 
+            max_ent_rate = self.max_ent_rate 
+            sample_size = self.sample_size
+            
+            # weibull c, location, scale
+            weibull_p = self.weibull_t
+            weibull_c = round(self.dist_weibull[0],4)
+            weibull_loc = round(self.dist_weibull[1],4)
+            weibull_scale = round(self.dist_weibull[2],4)
+            
+            # log normal b, location, scale
+            log_normal_p = self.log_normal_t
+            log_normal_b = round(self.dist_lognorm[0],4)
+            log_normal_loc = round(self.dist_lognorm[1],4)
+            log_normal_scale = round(self.dist_lognorm[2],4)
+            
+            return family, genus, species, month.astype(np.str), huc02, presence, max_ent_rate, sample_size, weibull_p, weibull_c, weibull_loc, weibull_scale, log_normal_p, log_normal_b, log_normal_loc, log_normal_scale
