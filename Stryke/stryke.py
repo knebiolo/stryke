@@ -95,7 +95,7 @@ class simulation():
                                                    index_col = None, 
                                                    usecols = "B:K", 
                                                    skiprows = 5, 
-                                                   dtype = {'Gage':np.str})
+                                                   dtype = {'Gage':str})
             
             self.flow_scenarios_df['Min_Op_Flow'] = self.flow_scenarios_df.Min_Op_Flow.fillna(0)
             self.flow_scenarios_df['Env_Flow'] = self.flow_scenarios_df.Env_Flow.fillna(0)  
@@ -554,9 +554,13 @@ class simulation():
         ''' function that gets and standardizes a hydrograph from the USGS based
         on a flow year.  It then prorates the flow as a function of watershed size.'''
         # get gage data object from web
-        gage_dat = hf.NWIS(site = gage, service='dv', start_date='1900-01-01')
+        start_date = '%s-01-01'%(flow_year)
+        end_date = '%s-12-31'%(flow_year)
         import requests
         response = requests.get('https://waterservices.usgs.gov', verify=False)
+        
+        gage_dat = hf.NWIS(site = gage, service='dv', start_date= start_date, end_date = end_date)
+
 
         # extract dataframe
         df = gage_dat.df()
@@ -602,14 +606,14 @@ class simulation():
         scen_df = flow_scenarios_df[flow_scenarios_df.Scenario == scen]
         # if the discharge type is hydrograph - import hydrography and transform using prorate factor
         if discharge_type == 'hydrograph':
-            gage = str(scen_df.Gage.iloc(0))
-            prorate = scen_df.Prorate.iloc(0)
-            flow_year = scen_df.FlowYear.iloc(0)
+            gage = str(scen_df.at[scen_df.index[0],'Gage'])
+            prorate = scen_df.at[scen_df.index[0],'Prorate']
+            flow_year = scen_df.at[scen_df.index[0],'FlowYear']
             
             df = self.get_USGS_hydrograph(gage, prorate, flow_year)
 
             for i in scen_months:
-                flow_df = flow_df.append(df[df.month == i])
+                flow_df = pd.concat([flow_df, df[df.month == i]])
         
         # if it is a fixed discharge - simulate a hydrograph
         elif discharge_type == 'fixed':
@@ -1207,16 +1211,16 @@ class simulation():
                             
                         self.hdf.flush()
                         
-            # TODO - more of that state 2 survival 2 nonesense
-            spc_length.to_hdf(self.hdf,
-                              key = 'Length',
-                              mode = 'a', 
-                              format = 'table',
-                              min_itemsize = {'flow_scenario':50,
-                                               'season':50,
-                                               'day':50,
-                                               'state_2':50},
-                              append = True)
+                # TODO - more of that state 2 survival 2 nonesense
+                spc_length.to_hdf(self.hdf,
+                                  key = 'Length',
+                                  mode = 'a', 
+                                  format = 'table',
+                                  min_itemsize = {'flow_scenario':50,
+                                                   'season':50,
+                                                   'day':50,
+                                                   'state_2':50},
+                                  append = True)
             self.hdf.flush()
             print ("Completed Scenario %s %s"%(species,scen))                            
             
