@@ -1392,19 +1392,19 @@ class simulation():
                                 else:
                                     n = self.population_sim(spc_dat, self.discharge_type,tot_hours,tot_flow,curr_Q)
                                 
-                                if np.int(n) == 0:
+                                if np.int32(n) == 0:
                                     n = 1
                                     
-                                print ("Resulting in an entrainment event of %s %s"%(np.int(n),spc))
+                                print ("Resulting in an entrainment event of %s %s"%(np.int32(n),spc))
                                 
                                 if math.isnan(s) == False:
                                     # create population of fish - IN CM!!!!!
-                                    population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int(n), random_state=rng))
+                                    population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int32(n), random_state=rng))
                                     population = np.where(population > 150,150,population)
                                     # convert lengths in cm to feet
                                     population = population * 0.0328084
                                 else:
-                                    population = np.abs(np.random.normal(mean_len, sd_len, np.int(n)))/12.0
+                                    population = np.abs(np.random.normal(mean_len, sd_len, np.int32(n)))/12.0
     
                                 # calculate sustained swim speed (ft/s)
                                 if math.isnan(spc_dat.caudal_AR.values[0]) == False:
@@ -1417,21 +1417,21 @@ class simulation():
     
                                 print ("created population for %s iteration:%s day: %s"%(species,i,day))
                                 # create a dataframe that tracks each fish
-                                fishes = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int(n)),
-                                                          'species':np.repeat(species,np.int(n)),
-                                                          'flow_scenario':np.repeat(scenario,np.int(n)),
-                                                          'season':np.repeat(season,np.int(n)),
-                                                          'iteration':np.repeat(i,np.int(n)),
-                                                          'day':np.repeat(day,np.int(n)),
-                                                          'flow':np.repeat(curr_Q,np.int(n)),
+                                fishes = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int32(n)),
+                                                          'species':np.repeat(species,np.int32(n)),
+                                                          'flow_scenario':np.repeat(scenario,np.int32(n)),
+                                                          'season':np.repeat(season,np.int32(n)),
+                                                          'iteration':np.repeat(i,np.int32(n)),
+                                                          'day':np.repeat(day,np.int32(n)),
+                                                          'flow':np.repeat(curr_Q,np.int32(n)),
                                                           'population':np.float32(population),
-                                                          'state_0':np.repeat('river_node_0',np.int(n))})
+                                                          'state_0':np.repeat('river_node_0',np.int32(n))})
                                 
     
                                 for k in self.moves:
                                     if k == 0:
                                         # initial status
-                                        status = np.repeat(1,np.int(n))
+                                        status = np.repeat(1,np.int32(n))
                                     else:
                                         status = fishes['survival_%s'%(k-1)].values
     
@@ -1449,7 +1449,7 @@ class simulation():
                                         print ('fuck')
     
                                     # simulate survival draws
-                                    dice = np.random.uniform(0.,1.,np.int(n))
+                                    dice = np.random.uniform(0.,1.,np.int32(n))
     
                                     # vectorize STRYKE survival function
                                     v_surv_rate = np.vectorize(self.node_surv_rate, excluded = [4,5])
@@ -1526,7 +1526,7 @@ class simulation():
                                 length_dat = fishes[['population','flow_scenario','season','iteration','day','state_2','survival_2']]
     
                                 # append to species length dataframe
-                                spc_length = spc_length.append(length_dat, ignore_index = True)
+                                spc_length = pd.concat([spc_length,length_dat], ignore_index = True)
        
                             else:
                                 n = 0
