@@ -857,11 +857,8 @@ class simulation():
         # get gage data object from web
         start_date = '%s-01-01'%(flow_year)
         end_date = '%s-12-31'%(flow_year)
-        import requests
-        response = requests.get('https://waterservices.usgs.gov', verify=False)
         
         gage_dat = hf.NWIS(site = gage, service='dv', start_date= start_date, end_date = end_date)
-
 
         # extract dataframe
         df = gage_dat.df()
@@ -1028,7 +1025,7 @@ class simulation():
 
                     else:
                         # TODO Bad Creek Analysis halved hours - change back
-                        hours = lognorm.rvs(shape,location,scale,1)[0] * 0.412290503
+                        hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
 
                         if hours > 24.:
                             hours = 24.
@@ -1039,14 +1036,14 @@ class simulation():
                 elif operations == 'dependent':
                     # if this is the first unit to be operated
                     #TODO change this back to just 1 == 1 - updated for Bad Creek Analysis
-                    if i == 1 or i == 5:
+                    if i == 1:# or i == 5:
                         if np.random.uniform(0,1,1) <= prob_not_operating:
                             hours_dict[unit] = 0.
                             flow_dict[unit] = 0.
     
                         else:
                             # TODO Bad Creek Analysis halved hours - change back
-                            hours = lognorm.rvs(shape,location,scale,1)[0] * 0.412290503
+                            hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
 
                             if hours > 24.:
                                 hours = 24.
@@ -1070,7 +1067,7 @@ class simulation():
                                     flow_dict[unit] = 0.
                                 else:
                                     # TODO Bad Creek Analysis halved hours - change back
-                                    hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0] * 0.412290503
+                                    hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0] #* 0.412290503
 
                                     if hours > 24.:
                                         hours = 24.
