@@ -14,12 +14,12 @@ import os
 import pandas as pd
 
 # read scenario worksheet
-ws = r'C:\Users\knebiolo\Desktop\Beaver_Falls_Production\validation'
-wks = 'townsend_validation.xlsx'
+ws = r'C:\Users\knebiolo\Desktop\EPRI Validation'
+wks = 'HUC02_Schaghticoke.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke.simulation(ws,wks, output_name = 'townsend_validate')
+simulation = stryke.simulation(ws,wks, output_name = 'HUC02_Schaghticoke')
 
 simulation.run()
 simulation.summary()
