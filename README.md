@@ -12,11 +12,11 @@ Stryke was developed on a 64 bit Windows operating system and utilizes Microsoft
 
 # Project Creation 
 
-To create a project, first create folder in the directory of your choice. Next, clone the repository (https://github.com/knebiolo/stryke) into your new directory using git commands or with GitHub Desktop.  After cloning, open up the ‘stryke’ folder that you will now find in the project directory.  You will find the spreadsheet interface in the appropriate folder. Stryke will directly read from and write results to this spreadsheet.  The following directions will guide the end user through parameter entry.
+To create a project, first create folder in the directory of your choice. Next, clone the repository (https://github.com/knebiolo/stryke) into your new directory using git commands or with GitHub Desktop.  After cloning, open up the ‘stryke’ folder that you will now find in the project directory.  You will find the spreadsheet interface in the appropriate folder. Stryke will directly read from and write results to this spreadsheet.  You don't have to keep the spreadsheet where it is, we will point the Stryke notebook to the correct directory before running simulations. The following directions will guide the end user through setting up the project spreadsheet and with parameter entry.
 
 # Spreadsheet Interface
 
-To implement a desktop entrainment study, Stryke will need data describing river discharge scenarios, project operating scenarios, seasonal entrainment events, turbine parameters, and migratory routes.  There is a tab for each major study component, and you can find directions to complete them below.  It is possible to configure Stryke spreadhsheet for resident and anadromous species impact assessments, for different operating configurations (run of river, peaking, and pumped storage operations), and expanded migratory network with multiple dependent facilities.  
+To implement a desktop entrainment study, Stryke will need data describing river discharge scenarios, project operating scenarios, seasonal entrainment events, turbine parameters, and migratory routes.  There is a tab for each major study component, and you can find directions to complete them below.  It is possible to configure a Stryke project (spreadhsheet) for resident or anadromous species impact assessments, for different operating configurations (run of river, peaking, and pumped storage operations), and it allows for an expanded migratory network with multiple dependent facilities.  
 
 ## Flow Scenarios
 
