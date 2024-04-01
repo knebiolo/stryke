@@ -22,5 +22,19 @@ To implement a desktop entrainment study, Stryke will need data describing river
 
 This section contains instruction on setting up the ‘Flow Scenarios’ tab on the spreadsheet interface.  There are different setups for native and anadromous species, therefore it is advised to analyze them separately.  For native species, entrainment events often occur on a seasonal cycle and are a function of the amount of water discharged through a facility. The intent of stryke is to simulate over the range of potential river discharges and realistic plant operating scenarios. For facilities with multiple units, it is assumed that a single unit would be operated up until its most efficient flow. At that point, water will then begin to flow through other units up until their most efficient flow, or until the hydrologic capacity of the facility is met.  Any more discharge is then spilled over the dam. If we assume fish proportionally follow the flow, we can estimate the rates at which fish will pass via each passage route. Thus, if we know the river discharge and unit capacities, we can simulate passage through the facility. 
 
-On the **Flow Scenarios** tab, you will note 10 columns: Scenario Number, Scenario, Flow, Min_Op_Flow, Env_Flow, Gage, FlowYear, Prorate, Season, Months.  An explanation of the columns, expected data types, and strategies for anadromous and native species is in the table below.  
+On the **Flow Scenarios** tab, you will note 10 columns: Scenario Number, Scenario, Flow, Min_Op_Flow, Env_Flow, Gage, FlowYear, Prorate, Season, Months.  An explanation of the columns, expected data types, and strategies for native species is in the table below.  
+
+
+| Field           | Data Type |                                             Comment                                           |
+|-----------------|-----------|-----------------------------------------------------------------------------------------------|
+|Scenario Number  |Integer    |(required) scenario number.  **must be unique**                                                |
+|Scenario         |String     |(required) name of scenario, not more than 50 characters                                       |
+|Flow             |String     |(required) value must be 'hydrograph'                                                          |
+|Min_Op_Flow      |Float      |(required) minimum operating discharge, if unknown enter 0                                     |
+|Env_Flow         |Float      |(required) minimum release discharge, if unknown enter 0                                       |
+|Gage             |String     |(required) USGS Gage Number 8 character length                                                 |
+|Prorate          |Floatg     |(required) project watershed: USGS watershed ratio                                             |
+|Season           |String     |(required) hydrologic season, e.g. winter                                                      |
+|Months           |List       |(required) list of calendar months that make up a hydrologic season, values seperated by comma |
+
 
