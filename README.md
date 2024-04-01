@@ -33,7 +33,7 @@ On the **Flow Scenarios** tab, you will note 10 columns: Scenario Number, Scenar
 |Min_Op_Flow      |Float      |(required) minimum operating discharge, if unknown enter 0                                     |
 |Env_Flow         |Float      |(required) minimum release discharge, if unknown enter 0                                       |
 |Gage             |String     |(required) USGS Gage Number 8 character length                                                 |
-|Prorate          |Floatg     |(required) project watershed: USGS watershed ratio                                             |
+|Prorate          |Float      |(required) project watershed: USGS watershed ratio                                             |
 |Season           |String     |(required) hydrologic season, e.g. winter                                                      |
 |Months           |List       |(required) list of calendar months that make up a hydrologic season, values seperated by comma |
 
@@ -41,5 +41,20 @@ The **Flow Scenarios** tab should look like the following image when setup prope
 
 ![native flow scenarios](https://github.com/knebiolo/stryke/assets/61742537/2ac59f67-d3fd-45c6-93bc-59a6f3aa80e7)
 
+## Operating Scenarios
 
+The **Operating Scenarios** tab tells stryke how to simulate powerhouse operations.  Every season and unit combination must be represented in this table.  For Run-Of-River facilities, it is assumed that the facility will run 24/7, whereas a Peaking Facility or Pumped Storage Faclity will run for a different amount of hours every day as demand dictates.  
 
+| Field           | Data Type |                                             Comment                                           |
+|-----------------|-----------|-----------------------------------------------------------------------------------------------|
+|Scenario Number  |Integer    |(required) scenario number.  **must be related to scenario number of Flow Scenario tab**       |
+|Season           |String     |(required) name of hydrologic season                                                           |
+|Unit             |String     |(required) turbine unit ID, every turbine in the study gets a unique ID                        |
+|Hours            |Integer    |(not required) number of hours facility is run every day, if Pumped Storage leave blank        |
+|Prob_Not_Op      |Float      |(required) minimum release discharge, if unknown enter 0                                       |
+|shape            |String     |(required) USGS Gage Number 8 character length                                                 |
+|location         |Floatg     |(required) project watershed: USGS watershed ratio                                             |
+|scale            |String     |(required) hydrologic season, e.g. winter                                                      |
+|Months           |List       |(required) list of calendar months that make up a hydrologic season, values seperated by comma |
+
+The setup for Run-of-river facilities is below:
