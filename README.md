@@ -51,10 +51,12 @@ The **Operating Scenarios** tab tells stryke how to simulate powerhouse operatio
 |Season           |String     |(required) name of hydrologic season                                                           |
 |Unit             |String     |(required) turbine unit ID, every turbine in the study gets a unique ID                        |
 |Hours            |Integer    |(not required) number of hours facility is run every day, if Pumped Storage leave blank        |
-|Prob_Not_Op      |Float      |(required) minimum release discharge, if unknown enter 0                                       |
-|shape            |String     |(required) USGS Gage Number 8 character length                                                 |
-|location         |Floatg     |(required) project watershed: USGS watershed ratio                                             |
-|scale            |String     |(required) hydrologic season, e.g. winter                                                      |
+|Prob_Not_Op      |Float      |(not required) Bionomial probability facility is not operating                                 |
+|shape            |String     |(not required) Scipy Log Normal shape parameter                                                |
+|location         |Floatg     |(not required) Scipy Log Normal locaiton paramter                                              |
+|scale            |String     |(not required) Scipy Log Normal scale parater                                                  |
 |Months           |List       |(required) list of calendar months that make up a hydrologic season, values seperated by comma |
 
 The setup for Run-of-river facilities is below:
+![run of river op scen](https://github.com/knebiolo/stryke/assets/61742537/4b81099f-8d9c-428f-a56e-73be2e2189ee)
+**Note, every season and unit combination represented**
