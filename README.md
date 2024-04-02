@@ -121,7 +121,7 @@ The following depicts the correct set up for the same, simple 3-unit run-of-rive
 
 ## Unit Parameters
 
-The unit parameters tab is another complex tab that contains measurable properties of the project's turbine and facility such hydraulic head, runner diameter, number of blades, etc.
+The unit parameters tab is another complex tab that contains measurable properties of the project's turbines and facilities such hydraulic head, runner diameter, number of blades, etc.  Note not all parameters are required for all turbine types.
 
 | Field             | Data Type |                                             Comment                                           |
 |-------------------|-----------|-----------------------------------------------------------------------------------------------|
@@ -141,4 +141,6 @@ The unit parameters tab is another complex tab that contains measurable properti
 |$\iota$            |Float      |(required - Francis) ratio of exit swirl to no exit swirl - leave at 1.1                       |
 |D1                 |Float      |(required - Francis) diameter of runner at inlet (ft)                                          |
 |D2                 |Float      |(required - Francis) diameter of runner at outlet (ft)                                         |
-|$\lambda$          |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2|       |
+|$\lambda$          |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2)|
+
+With data entered into the spreadsheet interface, open up the project notebook and start simulating!
