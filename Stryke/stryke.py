@@ -261,13 +261,13 @@ class simulation():
         - param_dict (dict): A dictionary containing key turbine parameters 
         necessary for the calculation. Expected keys and their
           meanings are as follows:
-            - 'H': The net head of water across the turbine (m).
+            - 'H': The net head of water across the turbine (ft).
             - 'RPM': The revolutions per minute of the turbine.
-            - 'D': The diameter of the turbine (m).
-            - 'Q': The flow rate through the turbine (m^3/s).
-            - 'ada': The specific speed of the turbine.
+            - 'D': The diameter of the turbine runner (ft).
+            - 'Q': The flow rate through the turbine (ft^3/s).
+            - 'ada': Turbine efficiency.
             - 'N': The number of blades on the turbine.
-            - '_lambda': The empirically derived constant for blade strike probability, 
+            - '_lambda': The empirically derived constant for blade strike probability, 0.2 as 
             suggested by the U.S. Fish and Wildlife Service.
     
         The function first computes the energy coefficient (Ewd) and discharge 
@@ -338,17 +338,17 @@ class simulation():
         factor in determining the probability of a blade strike.
         - param_dict (dict): A dictionary containing essential turbine parameters 
         for the calculation. Expected keys include:
-            - 'H': The net head of water across the turbine (m).
+            - 'H': The hydraulic head (ft).
             - 'RPM': The revolutions per minute of the turbine.
-            - 'D': The diameter of the turbine (m).
-            - 'Q': The actual flow rate through the turbine (m^3/s).
-            - 'ada': The specific speed of the turbine.
+            - 'D': The diameter of the turbine runner (ft).
+            - 'Q': The actual flow rate through the turbine (ft^3/s).
+            - 'ada': Turbine efficiency.
             - 'N': The number of blades on the turbine.
-            - 'Qopt': The optimum flow rate through the turbine (m^3/s), used in
+            - 'Qopt': The optimum flow rate through the turbine (ft^3/s), used in
             beta angle calculations.
             - 'Qper': The percentage of the optimum flow rate, contributing to
             the beta calculation.
-            - '_lambda': An empirical constant for blade strike probability, suggested 
+            - '_lambda': An empirical constant for blade strike probability, 0.2 as suggested 
             by the U.S. Fish and Wildlife Service.
     
         The function computes the energy coefficient (Ewd) and discharge coefficient (Qwd)
@@ -2290,16 +2290,16 @@ class epri():
             """
     
             # sum up the number of observations within each size cohort
-            cm_0_5 = np.int(self.epri['0_5'].sum())
-            cm_5_10 = np.int(self.epri['5_10'].sum())
-            cm_10_15 = np.int(self.epri['10_15'].sum())
-            cm_15_20 = np.int(self.epri['15_20'].sum())
-            cm_20_25 = np.int(self.epri['20_25'].sum())
-            cm_25_38 = np.int(self.epri['25_38'].sum())
-            cm_38_51 = np.int(self.epri['38_51'].sum())
-            cm_51_64 = np.int(self.epri['51_64'].sum())
-            cm_64_76 = np.int(self.epri['64_76'].sum())
-            cm_GT76 = np.int(self.epri['GT76'].sum())
+            cm_0_5 = np.int32(self.epri['0_5'].sum())
+            cm_5_10 = np.int32(self.epri['5_10'].sum())
+            cm_10_15 = np.int32(self.epri['10_15'].sum())
+            cm_15_20 = np.int32(self.epri['15_20'].sum())
+            cm_20_25 = np.int32(self.epri['20_25'].sum())
+            cm_25_38 = np.int32(self.epri['25_38'].sum())
+            cm_38_51 = np.int32(self.epri['38_51'].sum())
+            cm_51_64 = np.int32(self.epri['51_64'].sum())
+            cm_64_76 = np.int32(self.epri['64_76'].sum())
+            cm_GT76 = np.int32(self.epri['GT76'].sum())
     
             # sample from uniform distribution within each size cohort
             cm_0_5_arr = np.random.uniform(low = 0, high = 5.0, size = cm_0_5)
