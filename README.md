@@ -66,3 +66,18 @@ The following image depicts **Operation Scenarios** for peaking and pumped stora
 
 ![pump store op scen](https://github.com/knebiolo/stryke/assets/61742537/62bd0c8b-fba5-4c26-9ac9-b575a1772596)
 
+## Population
+
+The population tab is the most complex and can be set up for anadromous and resident species.  
+
+| Field             | Data Type |                                             Comment                                           |
+|-------------------|-----------|-----------------------------------------------------------------------------------------------|
+|Common Name        |Spring     |(required)                                                                                     |
+|Scientific Name    |String     |(required)                                                                                     |
+|Season             |String     |(required) hydrologic season, must be related to a season on the Operating Scenarios tab       |
+|Starting Population|Integer    |(not required) number of starting fish in the simulation (for anadromous mode)                 |
+|Ent. Event shape   |Float      |(not required) shape parameter describing daily entrainment event                              |
+|Ent Event location |Float      |(not required) location parameter describing daiy entrainment event                            |
+|Ent Event scale    |Float      |(not required) scale parameter describing daily entrainment event.                             |
+|dist               |String     |(not required) Distribution type describing daily entrainment event, must be one of (Log Normal, Weibull or Pareto) |
+|max_ent_rate       |Float      |(not required) maximum entrainment event measured in fish per million cubic feet.              |
