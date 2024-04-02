@@ -90,5 +90,6 @@ The population tab is the most complex and can be set up for anadromous or resid
 |(Length) location  |Float      |(not required) log normal location parameter describing length of fish                         |
 |(Length) shape     |Float      |(not required) log normal shape parameter describing length of fish                            |
 
-
+![population](https://github.com/knebiolo/stryke/assets/61742537/ede729f8-4edf-4278-951b-b52aa4ad4238)
+Note: The following columns have been hidden: Starting Popualtion, Length_mean, Length_sd, and caudal_AR.  The remaining columns depict a resident species set up. 
 
