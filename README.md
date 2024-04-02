@@ -68,11 +68,11 @@ The following image depicts **Operation Scenarios** for peaking and pumped stora
 
 ## Population
 
-The population tab is the most complex and can be set up for anadromous or resident species.  When assessing impact for resident species, entrainment is expressed as a rate (fish per million cubic feet), where the number of fish simulated per day is a function of the river discharge.  You can define entrainment rates with your own empirical data, or you can fit them to observations from the EPRI entrainment database, which is inlcuded with Stryke.  Entrainment rates can be simulated with a Log Normal, Weibull, or Pareto distributions.  For more information and tips for fitting distributions, see the documentation.  The maximum entrainment rate (max_ent_rate) is the largest entrainment rate observed.  Given that each of these distributions are heavy tailed, the maximum simulated entrainment rate can be very large.  Stryke limits the maximum simulated entrainment rate to 1 magnitude larger than the largest observation.  Entrainment events are episodic in nature, and it is not likely that there will be an entrainment event every day.  Occurence probability (occur_prob) is the probability of entraining fish of a species on any particular day. Stryke first simulates presence, and if fish are present Stryke simulates an entrainment rate.  This entrainment rate is then multiplied by the daily river discharge, and thus a simulated population is created.  Once there is a sample population, Stryke simulates fish lengths for each individual in the population.  The EPRI entrainment database also supplies information on fish lengths, which Stryke fits a log normal distribution to.    
+The population tab is the most complex and can be set up for anadromous or resident species.  When assessing impact for resident species, entrainment is expressed as a rate (fish per million cubic feet), where the number of fish simulated per day is a function of the river discharge.  You can define entrainment rates with your own empirical data, or you can fit them to observations from the EPRI entrainment database, which is inlcuded with Stryke.  Entrainment rates can be simulated with a Log Normal, Weibull, or Pareto distribution.  For more information and tips for fitting distributions, see the documentation.  The maximum entrainment rate (max_ent_rate) is the largest entrainment rate observed.  Given that each of these distributions are heavy tailed, the maximum simulated entrainment rate can be very large.  Stryke limits the maximum simulated entrainment rate to 1 magnitude larger than the largest observation.  Entrainment events are episodic in nature, and it is not likely that there will be an entrainment event every day.  Occurence probability (occur_prob) is the probability of entraining fish of a species on any particular day. Stryke first simulates presence, and if fish are present Stryke simulates an entrainment rate.  This entrainment rate is then multiplied by the daily river discharge, and thus a simulated population is created.  Once there is a sample population, Stryke simulates fish lengths for each individual in the population.  The EPRI entrainment database also supplies information on fish lengths, which Stryke fits a log normal distribution to.    
 
 | Field             | Data Type |                                             Comment                                           |
 |-------------------|-----------|-----------------------------------------------------------------------------------------------|
-|Common Name        |Spring     |(required)                                                                                     |
+|Common Name        |String     |(required)                                                                                     |
 |Scientific Name    |String     |(required)                                                                                     |
 |Season             |String     |(required) hydrologic season, must be related to a season on the Operating Scenarios tab       |
 |Starting Population|Integer    |(not required) number of starting fish in the simulation (for anadromous mode)                 |
@@ -93,3 +93,54 @@ The population tab is the most complex and can be set up for anadromous or resid
 ![population](https://github.com/knebiolo/stryke/assets/61742537/ede729f8-4edf-4278-951b-b52aa4ad4238)
 Note: The following columns have been hidden: Starting Popualtion, Length_mean, Length_sd, and caudal_AR.  The remaining columns depict a resident species set up. 
 
+## Nodes and Edges
+
+The next two tabs, **Nodes** and **Edges**, describe the migratory network simulated fish will move through.  Migratory networks are described mathematically with graphs.  Nodes are physical locations within the study area, and can include: river nodes, forebay, Units, tailrace, spill, etc.  Edges are logical migratory pathways that connect nodes together.  Stryke always models movements in a downstream direction, so the type of graph created is a directed acyclic graph.  It is directed in that fish are moving downstream while acyclic means travel is only one way.  The attributes for the **Nodes** tab are explained below. 
+
+| Field             | Data Type |                                             Comment                                           |
+|-------------------|-----------|-----------------------------------------------------------------------------------------------|
+|Location           |String     |(required) physical location within the migratory network                                      |
+|Surv_Fun           |String     |(required) the type of survival function applied at this node, must be 'a-priori' or a Unit ID |
+|Survival           |Float      |(required) a-prior determined survival rate, if node is a Unit leave 0                         |
+
+The following picture decpicts the correct set up for a simple 3-unit run-of-river impact assessment.
+
+![nodesx](https://github.com/knebiolo/stryke/assets/61742537/0f1dec29-939e-4c05-8c91-1efbcbea8319)
+
+Edges are logical pathways that connect two nodes.  Since Stryke simulates movement over a directed acyclic graph, edges are always in one direction (upstream to downstream).  Edges are always organized as From Node : To Node.  
+
+| Field             | Data Type |                                             Comment                                           |
+|-------------------|-----------|-----------------------------------------------------------------------------------------------|
+|_from              |String     |(required) From Node, must match 1 Node from the Nodes tab                                     |
+|_to                |String     |(required) To Node, must match 1 Node from the Nodes tab                                       |
+|weight             |Float      |(required) leave as 1.                                                                         |
+
+The following depicts the correct set up for the same, simple 3-unit run-of-river impact assessment.  Note: movement is always one way, always downstream.
+
+![edges](https://github.com/knebiolo/stryke/assets/61742537/5b742a03-a083-46de-922e-9a1ca96b4e81)
+
+## Unit Parameters
+
+The unit parameters tab is another complex tab that contains measurable properties of the project's turbines and facilities such hydraulic head, runner diameter, number of blades, etc.  Note not all parameters are required for all turbine types.
+
+| Field             | Data Type |                                             Comment                                           |
+|-------------------|-----------|-----------------------------------------------------------------------------------------------|
+|Unit               |String     |(required) unit identifier, must match identifiers used on **Nodes**, **Edges**, and **Operating Scenarios tab** |
+|Runner Type        |String     |(required) type of runner, must be one of (Kaplan, Francis, or Propeller)                      |
+|intake_vel         |Float      |(not required) If measured, intake velocity in ft/s                                            |
+|op_order           |Integer    |(required) Preferred operating order of turbines                                               |
+|H                  |Float      |(required) Hydraulic head (ft)                                                                 |
+|RPM                |Float      |(required) runner revolutions per minute at maximum efficiency                                 |
+|D                  |Float      |(required - Kaplan, Propeller) runner diameter (ft)                                            |
+|$\eta$             |Float      |(required - Francis) turbine efficiency (%)                                                    |
+|N                  |Integer    |(required) number of blades (Kaplan and Propeller) or buckets (Francis)                        |
+|Qopt               |Float      |(required) most efficient discharge (cfs)                                                      |
+|Qcap               |Float      |(required) hydraulic capacity of unit (cfs)                                                    |
+|Qper               |Float      |(not required) percent of capacity at optimum discharge                                        |
+|B                  |Float      |(required - Francis) runner inlet height (ft)                                                  |
+|$\iota$            |Float      |(required - Francis) ratio of exit swirl to no exit swirl - leave at 1.1                       |
+|D1                 |Float      |(required - Francis) diameter of runner at inlet (ft)                                          |
+|D2                 |Float      |(required - Francis) diameter of runner at outlet (ft)                                         |
+|$\lambda$          |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2)|
+
+With data entered into the spreadsheet interface, open up the project notebook and start simulating!
