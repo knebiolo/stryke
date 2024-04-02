@@ -116,3 +116,29 @@ Edges are logical pathways that connect two nodes.  Since Stryke simulates movem
 |weight             |Float      |(required) leave as 1.                                                                         |
 
 The following depicts the correct set up for the same, simple 3-unit run-of-river impact assessment.  Note: movement is always one way, always downstream.
+
+![edges](https://github.com/knebiolo/stryke/assets/61742537/5b742a03-a083-46de-922e-9a1ca96b4e81)
+
+## Unit Parameters
+
+The unit parameters tab is another complex tab that contains measurable properties of the project's turbine and facility such hydraulic head, runner diameter, number of blades, etc.
+
+| Field             | Data Type |                                             Comment                                           |
+|-------------------|-----------|-----------------------------------------------------------------------------------------------|
+|Unit               |String     |(required) unit identifier, must match identifiers used on **Nodes**, **Edges**, and **Operating Scenarios tab** |
+|Runner Type        |String     |(required) type of runner, must be one of (Kaplan, Francis, or Propeller)                      |
+|intake_vel         |Float      |(not required) If measured, intake velocity in ft/s                                            |
+|op_order           |Integer    |(required) Preferred operating order of turbines                                               |
+|H                  |Float      |(required) Hydraulic head (ft)                                                                 |
+|RPM                |Float      |(required) runner revolutions per minute at maximum efficiency                                 |
+|D                  |Float      |(required - Kaplan, Propeller) runner diameter (ft)                                            |
+|$\text{ada}$       |Float      |(required - Francis) turbine efficiency (%)                                                    |
+|N                  |Integer    |(required) number of blades (Kaplan and Propeller) or buckets (Francis)                        |
+|Qopt               |Float      |(required) most efficient discharge (cfs)                                                      |
+|Qcap               |Float      |(required) hydraulic capacity of unit (cfs)                                                    |
+|Qper               |Float      |(not required) percent of capacity at optimum discharge                                        |
+|B                  |Float      |(required - Francis) runner inlet height (ft)                                                  |
+|$\text{iota}$      |Float      |(required - Francis) ratio of exit swirl to no exit swirl - leave at 1.1                       |
+|D1                 |Float      |(required - Francis) diameter of runner at inlet (ft)                                          |
+|D2                 |Float      |(required - Francis) diameter of runner at outlet (ft)                                         |
+|$\text{lambda}$    |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2|       |
