@@ -132,13 +132,13 @@ The unit parameters tab is another complex tab that contains measurable properti
 |H                  |Float      |(required) Hydraulic head (ft)                                                                 |
 |RPM                |Float      |(required) runner revolutions per minute at maximum efficiency                                 |
 |D                  |Float      |(required - Kaplan, Propeller) runner diameter (ft)                                            |
-|$\text{ada}$       |Float      |(required - Francis) turbine efficiency (%)                                                    |
+|$\eta$             |Float      |(required - Francis) turbine efficiency (%)                                                    |
 |N                  |Integer    |(required) number of blades (Kaplan and Propeller) or buckets (Francis)                        |
 |Qopt               |Float      |(required) most efficient discharge (cfs)                                                      |
 |Qcap               |Float      |(required) hydraulic capacity of unit (cfs)                                                    |
 |Qper               |Float      |(not required) percent of capacity at optimum discharge                                        |
 |B                  |Float      |(required - Francis) runner inlet height (ft)                                                  |
-|$iota$             |Float      |(required - Francis) ratio of exit swirl to no exit swirl - leave at 1.1                       |
+|$\iota$            |Float      |(required - Francis) ratio of exit swirl to no exit swirl - leave at 1.1                       |
 |D1                 |Float      |(required - Francis) diameter of runner at inlet (ft)                                          |
 |D2                 |Float      |(required - Francis) diameter of runner at outlet (ft)                                         |
-|$lambda$           |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2|       |
+|$\lambda$          |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2|       |
