@@ -2191,9 +2191,6 @@ class epri():
             print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
                                                                                                           round(self.dist_pareto[1],4),
                                                                                                           round(self.dist_pareto[2],4)))
-            print ("The Pareto mean is: %s"% (pareto.mean(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
-            print ("The Pareto variance is: %s"% (pareto.var(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
-            print ("The Pareto standard deviation is: %s"% (pareto.std(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
             print ("--------------------------------------------------------------------------------------------")
     
     
@@ -2213,9 +2210,6 @@ class epri():
             print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
                                                                                                           round(self.dist_extreme[1],4),
                                                                                                           round(self.dist_extreme[2],4)))
-            print ("The Generic Extreme Value mean is: %s"% (genextreme.mean(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
-            print ("The Generic Extreme Value variance is: %s"% (genextreme.var(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
-            print ("The Generic Extreme Value standard deviation is: %s"% (genextreme.std(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
             print ("--------------------------------------------------------------------------------------------")
     
         def WeibullMinFit(self):
@@ -2234,9 +2228,6 @@ class epri():
             print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
                                                                                                           round(self.dist_weibull[1],4),
                                                                                                           round(self.dist_weibull[2],4)))
-            print ("The Weibull Max mean is: %s"% (weibull_min.mean(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
-            print ("The Weibull Max variance is: %s"% (weibull_min.var(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
-            print ("The Weibull Max standard deviation is: %s"% (weibull_min.std(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
             print ("--------------------------------------------------------------------------------------------")
     
         def LogNormalFit(self):
@@ -2255,9 +2246,6 @@ class epri():
             print ("The Log Normal distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_lognorm[0],4),
                                                                                                           round(self.dist_lognorm[1],4),
                                                                                                           round(self.dist_lognorm[2],4)))
-            print ("The Log Normal mean is: %s"% (lognorm.mean(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
-            print ("The Log Normal variance is: %s"% (lognorm.var(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
-            print ("The Log Normal standard deviation is: %s"% (lognorm.std(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
             print ("--------------------------------------------------------------------------------------------")
     
         def GumbelFit(self):
@@ -2371,34 +2359,70 @@ class epri():
     
             #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'emerald_shiner.png'), dpi = 700)
             #plt.show()
-
-            
-        def summary_output(self, ):
+           
+        def summary_output(self, output_dir, dist = 'Log Normal'):
             # species data
-            family = self.family
-            genus = self.genus 
-            species = self.species
-            
-            # months
-            month = self.month 
-            
-            huc02 = self.HUC02
-            
-            # presence and entrainment rate
-            presence = self.presence 
-            max_ent_rate = self.max_ent_rate 
-            sample_size = self.sample_size
-            
-            # weibull c, location, scale
-            weibull_p = self.weibull_t
-            weibull_c = round(self.dist_weibull[0],4)
-            weibull_loc = round(self.dist_weibull[1],4)
-            weibull_scale = round(self.dist_weibull[2],4)
-            
-            # log normal b, location, scale
-            log_normal_p = self.log_normal_t
-            log_normal_b = round(self.dist_lognorm[0],4)
-            log_normal_loc = round(self.dist_lognorm[1],4)
-            log_normal_scale = round(self.dist_lognorm[2],4)
-            
-            return family, genus, species, month.astype(np.str), huc02, presence, max_ent_rate, sample_size, weibull_p, weibull_c, weibull_loc, weibull_scale, log_normal_p, log_normal_b, log_normal_loc, log_normal_scale
+            if dist == 'Log Normal' or dist == 'Weibull' or dist == 'Pareto':
+                family = self.family
+                genus = self.genus 
+                species = self.species
+                
+                # months
+                month = self.month 
+                
+                huc02 = self.HUC02
+                
+                # presence and entrainment rate
+                presence = self.presence 
+                max_ent_rate = self.max_ent_rate 
+                sample_size = self.sample_size
+                
+                # weibull c, location, scale
+                weibull_p = self.weibull_t
+                weibull_c = round(self.dist_weibull[0],4)
+                weibull_loc = round(self.dist_weibull[1],4)
+                weibull_scale = round(self.dist_weibull[2],4)
+                
+                # log normal b, location, scale
+                log_normal_p = self.log_normal_t
+                log_normal_b = round(self.dist_lognorm[0],4)
+                log_normal_loc = round(self.dist_lognorm[1],4)
+                log_normal_scale = round(self.dist_lognorm[2],4)
+                
+                pareto_p = self.pareto_t
+                pareto_b = round(self.dist_pareto[0],4)
+                pareto_loc = round(self.dist_pareto[1],4)
+                pareto_scale = round(self.dist_pareto[2],4)
+                
+                length_b = round(self.len_dist[0],4)
+                length_loc = round(self.len_dist[1],4)
+                length_scale = round(self.len_dist[2],4)
+                
+                if dist == 'Log Normal':
+                    row = np.array([family, genus, species, log_normal_b, 
+                                    log_normal_loc, log_normal_scale, max_ent_rate, 
+                                    presence, length_b,length_loc,length_scale])
+                elif dist == 'Weibull':
+                    row = np.array([family, genus, species, weibull_c, 
+                                    weibull_loc, weibull_scale, max_ent_rate, 
+                                    presence, length_b,length_loc,length_scale])    
+                else:
+                    row = np.array([family, genus, species, pareto_b, 
+                                    pareto_loc, pareto_scale, max_ent_rate, 
+                                    presence, length_b,length_loc,length_scale])
+                
+                columns = ['family','genus','species','ent_shape','ent_loc',
+                           'ent_scale','max_ent_rate','presence','length_b',
+                           'length_loc','length_scale']
+                new_row_df = pd.DataFrame([row],columns = columns)
+                
+                try:
+                    results = pd.read_csv(os.path.join(output_dir,'epri_fit.csv'))
+                except FileNotFoundError:
+                    results = pd.DataFrame(columns = columns)
+                    
+                results = pd.concat([results,new_row_df], ignore_index = True)
+                results.to_csv(os.path.join(output_dir,'epri_fit.csv'), index = False)
+                
+            else:
+                return print('Distribution no supported by stryke')
