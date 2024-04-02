@@ -72,7 +72,7 @@ The population tab is the most complex and can be set up for anadromous or resid
 
 | Field             | Data Type |                                             Comment                                           |
 |-------------------|-----------|-----------------------------------------------------------------------------------------------|
-|Common Name        |Spring     |(required)                                                                                     |
+|Common Name        |String     |(required)                                                                                     |
 |Scientific Name    |String     |(required)                                                                                     |
 |Season             |String     |(required) hydrologic season, must be related to a season on the Operating Scenarios tab       |
 |Starting Population|Integer    |(not required) number of starting fish in the simulation (for anadromous mode)                 |
@@ -99,9 +99,20 @@ The next two tabs, **Nodes** and **Edges**, describe the migratory network simul
 
 | Field             | Data Type |                                             Comment                                           |
 |-------------------|-----------|-----------------------------------------------------------------------------------------------|
-|Location           |Spring     |(required) physical location within the migratory network                                      |
+|Location           |String     |(required) physical location within the migratory network                                      |
 |Surv_Fun           |String     |(required) the type of survival function applied at this node, must be 'a-priori' or a Unit ID |
 |Survival           |Float      |(required) a-prior determined survival rate, if node is a Unit leave 0                         |
 
 The following picture decpicts the correct set up for a simple 3-unit run-of-river impact assessment.
 
+![nodesx](https://github.com/knebiolo/stryke/assets/61742537/0f1dec29-939e-4c05-8c91-1efbcbea8319)
+
+Edges are logical pathways that connect two nodes.  Since Stryke simulates movement over a directed acyclic graph, edges are always in one direction (upstream to downstream).  Edges are always organized as From Node : To Node.  
+
+| Field             | Data Type |                                             Comment                                           |
+|-------------------|-----------|-----------------------------------------------------------------------------------------------|
+|_from              |String     |(required) From Node, must match 1 Node from the Nodes tab                                     |
+|_to                |String     |(required) To Node, must match 1 Node from the Nodes tab                                       |
+|weight             |Float      |(required) leave as 1.                                                                         |
+
+The following depicts the correct set up for the same, simple 3-unit run-of-river impact assessment.  Note: movement is always one way, always downstream.
