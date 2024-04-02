@@ -68,7 +68,7 @@ The following image depicts **Operation Scenarios** for peaking and pumped stora
 
 ## Population
 
-The population tab is the most complex and can be set up for anadromous or resident species.  When assessing impact for resident species, entrainment is expressed as a rate (fish per million cubic feet), where the number of fish simulated per day is a function of the river discharge.  You can define entrainment rates with your own empirical data, or you can fit them to observations from the EPRI entrainment database, which is inlcuded with Stryke.  Entrainment rates can be simulated with a Log Normal, Weibull, or Pareto distributions.  For more information and tips for fitting distributions, see the documentation.     
+The population tab is the most complex and can be set up for anadromous or resident species.  When assessing impact for resident species, entrainment is expressed as a rate (fish per million cubic feet), where the number of fish simulated per day is a function of the river discharge.  You can define entrainment rates with your own empirical data, or you can fit them to observations from the EPRI entrainment database, which is inlcuded with Stryke.  Entrainment rates can be simulated with a Log Normal, Weibull, or Pareto distributions.  For more information and tips for fitting distributions, see the documentation.  The maximum entrainment rate (max_ent_rate) is the largest entrainment rate observed.  Given that each of these distributions are heavy tailed, the maximum simulated entrainment rate can be very large.  Stryke limits the maximum simulated entrainment rate to 1 magnitude larger than the largest observation.  Entrainment events are episodic in nature, and it is not likely that there will be an entrainment event every day.  Occurence probability (occur_prob) is the probability of entraining fish of a species on any particular day. Stryke first simulates presence, and if fish are present Stryke simulates an entrainment rate.  This entrainment rate is then multiplied by the daily river discharge, and thus a simulated population is created.  Once there is a sample population, Stryke simulates fish lengths for each individual in the population.  The EPRI entrainment database also supplies information on fish lengths, which Stryke fits a log normal distribution to.    
 
 | Field             | Data Type |                                             Comment                                           |
 |-------------------|-----------|-----------------------------------------------------------------------------------------------|
@@ -76,8 +76,19 @@ The population tab is the most complex and can be set up for anadromous or resid
 |Scientific Name    |String     |(required)                                                                                     |
 |Season             |String     |(required) hydrologic season, must be related to a season on the Operating Scenarios tab       |
 |Starting Population|Integer    |(not required) number of starting fish in the simulation (for anadromous mode)                 |
-|Ent. Event shape   |Float      |(not required) shape parameter describing daily entrainment event                              |
-|Ent Event location |Float      |(not required) location parameter describing daiy entrainment event                            |
-|Ent Event scale    |Float      |(not required) scale parameter describing daily entrainment event.                             |
+|(Ent. Event) shape |Float      |(not required) shape parameter describing daily entrainment event                              |
+|(Ent. Event) location |Float      |(not required) location parameter describing daiy entrainment event                         |
+|(Ent. Event) scale |Float      |(not required) scale parameter describing daily entrainment event.                             |
 |dist               |String     |(not required) Distribution type describing daily entrainment event, must be one of (Log Normal, Weibull or Pareto) |
 |max_ent_rate       |Float      |(not required) maximum entrainment event measured in fish per million cubic feet.              |
+|occur_prob         |Float      |(not required) occurence probability                                                           |
+|iterations         |Integer    |(required) number of simulation runs                                                           |
+|Length_mean        |Float      |(not required) mean length (for anadromous mode)                                               |
+|Length_sd          |Float      |(not required) standard deviation of length (for anadromous mode)                              |
+|caudal_AR          |Float      |(not required) caudal fin aspect ratio, used in calculatio of swim speed.  See Sambalay 1990   |
+|(Length) shape     |Float      |(not required) log normal shape parameter describing length of fish in population              |
+|(Length) location  |Float      |(not required) log normal location parameter describing length of fish                         |
+|(Length) shape     |Float      |(not required) log normal shape parameter describing length of fish                            |
+
+
+
