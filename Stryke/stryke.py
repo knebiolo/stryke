@@ -2370,7 +2370,7 @@ class epri():
             axs[1,1].set_xlabel('org per Mft3')
     
             #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'emerald_shiner.png'), dpi = 700)
-            plt.show()
+            #plt.show()
 
             
         def summary_output(self, ):
