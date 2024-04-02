@@ -63,3 +63,6 @@ The setup for Run-of-river facilities is below:
 **Note, every season and unit combination represented**
 
 The following image depicts **Operation Scenarios** for peaking and pumped storage projects, which are assumed to operate on demand.  Operations at these facilities can be described with two probabilities, the probability that a facility will or will not operate, and given the facility is operating, the probability a facility is operated for n hours.  These parameters are modeled with a binomial and log normal respectively.  Note, Stryke requires shape parameters be fitted with [Scipy](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.lognorm.html).  
+
+![pump store op scen](https://github.com/knebiolo/stryke/assets/61742537/62bd0c8b-fba5-4c26-9ac9-b575a1772596)
+
