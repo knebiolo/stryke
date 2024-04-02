@@ -138,7 +138,7 @@ The unit parameters tab is another complex tab that contains measurable properti
 |Qcap               |Float      |(required) hydraulic capacity of unit (cfs)                                                    |
 |Qper               |Float      |(not required) percent of capacity at optimum discharge                                        |
 |B                  |Float      |(required - Francis) runner inlet height (ft)                                                  |
-|$\text{iota}$      |Float      |(required - Francis) ratio of exit swirl to no exit swirl - leave at 1.1                       |
+|$iota$             |Float      |(required - Francis) ratio of exit swirl to no exit swirl - leave at 1.1                       |
 |D1                 |Float      |(required - Francis) diameter of runner at inlet (ft)                                          |
 |D2                 |Float      |(required - Francis) diameter of runner at outlet (ft)                                         |
-|$\text{lambda}$    |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2|       |
+|$lambda$           |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2|       |
