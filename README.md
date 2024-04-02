@@ -68,7 +68,7 @@ The following image depicts **Operation Scenarios** for peaking and pumped stora
 
 ## Population
 
-The population tab is the most complex and can be set up for anadromous and resident species.  
+The population tab is the most complex and can be set up for anadromous or resident species.  When assessing impact for resident species, entrainment is expressed as a rate (fish per million cubic feet), where the number of fish simulated per day is a function of the river discharge.  You can define entrainment rates with your own empirical data, or you can fit them to observations from the EPRI entrainment database, which is inlcuded with Stryke.  Entrainment rates can be simulated with a Log Normal, Weibull, or Pareto distributions.  For more information, see the documentation.     
 
 | Field             | Data Type |                                             Comment                                           |
 |-------------------|-----------|-----------------------------------------------------------------------------------------------|
