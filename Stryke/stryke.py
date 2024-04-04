@@ -261,13 +261,13 @@ class simulation():
         - param_dict (dict): A dictionary containing key turbine parameters 
         necessary for the calculation. Expected keys and their
           meanings are as follows:
-            - 'H': The net head of water across the turbine (m).
+            - 'H': The net head of water across the turbine (ft).
             - 'RPM': The revolutions per minute of the turbine.
-            - 'D': The diameter of the turbine (m).
-            - 'Q': The flow rate through the turbine (m^3/s).
-            - 'ada': The specific speed of the turbine.
+            - 'D': The diameter of the turbine runner (ft).
+            - 'Q': The flow rate through the turbine (ft^3/s).
+            - 'ada': Turbine efficiency.
             - 'N': The number of blades on the turbine.
-            - '_lambda': The empirically derived constant for blade strike probability, 
+            - '_lambda': The empirically derived constant for blade strike probability, 0.2 as 
             suggested by the U.S. Fish and Wildlife Service.
     
         The function first computes the energy coefficient (Ewd) and discharge 
@@ -338,17 +338,17 @@ class simulation():
         factor in determining the probability of a blade strike.
         - param_dict (dict): A dictionary containing essential turbine parameters 
         for the calculation. Expected keys include:
-            - 'H': The net head of water across the turbine (m).
+            - 'H': The hydraulic head (ft).
             - 'RPM': The revolutions per minute of the turbine.
-            - 'D': The diameter of the turbine (m).
-            - 'Q': The actual flow rate through the turbine (m^3/s).
-            - 'ada': The specific speed of the turbine.
+            - 'D': The diameter of the turbine runner (ft).
+            - 'Q': The actual flow rate through the turbine (ft^3/s).
+            - 'ada': Turbine efficiency.
             - 'N': The number of blades on the turbine.
-            - 'Qopt': The optimum flow rate through the turbine (m^3/s), used in
+            - 'Qopt': The optimum flow rate through the turbine (ft^3/s), used in
             beta angle calculations.
             - 'Qper': The percentage of the optimum flow rate, contributing to
             the beta calculation.
-            - '_lambda': An empirical constant for blade strike probability, suggested 
+            - '_lambda': An empirical constant for blade strike probability, 0.2 as suggested 
             by the U.S. Fish and Wildlife Service.
     
         The function computes the energy coefficient (Ewd) and discharge coefficient (Qwd)
@@ -1779,7 +1779,7 @@ class simulation():
                 
                 # fit distribution to number entrained
                 dist = lognorm.fit(day_dat.total_entrained)
-                probs = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
+                probs_ent = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
                 
                 mean = lognorm.mean(dist[0],dist[1],dist[2])
                 lcl = lognorm.ppf(0.025,dist[0],dist[1],dist[2])
@@ -1788,13 +1788,13 @@ class simulation():
                 cum_sum_dict['mean_ent'].append(mean)
                 cum_sum_dict['lcl_ent'].append(lcl)
                 cum_sum_dict['ucl_ent'].append(ucl)
-                cum_sum_dict['prob_gt_10_entrained'].append(probs[0])
-                cum_sum_dict['prob_gt_100_entrained'].append(probs[1])
-                cum_sum_dict['prob_gt_1000_entrained'].append(probs[2])
+                cum_sum_dict['prob_gt_10_entrained'].append(probs_ent[0])
+                cum_sum_dict['prob_gt_100_entrained'].append(probs_ent[1])
+                cum_sum_dict['prob_gt_1000_entrained'].append(probs_ent[2])
                 
                 # fit distribution to number killed
                 dist = lognorm.fit(day_dat.total_killed)
-                probs = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
+                probs_ded = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
                 
                 mean = lognorm.mean(dist[0],dist[1],dist[2])
                 lcl = lognorm.ppf(0.025,dist[0],dist[1],dist[2])
@@ -1803,9 +1803,10 @@ class simulation():
                 cum_sum_dict['mean_killed'].append(mean)
                 cum_sum_dict['lcl_killed'].append(lcl)
                 cum_sum_dict['ucl_killed'].append(ucl)
-                cum_sum_dict['prob_gt_10_killed'].append(probs[0])
-                cum_sum_dict['prob_gt_100_killed'].append(probs[1])
-                cum_sum_dict['prob_gt_1000_killed'].append(probs[2])
+
+                cum_sum_dict['prob_gt_10_killed'].append(probs_ded[0])
+                cum_sum_dict['prob_gt_100_killed'].append(probs_ded[1])
+                cum_sum_dict['prob_gt_1000_killed'].append(probs_ded[2])
         print ("Yearly summary complete")   
         
         self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict,orient = 'columns')        
@@ -1821,6 +1822,7 @@ class simulation():
             day_sum.to_excel(writer,sheet_name = 'daily summary')    
             year_sum.to_excel(writer,sheet_name = 'yearly summary')
             length.to_excel(writer,sheet_name = 'length data')
+
 
         # plt.figure()
         # plt.hist(day_dat.total_entrained,color = 'r')
@@ -2206,9 +2208,6 @@ class epri():
             print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
                                                                                                           round(self.dist_pareto[1],4),
                                                                                                           round(self.dist_pareto[2],4)))
-            print ("The Pareto mean is: %s"% (pareto.mean(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
-            print ("The Pareto variance is: %s"% (pareto.var(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
-            print ("The Pareto standard deviation is: %s"% (pareto.std(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2])))
             print ("--------------------------------------------------------------------------------------------")
     
     
@@ -2228,9 +2227,6 @@ class epri():
             print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
                                                                                                           round(self.dist_extreme[1],4),
                                                                                                           round(self.dist_extreme[2],4)))
-            print ("The Generic Extreme Value mean is: %s"% (genextreme.mean(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
-            print ("The Generic Extreme Value variance is: %s"% (genextreme.var(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
-            print ("The Generic Extreme Value standard deviation is: %s"% (genextreme.std(self.dist_extreme[0],self.dist_extreme[1],self.dist_extreme[2])))
             print ("--------------------------------------------------------------------------------------------")
     
         def WeibullMinFit(self):
@@ -2249,9 +2245,6 @@ class epri():
             print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
                                                                                                           round(self.dist_weibull[1],4),
                                                                                                           round(self.dist_weibull[2],4)))
-            print ("The Weibull Max mean is: %s"% (weibull_min.mean(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
-            print ("The Weibull Max variance is: %s"% (weibull_min.var(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
-            print ("The Weibull Max standard deviation is: %s"% (weibull_min.std(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2])))
             print ("--------------------------------------------------------------------------------------------")
     
         def LogNormalFit(self):
@@ -2270,9 +2263,6 @@ class epri():
             print ("The Log Normal distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_lognorm[0],4),
                                                                                                           round(self.dist_lognorm[1],4),
                                                                                                           round(self.dist_lognorm[2],4)))
-            print ("The Log Normal mean is: %s"% (lognorm.mean(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
-            print ("The Log Normal variance is: %s"% (lognorm.var(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
-            print ("The Log Normal standard deviation is: %s"% (lognorm.std(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2])))
             print ("--------------------------------------------------------------------------------------------")
     
         def GumbelFit(self):
@@ -2305,16 +2295,16 @@ class epri():
             """
     
             # sum up the number of observations within each size cohort
-            cm_0_5 = np.int(self.epri['0_5'].sum())
-            cm_5_10 = np.int(self.epri['5_10'].sum())
-            cm_10_15 = np.int(self.epri['10_15'].sum())
-            cm_15_20 = np.int(self.epri['15_20'].sum())
-            cm_20_25 = np.int(self.epri['20_25'].sum())
-            cm_25_38 = np.int(self.epri['25_38'].sum())
-            cm_38_51 = np.int(self.epri['38_51'].sum())
-            cm_51_64 = np.int(self.epri['51_64'].sum())
-            cm_64_76 = np.int(self.epri['64_76'].sum())
-            cm_GT76 = np.int(self.epri['GT76'].sum())
+            cm_0_5 = np.int32(self.epri['0_5'].sum())
+            cm_5_10 = np.int32(self.epri['5_10'].sum())
+            cm_10_15 = np.int32(self.epri['10_15'].sum())
+            cm_15_20 = np.int32(self.epri['15_20'].sum())
+            cm_20_25 = np.int32(self.epri['20_25'].sum())
+            cm_25_38 = np.int32(self.epri['25_38'].sum())
+            cm_38_51 = np.int32(self.epri['38_51'].sum())
+            cm_51_64 = np.int32(self.epri['51_64'].sum())
+            cm_64_76 = np.int32(self.epri['64_76'].sum())
+            cm_GT76 = np.int32(self.epri['GT76'].sum())
     
             # sample from uniform distribution within each size cohort
             cm_0_5_arr = np.random.uniform(low = 0, high = 5.0, size = cm_0_5)
@@ -2384,36 +2374,74 @@ class epri():
             axs[1,1].set_title('Weibull p = %s'%(round(t3[1],4)))
             axs[1,1].set_xlabel('org per Mft3')
     
-            #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'emerald_shiner.png'), dpi = 700)
             plt.show()
 
             
-        def summary_output(self):
+
+           
+        def summary_output(self, output_dir, dist = 'Log Normal'):
             # species data
-            family = self.family
-            genus = self.genus 
-            species = self.species
-            
-            # months
-            month = self.month 
-            
-            huc02 = self.HUC02
-            
-            # presence and entrainment rate
-            presence = self.presence 
-            max_ent_rate = self.max_ent_rate 
-            sample_size = self.sample_size
-            
-            # weibull c, location, scale
-            weibull_p = self.weibull_t
-            weibull_c = round(self.dist_weibull[0],4)
-            weibull_loc = round(self.dist_weibull[1],4)
-            weibull_scale = round(self.dist_weibull[2],4)
-            
-            # log normal b, location, scale
-            log_normal_p = self.log_normal_t
-            log_normal_b = round(self.dist_lognorm[0],4)
-            log_normal_loc = round(self.dist_lognorm[1],4)
-            log_normal_scale = round(self.dist_lognorm[2],4)
-            
-            return family, genus, species, month.astype(np.str), huc02, presence, max_ent_rate, sample_size, weibull_p, weibull_c, weibull_loc, weibull_scale, log_normal_p, log_normal_b, log_normal_loc, log_normal_scale
+            if dist == 'Log Normal' or dist == 'Weibull' or dist == 'Pareto':
+                family = self.family
+                genus = self.genus 
+                species = self.species
+                
+                # months
+                month = self.month 
+                
+                huc02 = self.HUC02
+                
+                # presence and entrainment rate
+                presence = self.presence 
+                max_ent_rate = self.max_ent_rate 
+                sample_size = self.sample_size
+                
+                # weibull c, location, scale
+                weibull_p = self.weibull_t
+                weibull_c = round(self.dist_weibull[0],4)
+                weibull_loc = round(self.dist_weibull[1],4)
+                weibull_scale = round(self.dist_weibull[2],4)
+                
+                # log normal b, location, scale
+                log_normal_p = self.log_normal_t
+                log_normal_b = round(self.dist_lognorm[0],4)
+                log_normal_loc = round(self.dist_lognorm[1],4)
+                log_normal_scale = round(self.dist_lognorm[2],4)
+                
+                pareto_p = self.pareto_t
+                pareto_b = round(self.dist_pareto[0],4)
+                pareto_loc = round(self.dist_pareto[1],4)
+                pareto_scale = round(self.dist_pareto[2],4)
+                
+                length_b = round(self.len_dist[0],4)
+                length_loc = round(self.len_dist[1],4)
+                length_scale = round(self.len_dist[2],4)
+                
+                if dist == 'Log Normal':
+                    row = np.array([family, genus, species, log_normal_b, 
+                                    log_normal_loc, log_normal_scale, max_ent_rate, 
+                                    presence, length_b,length_loc,length_scale])
+                elif dist == 'Weibull':
+                    row = np.array([family, genus, species, weibull_c, 
+                                    weibull_loc, weibull_scale, max_ent_rate, 
+                                    presence, length_b,length_loc,length_scale])    
+                else:
+                    row = np.array([family, genus, species, pareto_b, 
+                                    pareto_loc, pareto_scale, max_ent_rate, 
+                                    presence, length_b,length_loc,length_scale])
+                
+                columns = ['family','genus','species','ent_shape','ent_loc',
+                           'ent_scale','max_ent_rate','presence','length_b',
+                           'length_loc','length_scale']
+                new_row_df = pd.DataFrame([row],columns = columns)
+                
+                try:
+                    results = pd.read_csv(os.path.join(output_dir,'epri_fit.csv'))
+                except FileNotFoundError:
+                    results = pd.DataFrame(columns = columns)
+                    
+                results = pd.concat([results,new_row_df], ignore_index = True)
+                results.to_csv(os.path.join(output_dir,'epri_fit.csv'), index = False)
+                
+            else:
+                return print('Distribution no supported by stryke')
