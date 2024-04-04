@@ -1806,13 +1806,28 @@ class simulation():
                 cum_sum_dict['prob_gt_10_killed'].append(probs[0])
                 cum_sum_dict['prob_gt_100_killed'].append(probs[1])
                 cum_sum_dict['prob_gt_1000_killed'].append(probs[2])
-        print ("Yearly summary complete")        
+        print ("Yearly summary complete")   
+        
+        self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict,orient = 'columns')        
+        results = self.beta_df
+        day_sum = self.daily_summary
+        year_sum = self.cum_sum
+        length = self.length_summ
+        
+        # summarize over iterations by Species and Flow Scenario
+        
+        with pd.ExcelWriter(self.wks_dir,engine = 'openpyxl', mode = 'a') as writer:
+            results.to_excel(writer,sheet_name = 'beta fit')
+            day_sum.to_excel(writer,sheet_name = 'daily summary')    
+            year_sum.to_excel(writer,sheet_name = 'yearly summary')
+            length.to_excel(writer,sheet_name = 'length data')
+
         # plt.figure()
         # plt.hist(day_dat.total_entrained,color = 'r')
         # #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'fuck.png'), dpi = 700)
         # plt.show()        
                 
-        self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict,orient = 'columns')
+
 
 class hydrologic():
     """
@@ -2373,7 +2388,7 @@ class epri():
             plt.show()
 
             
-        def summary_output(self, ):
+        def summary_output(self):
             # species data
             family = self.family
             genus = self.genus 
