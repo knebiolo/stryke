@@ -1779,7 +1779,7 @@ class simulation():
                 
                 # fit distribution to number entrained
                 dist = lognorm.fit(day_dat.total_entrained)
-                probs = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
+                probs_ent = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
                 
                 mean = lognorm.mean(dist[0],dist[1],dist[2])
                 lcl = lognorm.ppf(0.025,dist[0],dist[1],dist[2])
@@ -1788,13 +1788,13 @@ class simulation():
                 cum_sum_dict['mean_ent'].append(mean)
                 cum_sum_dict['lcl_ent'].append(lcl)
                 cum_sum_dict['ucl_ent'].append(ucl)
-                cum_sum_dict['prob_gt_10_entrained'].append(probs[0])
-                cum_sum_dict['prob_gt_100_entrained'].append(probs[1])
-                cum_sum_dict['prob_gt_1000_entrained'].append(probs[2])
+                cum_sum_dict['prob_gt_10_entrained'].append(probs_ent[0])
+                cum_sum_dict['prob_gt_100_entrained'].append(probs_ent[1])
+                cum_sum_dict['prob_gt_1000_entrained'].append(probs_ent[2])
                 
                 # fit distribution to number killed
                 dist = lognorm.fit(day_dat.total_killed)
-                probs = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
+                probs_ded = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
                 
                 mean = lognorm.mean(dist[0],dist[1],dist[2])
                 lcl = lognorm.ppf(0.025,dist[0],dist[1],dist[2])
@@ -1803,9 +1803,9 @@ class simulation():
                 cum_sum_dict['mean_killed'].append(mean)
                 cum_sum_dict['lcl_killed'].append(lcl)
                 cum_sum_dict['ucl_killed'].append(ucl)
-                cum_sum_dict['prob_gt_10_killed'].append(probs[0])
-                cum_sum_dict['prob_gt_100_killed'].append(probs[1])
-                cum_sum_dict['prob_gt_1000_killed'].append(probs[2])
+                cum_sum_dict['prob_gt_10_killed'].append(probs_ent[0] * probs_ded[0] / probs_ent[0])
+                cum_sum_dict['prob_gt_100_killed'].append(probs_ent[1] * probs_ded[1] / probs_ent[1])
+                cum_sum_dict['prob_gt_1000_killed'].append(probs_ent[2] * probs_ded[2] / probs_ent[2])
         print ("Yearly summary complete")        
         # plt.figure()
         # plt.hist(day_dat.total_entrained,color = 'r')
