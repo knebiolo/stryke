@@ -50,8 +50,13 @@ from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gum
 import h5py
 #import tables
 from numpy.random import default_rng
-rng = default_rng()
+#rng = default_rng()
 
+
+session = requests.Session()
+session.verify = False
+
+# Now pass the session to hydrofunctions if possible
 
 
 # Get the directory of the current script
