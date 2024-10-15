@@ -14,9 +14,8 @@ Stryke was developed on a 64-bit Windows operating system and utilizes Microsoft
 Thank you for using this open-source software! Unlike traditional programs that come with simple `.exe` installers, open-source projects often require a bit more setup to get started. Don’t worry though—this guide will walk you through everything step-by-step.
 
 ## What You'll Need:
-To run this software, you'll need to install certain Python libraries that the project depends on. But don’t worry, we'll use **Anaconda Navigator** to manage everything for you. Anaconda Navigator provides an easy, graphical way to handle all the software dependencies without needing to use the command line.
+To run this software, you'll need to install certain Python libraries that the project depends on. But don’t worry, we'll use **Anaconda Navigator** to manage everything for you. Anaconda Navigator provides an easy, graphical way to handle all the software dependencies without needing to use the command line.  **By following the steps below, you'll be able to recreate the necessary environment, ensuring the software runs smoothly on your system.**
 
-By following the steps below, you'll be able to recreate the necessary environment, ensuring the software runs smoothly on your system.
 ---
 ## How to Set Up the Environment
 
