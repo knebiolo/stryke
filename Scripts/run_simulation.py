@@ -8,18 +8,18 @@ Create an Upper Barker Model to test out Stryke
 """
 # Import Dependencies
 import sys
-sys.path.append(r"Q:\Client_Data\Other\EPRI\0868022_SoftwareDevelopment\stryke\Stryke")
+sys.path.append(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Stryke")
 import stryke
 import os
 import pandas as pd
 
 # read scenario worksheet
-ws = r'Q:\Client_Data\Other\EPRI\0868022_SoftwareDevelopment\stryke\Spreadsheet Interface'
+ws = r'K:\Jobs\868\022\Calcs\validation'
 wks = 'HUC02_Schaghticoke.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke.simulation(ws,wks, output_name = 'HUC02_Schaghticoke')
+simulation = stryke.simulation(ws,wks, output_name = 'HUC02_Schaticoke')
 
 simulation.run()
 simulation.summary()
