@@ -42,6 +42,7 @@ from scipy.stats import beta
 import xlrd
 import networkx as nx
 import hydrofunctions as hf
+import requests
 #import geopandas as gp
 import statsmodels.api as sm
 import math
@@ -953,8 +954,8 @@ class simulation():
                 df['month'] = pd.to_datetime(df.datetimeUTC).dt.month
                 if np.any(df.DAvgFlow_prorate.values < 0):
                     print ('fuck')
-                flow_df = flow_df.append(df)
-                
+                #flow_df = flow_df.append(df)
+                flow_df = pd.concat([df, flow_df])             
         return flow_df
     
     def daily_hours(self, ops_df, q_cap_dict, op_order_dict, operations = 'independent'):
@@ -1036,7 +1037,7 @@ class simulation():
                 elif operations == 'dependent':
                     # if this is the first unit to be operated
                     #TODO change this back to just 1 == 1 - updated for Bad Creek Analysis
-                    if i == 1:# or i == 5:
+                    if i == 1 or i == 5:
                         if np.random.uniform(0,1,1) <= prob_not_operating:
                             hours_dict[unit] = 0.
                             flow_dict[unit] = 0.
