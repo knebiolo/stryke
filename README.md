@@ -10,6 +10,49 @@ This README will guide the end user through an assessment of the effects of entr
 
 Stryke was developed on a 64-bit Windows operating system and utilizes Microsoft Excel spreadsheets as an interface.  Users are encouraged to use the table of contents for navigation within the README and Project Notebook.
 
+# Installation instructions
+Thank you for using this open-source software! Unlike traditional programs that come with simple `.exe` installers, open-source projects often require a bit more setup to get started. Don’t worry though—this guide will walk you through everything step-by-step.
+
+## What You'll Need:
+To run this software, you'll need to install certain Python libraries that the project depends on. But don’t worry, we'll use **Anaconda Navigator** to manage everything for you. Anaconda Navigator provides an easy, graphical way to handle all the software dependencies without needing to use the command line.  **By following the steps below, you'll be able to recreate the necessary environment, ensuring the software runs smoothly on your system.**
+
+---
+## How to Set Up the Environment
+
+This project requires specific Python libraries to run properly. To make it easy, you can recreate the environment using Anaconda Navigator after cloning this repository from GitHub. Follow these steps:
+
+### 1. Clone the Repository Using GitHub Desktop
+1. Open **GitHub Desktop**.
+2. Click on `File > Clone Repository...`.
+3. Select this repository from the list or paste the repository URL.
+4. Choose the folder where you want to save the repository locally.
+5. Click `Clone` to download the repository to your machine.
+
+### 2. Open Anaconda Navigator
+1. Launch **Anaconda Navigator**.
+2. Go to the **"Environments"** tab on the left side of the interface.
+3. In the bottom-left corner, click the **"Import"** button.
+
+### 3. Import the `environment.yml` File
+1. In the **Import** dialog:
+   - Give the environment a name (e.g., `stryke`).
+   - Click the **"Browse"** button next to **"Specification File"**.
+   - Navigate to the folder where you cloned the repository and select the `environment.yml` file.
+   - Click **"Import"** to create the environment.
+   
+Anaconda Navigator will install all the required packages listed in the `environment.yml` file.
+
+### 4. Activate the Environment
+1. Once the environment is created, it will appear in the **Environments** list in Anaconda Navigator.
+2. Click on the environment name (e.g., `stryke`) to activate it.
+3. You can now launch applications like **Jupyter Notebook** or **Spyder** from within the activated environment.
+
+---
+
+### Additional Notes
+- **Standard Libraries**: Packages like `os` and `math` are part of Python's standard library and do not need to be installed separately.
+- If you encounter any issues during setup, feel free to [reach out for assistance](mailto:kevin.nebiolo@kleinschmidtgroup.com).
+
 # Project Creation 
 
 To create a project, first create a folder in the directory of your choice. Next, clone the repository (https://github.com/knebiolo/stryke) into your new directory using git commands or with GitHub Desktop.  After cloning, open the ‘stryke’ folder, which you will now find in the project directory.  Stryke will directly read from and write results to the spreadsheet interface found in the spreadsheet interface folder.  You don't have to keep the spreadsheet here because one of the first steps when creating a model is to point to the spreadsheet's directory. The following directions will guide the end user through setting up the project spreadsheet and with parameter entry.
