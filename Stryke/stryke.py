@@ -491,7 +491,7 @@ class simulation():
         return 1 - p_strike  # Survival probability
     
     def Pump(length, param_dict):
-        ''' pump mode calculations from fish entrainment analysis report:
+        r''' pump mode calculations from fish entrainment analysis report:
             J:\1210\005\Docs\Entrainment\Entrainment Calcs\BladeStrike_CabotStation.xlsx'''
     
         # either sample parameters from statistical distributions, use a priori measures or extract from parameter dictionary
