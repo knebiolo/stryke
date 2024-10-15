@@ -41,7 +41,9 @@ warnings.filterwarnings("ignore")
 from scipy.stats import beta
 import xlrd
 import networkx as nx
+
 from Stryke.hydrofunctions import hydrofunctions as hf
+
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
@@ -860,7 +862,7 @@ class simulation():
         start_date = '%s-01-01'%(flow_year)
         end_date = '%s-12-31'%(flow_year)
         
-        gage_dat = hf.NWIS(site = gage, service='dv', start_date= start_date, end_date = end_date)
+        gage_dat = hf.station.NWIS(site = gage, service='dv', start_date= start_date, end_date = end_date)
 
         # extract dataframe
         df = gage_dat.df()
