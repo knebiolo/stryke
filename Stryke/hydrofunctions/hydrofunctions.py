@@ -18,10 +18,15 @@ from pandas.tseries.frequencies import to_offset
 
 # Change to relative import: from . import exceptions
 # https://axialcorps.com/2013/08/29/5-simple-rules-for-building-great-python-packages/
-from . import exceptions
+from Stryke.hydrofunctions import exceptions
+from Stryke.hydrofunctions import validate
+from Stryke.hydrofunctions import helpers
+from Stryke.hydrofunctions import station
+
+#from . import exceptions
 import warnings
-from . import validate
-from . import helpers
+#from . import validate
+#from . import helpers
 
 logger = logging.getLogger(__name__)
 
@@ -285,7 +290,7 @@ def get_nwis(
     url = url + service + "/?"
     if verbose:
         print(f"Requesting data from {url}...", end="\r")
-    response = requests.get(url, params=values, headers=header)
+    response = requests.get(url, params=values, headers=header, verify=False)
     if verbose:
         print("Requested data from", response.url)
     # requests will raise a 'ConnectionError' if the connection is refused
