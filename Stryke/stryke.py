@@ -41,9 +41,7 @@ warnings.filterwarnings("ignore")
 from scipy.stats import beta
 import xlrd
 import networkx as nx
-
 from Stryke.hydrofunctions import hydrofunctions as hf
-
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
@@ -52,7 +50,7 @@ from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gum
 import h5py
 #import tables
 from numpy.random import default_rng
-#rng = default_rng()
+rng = default_rng()
 
 # Now pass the session to hydrofunctions if possible
 
@@ -1165,7 +1163,7 @@ class simulation():
 
             # reduce by at least 1 order of magnitude
             ent_rate = np.abs(ent_rate / 10**magnitudes)
-            print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
+            #print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
 
         # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
         if discharge_type == 'fixed':
@@ -1399,7 +1397,7 @@ class simulation():
                                 if np.int32(n) == 0:
                                     n = 1
                                     
-                                print ("Resulting in an entrainment event of %s %s"%(np.int32(n),spc))
+                                #print ("Resulting in an entrainment event of %s %s"%(np.int32(n),spc))
                                 
                                 if math.isnan(s) == False:
                                     # create population of fish - IN CM!!!!!
@@ -1419,7 +1417,7 @@ class simulation():
                                     swim_speed = np.zeros(len(population))
     
     
-                                print ("created population for %s iteration:%s day: %s"%(species,i,day))
+                                #print ("created population for %s iteration:%s day: %s"%(species,i,day))
                                 # create a dataframe that tracks each fish
                                 fishes = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int32(n)),
                                                           'species':np.repeat(species,np.int32(n)),
@@ -1579,6 +1577,8 @@ class simulation():
                             
                             
                         self.hdf.flush()
+                    print ("Scenario %s Iteration %s for Species %s complete"(scen,i,species))
+
                         
                 # TODO - more of that state 2 survival 2 nonesense
                 spc_length.to_hdf(self.hdf,
