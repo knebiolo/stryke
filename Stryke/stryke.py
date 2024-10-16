@@ -1577,7 +1577,7 @@ class simulation():
                             
                             
                         self.hdf.flush()
-                    print ("Scenario %s Iteration %s for Species %s complete"(scen,i,species))
+                    print ("Scenario %s Iteration %s for Species %s complete"%(scenario,i,species))
 
                         
                 # TODO - more of that state 2 survival 2 nonesense
