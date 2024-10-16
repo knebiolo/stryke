@@ -1532,7 +1532,7 @@ class simulation():
        
                             else:
                                 n = 0
-                                print ("No fish of this species on %s"%(day))
+                                #print ("No fish of this species on %s"%(day))
     
                                 daily_row_dict = {'species':['{:50}'.format(spc)],
                                                   'scenario':['{:50}'.format(scenario)],
@@ -1551,7 +1551,7 @@ class simulation():
     
                         else:
                             n = 0
-                            print ("Units not operating on %s"%(day))
+                            #print ("Units not operating on %s"%(day))
 
                             daily_row_dict = {'species':['{:50}'.format(spc)],
                                               'scenario':['{:50}'.format(scenario)],
