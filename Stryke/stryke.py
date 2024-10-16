@@ -1745,7 +1745,8 @@ class simulation():
             pass
         
         # create yearly summary by summing on species, flow scenario, and iteration
-        yearly_summary = self.daily_summary.groupby(by = ['species','scenario','iteration'])['pop_size','total_killed','total_entrained'].sum()
+        
+        yearly_summary = self.daily_summary.groupby(by = ['species','scenario','iteration'])[['pop_size','total_killed','total_entrained']].sum()        
         yearly_summary.reset_index(inplace = True)
 
         cum_sum_dict = {'species':[],
