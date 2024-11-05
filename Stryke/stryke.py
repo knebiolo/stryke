@@ -1136,7 +1136,7 @@ class simulation():
         for feasibility based on historical data.
         """
         shape = spc_df.at[0,'shape']
-        loc = spc_df.at[0,'loc']
+        loc = spc_df.at[0,'location']
         scale = spc_df.at[0,'scale']
         dist = spc_df.at[0,'dist']
         # shape = spc_df.shape.values[0]
