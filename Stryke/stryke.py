@@ -1136,9 +1136,9 @@ class simulation():
         for feasibility based on historical data.
         """
         
-        shape = spc_df.param1.values[0]
-        loc = spc_df.param2.values[0]
-        scale = spc_df.param3.values[0]
+        shape = spc_df.shape.values[0]
+        loc = spc_df.location.values[0]
+        scale = spc_df.scale.values[0]
         if spc_df.dist.values[0] == 'Pareto':
             ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
         elif spc_df.dist.values[0] == 'Extreme':
