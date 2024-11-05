@@ -1387,7 +1387,7 @@ class simulation():
                             if occur_prob >= presence_seed:
     
                                 # if we are passing a population
-                                if math.isnan(spc_dat.iat[0,spc_dat.columns.get_loc('param1')]):
+                                if math.isnan(spc_dat.iat[0,spc_dat.columns.get_loc('shape')]):
                                     n = np.int(spc_dat.iat[0,spc_dat.columns.get_loc('Fish')])
         
                                 # simulate a populution
