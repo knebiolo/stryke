@@ -1135,10 +1135,10 @@ class simulation():
         The entrainment rate is drawn from the specified distribution and adjusted
         for feasibility based on historical data.
         """
-        shape = spc_df.iat[0,'shape']
-        loc = spc_df.iat[0,'loc']
-        scale = spc_df.iat[0,'scale']
-        dist = spc_df.iat[0,'dist']
+        shape = spc_df.at[0,'shape']
+        loc = spc_df.at[0,'loc']
+        scale = spc_df.at[0,'scale']
+        dist = spc_df.at[0,'dist']
         # shape = spc_df.shape.values[0]
         # loc = spc_df.location.values[0]
         # scale = spc_df.scale.values[0]
