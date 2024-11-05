@@ -1331,9 +1331,9 @@ class simulation():
                 spc_dat = self.pop[(self.pop['Season'] == season) & (self.pop.Species == spc)]
 
                 # get scipy log normal distribution paramters - note values in centimeters
-                s = spc_dat.iat[0,spc_dat.columns.get_loc('shape')]
-                len_loc = spc_dat.iat[0,spc_dat.columns.get_loc('location')]
-                len_scale = spc_dat.iat[0,spc_dat.columns.get_loc('scale')]
+                s = spc_dat.iat[0,spc_dat.columns.get_loc('length shape')]
+                len_loc = spc_dat.iat[0,spc_dat.columns.get_loc('length location')]
+                len_scale = spc_dat.iat[0,spc_dat.columns.get_loc('length scale')]
 
                 # get a priori length 
                 mean_len = spc_dat.iat[0,spc_dat.columns.get_loc('Length_mean')]
