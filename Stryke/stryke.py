@@ -246,7 +246,7 @@ class simulation():
                     max_len = path_len
             self.moves = np.arange(0,max_len-1,1)
             
-    def Kaplan(length, param_dict):
+    def Kaplan(self,length, param_dict):
         
         """
         Calculates the probability of a fish surviving a blade strike in a Kaplan 
@@ -323,7 +323,7 @@ class simulation():
     
         return 1 - (p_strike)
     
-    def Propeller(length, param_dict):
+    def Propeller(self,length, param_dict):
         """
         Estimates the survival probability of a fish passing through a propeller 
         turbine, adapting the blade strike model from Franke et al. 1997. This 
@@ -409,7 +409,7 @@ class simulation():
     
         return 1 - (p_strike)
     
-    def Francis(length, param_dict):
+    def Francis(self,length, param_dict):
         """
         Calculates the survival probability of a fish passing through a Francis turbine,
         based on the blade strike model developed by Franke et al. 1997. This model 
@@ -491,7 +491,7 @@ class simulation():
     
         return 1 - p_strike  # Survival probability
     
-    def Pump(length, param_dict):
+    def Pump(self,length, param_dict):
         r''' pump mode calculations from fish entrainment analysis report:
             J:\1210\005\Docs\Entrainment\Entrainment Calcs\BladeStrike_CabotStation.xlsx'''
     
