@@ -1135,15 +1135,18 @@ class simulation():
         The entrainment rate is drawn from the specified distribution and adjusted
         for feasibility based on historical data.
         """
-        
-        shape = spc_df.shape.values[0]
-        loc = spc_df.location.values[0]
-        scale = spc_df.scale.values[0]
-        if spc_df.dist.values[0] == 'Pareto':
+        shape = spc_df.iat[0,'shape']
+        loc = spc_df.iat[0,'loc']
+        scale = spc_df.iat[0,'scale']
+        dist = spc_df.iat[0,'dist']
+        # shape = spc_df.shape.values[0]
+        # loc = spc_df.location.values[0]
+        # scale = spc_df.scale.values[0]
+        if dist == 'Pareto':
             ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
-        elif spc_df.dist.values[0] == 'Extreme':
+        elif dist == 'Extreme':
             ent_rate = genextreme.rvs(shape, loc, scale, 1, random_state=rng)
-        elif spc_df.dist.values[0] == 'Log Normal':
+        elif dist == 'Log Normal':
             ent_rate = lognorm.rvs(shape, loc, scale, 1, random_state=rng)
         else:
             ent_rate = weibull_min.rvs(shape, loc, scale, 1, random_state=rng)
