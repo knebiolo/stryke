@@ -14,12 +14,12 @@ import os
 import pandas as pd
 
 # read scenario worksheet
-ws = r'C:\Users\knebiolo\Desktop\EPRI Validation'
-wks = 'HUC02_Schaghticoke.xlsx'
+ws = r'C:\Users\knebiolo\Desktop\Stryke\stryke\Spreadsheet Interface'
+wks = 'Cabot_Beta_Test.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke.simulation(ws,wks, output_name = 'HUC02_Schaghticoke')
+simulation = stryke.simulation(ws,wks, output_name = 'Cabot_Beta_Test')
 
 simulation.run()
 simulation.summary()
