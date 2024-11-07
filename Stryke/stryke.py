@@ -41,7 +41,7 @@ warnings.filterwarnings("ignore")
 from scipy.stats import beta
 import xlrd
 import networkx as nx
-from stryke.hydrofunctions import hydrofunctions as hf
+from Stryke.hydrofunctions import hydrofunctions as hf
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
