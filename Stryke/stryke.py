@@ -147,11 +147,19 @@ class simulation():
                                              sheet_name = 'Unit Params', 
                                              header = 0, 
                                              index_col = None,
-                                             usecols = "B:R",
+                                             usecols = "B:S",
                                              skiprows = 4)
+            
+            self.facility_params = pd.read_excel(self.wks_dir,
+                                             sheet_name = 'Facilities', 
+                                             header = 0, 
+                                             index_col = None,
+                                             usecols = "B:D",
+                                             skiprows = 3)
+            self.facility_params.set_index('Facility', inplace = True)
 
             # get hydraulic capacity of facility
-            self.flow_cap = self.unit_params.Qcap.sum()
+            self.flow_cap = self.unit_params.groupby('Facility')['Qcap'].sum()
 
             # identify unique flow scenarios
             self.flow_scenarios_df = pd.read_excel(self.wks_dir,
@@ -1006,7 +1014,7 @@ class simulation():
                 flow_df = pd.concat([df, flow_df])             
         return flow_df
     
-    def daily_hours(self, ops_df, q_cap_dict, op_order_dict, operations = 'independent'):
+    def daily_hours(self, Q_dict, operations = 'independent'):
         """
         Simulates the daily operational hours of units in hydroelectric facilities,
         considering the facility type (Run-Of-River or peaking) and operational
@@ -1033,9 +1041,10 @@ class simulation():
         the operation of one unit depends on another. For Run-Of-River facilities,
         units operate 24/7, while peaking facilities may vary.
         """
-        order_swap = {v: k for k, v in op_order_dict.items()}
+
+        ops_df = self.operating_scenarios_df
         ops_df.set_index('Unit', inplace = True)
-        
+        facilities = ops_df.Facility.unique()
         # loop over units, build some dictionaries
         prev_unit_hours = None
         
@@ -1043,94 +1052,125 @@ class simulation():
         hours_operated = {}
         flow_dict = {}
         
-        # for each unit either simulate hours operated or write hours to dictionary
-        for i in np.arange(1,len(order_swap)+1,1):
-            unit = order_swap[i]
-            hours = ops_df.at[unit,'Hours']
-            
-            if np.isnan(hours):
-                # get log norm shape parameters
-                shape = ops_df.at[unit,'shape']
-                location = ops_df.at[unit,'location']
-                scale = ops_df.at[unit,'scale']
-                
-                hours_operated[unit] = lognorm.rvs(shape,location,scale,1000)
-                
-            else:
-                hours_dict[unit] = hours
-                flow_dict[unit] = q_cap_dict[unit] * hours * 3600.
+        ''' this is incorrect, it does not account for current discharge 
+        and whether or not the facility is capable of operation all units'''
+        curr_Q = Q_dict['curr_Q']   # current discharge
+        min_Q = Q_dict['min_Q']     # minimum operating discharge
+        sta_cap = Q_dict['sta_cap'] # station capacity
+        env_Q = Q_dict['env_Q']     # min environmental discharge 
+        bypass_Q = Q_dict['bypass_Q'] # how much discharge through downstream bypass sluice
+        prod_Q = curr_Q - env_Q - bypass_Q # how much water is left to use for production
         
-        # if operations are dependent, simulate hours operated
-        if np.isnan(hours):
-            for i in np.arange(1,len(order_swap)+1,1):
-                # flip a coin - see if this unit is running today
-                prob_not_operating = ops_df.at[unit,'Prob_Not_Op']
-                unit = order_swap[i]
-                
-                if operations == 'independent':
-                    if np.random.uniform(0,1,1) <= prob_not_operating:
-                        hours_dict[unit] = 0.
-                        flow_dict[unit] = 0.
-
-                    else:
-                        # TODO Bad Creek Analysis halved hours - change back
-                        hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
-
-                        if hours > 24.:
-                            hours = 24.
-                        elif hours < 0:
-                            hours = 0.
-                        hours_dict[unit] = hours
-                        flow_dict[unit] = q_cap_dict[unit] * hours * 3600.                   
-                elif operations == 'dependent':
-                    # if this is the first unit to be operated
-                    #TODO change this back to just 1 == 1 - updated for Bad Creek Analysis
-                    if i == 1:# or i == 5:
+        cum_Q = 0. # current amount of discharge passing through powerhouse
+        # for each unit either simulate hours operated or write hours to dictionary
+        for facility in facilities:
+            fac_type = self.facility_params.at[facility,'Operations']
+            fac_units = self.unit_params[self.unit_params.Facility == facility]
+            fac_units.set_index('Unit', inplace = True)
+            fac_units = fac_units.sort_values(by = 'op_order')
+            
+            # if operations are modeled with a distribution 
+            if fac_type != 'run of river':
+                for i in fac_units.Unit:
+                    order = fac_units.at[i,'op_order']
+                    # get log norm shape parameters
+                    shape = ops_df.at[i,'shape']
+                    location = ops_df.at[i,'location']
+                    scale = ops_df.at[i,'scale']
+                    
+                    hours_operated[i] = lognorm.rvs(shape,location,scale,1000)
+    
+                    # flip a coin - see if this unit is running today
+                    prob_not_operating = ops_df.at[i,'Prob_Not_Op']
+                    
+                    
+                    if operations == 'independent':
                         if np.random.uniform(0,1,1) <= prob_not_operating:
-                            hours_dict[unit] = 0.
-                            flow_dict[unit] = 0.
+                            hours_dict[i] = 0.
+                            flow_dict[i] = 0.
     
                         else:
                             # TODO Bad Creek Analysis halved hours - change back
                             hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
-
+    
                             if hours > 24.:
                                 hours = 24.
                             elif hours < 0:
                                 hours = 0.
-                            hours_dict[unit] = hours
-                            flow_dict[unit] = q_cap_dict[unit] * hours * 3600.
-
-                    # if it is any other unit        
-                    else:
-                        prev_hours = hours_dict[order_swap[i-1]]
-                        
-                        # if the previous unit ran
-                        if prev_hours > 0:
-                            hours_remain = np.where(hours_operated[unit] <= prev_hours, hours_operated[unit], np.nan)
-                            hours_remain = hours_remain[~np.isnan(hours_remain)]
-                            if len(hours_remain) > 0:
-                                fit_to_remain = lognorm.fit(hours_remain)
-                                if np.random.uniform(0,1,1) <= prob_not_operating:
-                                    hours_dict[unit] = 0.
-                                    flow_dict[unit] = 0.
-                                else:
-                                    # TODO Bad Creek Analysis halved hours - change back
-                                    hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0] #* 0.412290503
-
-                                    if hours > 24.:
-                                        hours = 24.
-                                    elif hours < 0:
-                                        hours = 0.
-                                    hours_dict[unit] = hours                        
-                                    flow_dict[unit] = q_cap_dict[unit] * hours * 3600.
-                            else:
-                                hours_dict[unit] = 0.
-                                flow_dict[unit] = 0.                            
-                        else:
-                            hours_dict[unit] = 0.
-                            flow_dict[unit] = 0.
+                            hours_dict[i] = hours
+                            flow_dict[i] = fac_units.at[i,'Q_cap'] * hours * 3600.    
                             
+                    elif operations == 'dependent':
+                        # if this is the first unit to be operated
+                        #TODO change this back to just 1 == 1 - updated for Bad Creek Analysis
+                        if order == 1:# or i == 5:
+                            if np.random.uniform(0,1,1) <= prob_not_operating:
+                                hours_dict[i] = 0.
+                                flow_dict[i] = 0.
+        
+                            else:
+                                # TODO Bad Creek Analysis halved hours - change back
+                                hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
+    
+                                if hours > 24.:
+                                    hours = 24.
+                                elif hours < 0:
+                                    hours = 0.
+                                hours_dict[i] = hours
+                                flow_dict[i] = fac_units.at[i,'Q_cap'] * hours * 3600.
+    
+                        # if it is any other unit        
+                        else:
+                            prev_unit = fac_units[fac_units.op_order == order -1].index
+                            prev_hours = hours_dict[prev_unit]
+                            
+                            # if the previous unit ran
+                            if prev_hours > 0:
+                                hours_remain = np.where(hours_operated[i] <= prev_hours, hours_operated[i], np.nan)
+                                hours_remain = hours_remain[~np.isnan(hours_remain)]
+                                if len(hours_remain) > 0:
+                                    fit_to_remain = lognorm.fit(hours_remain)
+                                    if np.random.uniform(0,1,1) <= prob_not_operating:
+                                        hours_dict[i] = 0.
+                                        flow_dict[i] = 0.
+                                    else:
+                                        # TODO Bad Creek Analysis halved hours - change back
+                                        hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0] #* 0.412290503
+    
+                                        if hours > 24.:
+                                            hours = 24.
+                                        elif hours < 0:
+                                            hours = 0.
+                                        hours_dict[i] = hours                        
+                                        flow_dict[i] = fac_units.at[i,'Q_cap'] * hours * 3600.
+                                else:
+                                    hours_dict[i] = 0.
+                                    flow_dict[i] = 0.                            
+                            else:
+                                hours_dict[i] = 0.
+                                flow_dict[i] = 0.
+            # if it's run of river, units operate when there is water
+            else:
+                at_capacity = False
+
+                for i in fac_units.index:
+                    hours = ops_df.at[i, 'Hours']
+                    u_cap = fac_units.at[i, 'Qcap']
+                    # Determine the effective capacity limit
+                    effective_cap = min(prod_Q, sta_cap)
+                    
+                    if cum_Q + u_cap <= effective_cap:
+                        hours_dict[i] = hours
+                        flow_dict[i] = u_cap * hours * 3600.
+                        cum_Q = cum_Q + u_cap
+                    else:
+                        excess = cum_Q + u_cap - effective_cap
+                        hours_dict[i] = hours
+                        flow_dict[i] = (u_cap - excess) * hours * 3600
+                        at_capacity = True
+                    if at_capacity:  # Exit the for loop if we are at capacity
+                            break
+
         # # implement Bad Creek algorithm here - is this method valid for new construction?
         # tot_hours = 0.
         # sum_pump_rate = 0.
@@ -1151,7 +1191,7 @@ class simulation():
         tot_flow = 0       
         tot_hours = 0   
                      
-        for u in op_order_dict.keys():
+        for u in hours_dict.keys():
             tot_hours = tot_hours + hours_dict[u]
             tot_flow = tot_flow + flow_dict[u]
                
@@ -1159,7 +1199,7 @@ class simulation():
             
         return tot_hours, tot_flow, hours_dict, flow_dict
         
-    def population_sim(self, spc_df, discharge_type, tot_hours, tot_flow, curr_Q):
+    def population_sim(self, spc_df, curr_Q):
         """
         Simulates a population of fish based on species-specific parameters and
         operational conditions of a hydroelectric facility. The function uses
@@ -1215,11 +1255,7 @@ class simulation():
             ent_rate = np.abs(ent_rate / 10**magnitudes)
             #print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
 
-        # because we are simulating passage via spill - we need the number of fish in the river at time, not just flowing through units
-        if discharge_type == 'fixed':
-            Mft3 = tot_flow/1000000
-        else:
-            Mft3 = (60 * 60 * tot_hours * curr_Q)/1000000
+        Mft3 = (60 * 60 * 24 * curr_Q)/1000000
 
         # calcualte sample size
         return np.round(Mft3 * ent_rate,0)[0]
@@ -1430,7 +1466,7 @@ class simulation():
                         Q_dict['sta_cap'] = sta_cap
 
                         # Are units running today? if they are - test for occurence
-                        tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(ops,q_cap_dict,op_order_dict, operations = 'independent')
+                        tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, operations = 'run-of-river')
                         
                         if tot_hours > 0:
                             '''we need to roll the dice here and determine whether or not fish are present at site'''
@@ -1444,7 +1480,7 @@ class simulation():
         
                                 # simulate a populution
                                 else:
-                                    n = self.population_sim(spc_dat, self.discharge_type,tot_hours,tot_flow,curr_Q)
+                                    n = self.population_sim(spc_dat,curr_Q)
                                 
                                 if np.int32(n) == 0:
                                     n = 1
@@ -1549,8 +1585,6 @@ class simulation():
                                                   'season':['{:50}'.format(season)],
                                                   'iteration':[np.int64(i)],
                                                   'day': [pd.to_datetime(day)],
-                                                  'unit_hours':[np.float64(tot_hours)],
-                                                  'total_volume':[np.float64(tot_flow)],
                                                   'flow':[np.float64(curr_Q)],
                                                   'pop_size':[np.int64(len(fishes))]}
                                 
@@ -1602,8 +1636,6 @@ class simulation():
                                                   'season':['{:50}'.format(season)],
                                                   'iteration':[np.int64(i)],
                                                   'day': [pd.to_datetime(day)],
-                                                  'unit_hours':[np.float64(tot_hours)],
-                                                  'total_volume':[np.float64(tot_flow)],
                                                   'flow':[np.float64(curr_Q)],
                                                   'pop_size':[np.int64(0)],
                                                   'num_entrained':[np.int64(0)],
@@ -1619,8 +1651,6 @@ class simulation():
                                               'season':['{:50}'.format(season)],
                                               'iteration':[np.int64(i)],
                                               'day': [pd.to_datetime(day)],
-                                              'unit_hours':[np.float64(tot_hours)],
-                                              'total_volume':[np.float64(tot_flow)],
                                               'flow':[np.float64(curr_Q)],
                                               'pop_size':[np.int64(0)],
                                               'num_entrained':[np.int64(0)],
@@ -1829,15 +1859,17 @@ class simulation():
                 cum_sum_dict['med_entrained'].append(idat.num_entrained.median())
                 cum_sum_dict['med_survived'].append(idat.num_survived.median())
                 
-                day_dat = self.daily_summary[(self.daily_summary.species == fishy) & (self.daily_summary.scenario == scen)]
+                day_dat = self.daily_summary[(self.daily_summary.species == fishy) & 
+                                             (self.daily_summary.scenario == scen) &
+                                             (self.daily_summary.num_entrained > 0)]
                 
                 # fit distribution to number entrained
-                dist = lognorm.fit(day_dat.num_entrained)
-                probs_ent = lognorm.sf([10,100,1000],dist[0],dist[1],dist[2])
+                dist = pareto.fit(np.log(day_dat.num_entrained))
+                probs_ent = pareto.sf([10,100,1000],dist[0],dist[1],dist[2])
                 
-                mean = lognorm.mean(dist[0],dist[1],dist[2])
-                lcl = lognorm.ppf(0.025,dist[0],dist[1],dist[2])
-                ucl = lognorm.ppf(0.975,dist[0],dist[1],dist[2])
+                mean = pareto.mean(dist[0],dist[1],dist[2])
+                lcl = pareto.ppf(0.025,dist[0],dist[1],dist[2])
+                ucl = pareto.ppf(0.975,dist[0],dist[1],dist[2])
                 
                 cum_sum_dict['mean_ent'].append(mean)
                 cum_sum_dict['lcl_ent'].append(lcl)
