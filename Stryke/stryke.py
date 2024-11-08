@@ -805,7 +805,7 @@ class simulation():
                         #     locs.append(i)
                         #     probs.append(bypass_Q / (curr_Q - bypass_Q))
 
-                    locs.append('bypass')
+                    locs.append('spill')
                     probs.append(1 - np.sum(probs)) 
                             
                 elif min_Q < curr_Q - env_Q >= sta_cap + bypass_Q and np.any(starts_with_U):
@@ -1222,13 +1222,16 @@ class simulation():
         The entrainment rate is drawn from the specified distribution and adjusted
         for feasibility based on historical data.
         """
-        shape = spc_df.at[0,'shape']
-        loc = spc_df.at[0,'location']
-        scale = spc_df.at[0,'scale']
-        dist = spc_df.at[0,'dist']
-        # shape = spc_df.shape.values[0]
-        # loc = spc_df.location.values[0]
-        # scale = spc_df.scale.values[0]
+        shape_col_num = spc_df.columns.get_loc('shape')
+        loc_col_num = spc_df.columns.get_loc('location')
+        scale_col_num = spc_df.columns.get_loc('scale')
+        dist_col_num = spc_df.columns.get_loc('dist')
+        
+        shape = spc_df.iat[0,shape_col_num]
+        loc = spc_df.iat[0,loc_col_num]
+        scale = spc_df.iat[0,scale_col_num]
+        dist = spc_df.iat[0,dist_col_num]
+
         if dist == 'Pareto':
             ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
         elif dist == 'Extreme':
@@ -1392,7 +1395,7 @@ class simulation():
             
             # get unit operations scenarios and extract data
             ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario Number'] == scen_num]
-            units = self.operating_scenarios_df.Unit.values
+            units = self.unit_params.Unit.values
 
             # identify the species we need to simulate for this scenario
             species = self.pop[self.pop['Season'] == season].Species.unique()
@@ -1468,7 +1471,7 @@ class simulation():
                         # Are units running today? if they are - test for occurence
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, operations = 'run-of-river')
                         
-                        if tot_hours > 0:
+                        if np.any(tot_hours > 0):
                             '''we need to roll the dice here and determine whether or not fish are present at site'''
                             presence_seed = np.random.uniform(0,1)
                             
@@ -1747,7 +1750,10 @@ class simulation():
 
             for j in scens:
                 # get daily data for this species/scenario
-                dat = self.hdf['simulations/%s/%s'%(j,i)]
+                try:
+                    dat = self.hdf['simulations/%s/%s'%(j,i)]
+                except:
+                    continue
 
                 # summarize species-scenario - whole project
                 whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
