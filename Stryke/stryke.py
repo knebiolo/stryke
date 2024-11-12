@@ -149,14 +149,18 @@ class simulation():
                                              index_col = None,
                                              usecols = "B:S",
                                              skiprows = 4)
+            self.unit_params.set_index('Unit',inplace = True)
             
             self.facility_params = pd.read_excel(self.wks_dir,
                                              sheet_name = 'Facilities', 
                                              header = 0, 
                                              index_col = None,
-                                             usecols = "B:D",
+                                             usecols = "B:H",
                                              skiprows = 3)
             self.facility_params.set_index('Facility', inplace = True)
+            # self.facility_params['Min_Op_Flow'] = self.facility_params.Min_Op_Flow.fillna(0)
+            # self.facility_params['Env_Flow'] = self.facility_params.Env_Flow.fillna(0)  
+            # self.facility_params['Bypass_Flow'] = self.facility_params.Bypass_Flow.fillna(0)
 
             # get hydraulic capacity of facility
             self.flow_cap = self.unit_params.groupby('Facility')['Qcap'].sum()
@@ -166,13 +170,9 @@ class simulation():
                                                    sheet_name = 'Flow Scenarios',
                                                    header = 0,
                                                    index_col = None, 
-                                                   usecols = "B:L", 
+                                                   usecols = "B:I", 
                                                    skiprows = 5, 
                                                    dtype = {'Gage':str})
-            
-            self.flow_scenarios_df['Min_Op_Flow'] = self.flow_scenarios_df.Min_Op_Flow.fillna(0)
-            self.flow_scenarios_df['Env_Flow'] = self.flow_scenarios_df.Env_Flow.fillna(0)  
-            self.flow_scenarios_df['Bypass_Flow'] = self.flow_scenarios_df.Bypass_Flow.fillna(0)  
 
             self.operating_scenarios_df = pd.read_excel(self.wks_dir,
                                                         sheet_name = 'Operating Scenarios', 
@@ -578,7 +578,10 @@ class simulation():
             return 0.0
         else:
             if surv_fun == 'a priori':
+                try:
                     prob = surv_dict[route]
+                except:
+                    print ('fuck')
     
             else:
                 param_dict = u_param_dict[route]
@@ -674,7 +677,16 @@ class simulation():
                 max_len = path_len
         self.moves = np.arange(0,max_len + 1,1)
     
-    def movement (self, location, status, swim_speed, graph, intake_vel_dict, Q_dict, op_order, cap_dict):
+    def movement (self,
+                  location,
+                  status, 
+                  swim_speed, 
+                  graph, 
+                  intake_vel_dict,
+                  Q_dict, 
+                  op_order, 
+                  cap_dict,
+                  unit_fac_dict):
         """
         Simulates the movement of a fish through a hydroelectric project's
         infrastructure, considering operational conditions, the fish's swimming
@@ -708,10 +720,10 @@ class simulation():
         inform management decisions and impact assessments within hydroelectric projects.
         """
         curr_Q = Q_dict['curr_Q']   # current discharge
-        min_Q = Q_dict['min_Q']     # minimum operating discharge
-        sta_cap = Q_dict['sta_cap'] # station capacity
-        env_Q = Q_dict['env_Q']     # min environmental discharge 
-        bypass_Q = Q_dict['bypass_Q'] # how much discharge through downstream bypass sluice
+        min_Q_dict = Q_dict['min_Q']     # minimum operating discharge
+        sta_cap_dict = Q_dict['sta_cap'] # station capacity
+        env_Q_dict = Q_dict['env_Q']     # min environmental discharge 
+        bypass_Q_dict = Q_dict['bypass_Q'] # how much discharge through downstream bypass sluice
         
         # if the fish is alive
         if status == 1:
@@ -726,104 +738,151 @@ class simulation():
                 # Check for "spill" in any part of the string or if it starts with an uppercase 'U'
                 found_spill = np.char.find(nbors, "spill") >= 0
                 starts_with_U = np.char.startswith(nbors, "U")
+                
+                
+                '''check to see if any neighbor starts with U - if it does, figure 
+                out that facility it belongs to and get the station capacity''' 
+                if np.any(starts_with_U):
+                    for i in nbors:
+                        # it's a unit
+                        try:
+                            facility = unit_fac_dict[i]
 
-                # when current discharge less than the min operating flow - everything is spilled:
-                if curr_Q <= min_Q and np.any(found_spill):
-                    for i in nbors:
-                        if i == 'spill':
-                            locs.append('spill')  
-                            probs.append(1.)  
-                        else:
-                            locs.append(i)
-                            probs.append(0.)
-                            
-                # when current discharge is greater than hydraulic capacity - excess water above the enviromental discharge are routed through spill:
-                elif curr_Q >= sta_cap + bypass_Q and np.any(found_spill):
-                    excess = curr_Q - sta_cap - env_Q
-                    tot_spill = excess + env_Q
-                    p_spill = tot_spill / curr_Q
-                    for i in nbors:
-                        if i == 'spill':
-                            locs.append('spill')  
-                            probs.append(p_spill)  
-                        else:
-                            locs.append(i)
-                            probs.append(1 - p_spill)
-                            
-                # when the current discharge is between min flows and station capacity - the spillway gets what it gets            
-                elif min_Q + env_Q < curr_Q < sta_cap and np.any(found_spill):
-                    p_env = env_Q / curr_Q
-                    for i in nbors:
-                        if i == 'spill':
-                            locs.append('spill')  
-                            probs.append(p_env)
-                        else:
-                            locs.append(i)
-                            probs.append(1 - p_env)
-                            
-                # When current discharge greater than the min operating flow but less than station capacity...
-                elif min_Q < curr_Q < sta_cap + bypass_Q and np.any(starts_with_U):
-                    # get flow remaining for production
-                    prod_Q = curr_Q - env_Q - bypass_Q
-                                    
-                    for i in nbors:
-                        if i[0] == 'U':
-                            unit_cap = Q_dict[i]
-                            order = op_order[i]
-                            
-                            # list units that turn on before this one
-                            prev_units = []
-                            for u in op_order:
-                                if op_order[u] < order:
-                                    prev_units.append(u)
-                            
-                            # calculate the amount of discharge going to this unit
-                            if len(prev_units) == 0:
-                                if prod_Q >= Q_dict[i]:
-                                    u_Q = Q_dict[i]
-                                else:
-                                    u_Q = prod_Q
-                            else:
-                                # need to figure out how much discharge is going to other units
-                                prev_Q = 0
-                                for j in prev_units:
-                                    prev_Q = prev_Q + Q_dict[j]
+                        # nope it's a bypass
+                        except:
+                            for j in nbors:
+                                if 'U' in j:
+                                    facility = self.unit_params.at[j,'Facility']
+                                    continue
+                        sta_cap = sta_cap_dict[facility]
+                        min_Q =  min_Q_dict[facility]
+                        env_Q = env_Q_dict[facility]
+                        bypass_Q = bypass_Q_dict[facility]
                                 
-                                if prev_Q > prod_Q:
-                                    u_Q = 0.0
+                        # When current discharge greater than the min operating flow but less than station capacity...
+                        if min_Q < curr_Q < sta_cap + bypass_Q:
+                            # get flow remaining for production
+                            excess = curr_Q - (sta_cap + env_Q + bypass_Q)
+                            if excess >= 0:
+                                prod_Q = curr_Q - env_Q - bypass_Q - excess
+                            else:
+                                prod_Q = curr_Q - env_Q - bypass_Q
+                            
+                            if i[0] == 'U':
+                                unit_cap = Q_dict[i]
+                                order = op_order[i]
+                                
+                                # list units that turn on before this one
+                                prev_units = []
+                                for u in op_order:
+                                    fac = unit_fac_dict[u]
+                                    if fac == facility:
+                                        if op_order[u] < order:
+                                            prev_units.append(u)
+                                
+                                # calculate the amount of discharge going to this unit
+                                if len(prev_units) == 0:
+                                    if prod_Q >= Q_dict[i]:
+                                        u_Q = Q_dict[i]
+                                    else:
+                                        u_Q = prod_Q
                                 else:
-                                    u_Q = prod_Q - prev_Q
-                                    if u_Q > unit_cap:
-                                        u_Q = unit_cap
-                            
-                            # write data to arrays
-                            locs.append(i)
-    
-                            probs.append(round(u_Q/(sta_cap + bypass_Q),5))
-                            del u_Q, prev_units
-                        # else:
-                        #     locs.append(i)
-                        #     probs.append(bypass_Q / (curr_Q - bypass_Q))
-
-                    locs.append('spill')
-                    probs.append(1 - np.sum(probs)) 
-                            
-                elif min_Q < curr_Q - env_Q >= sta_cap + bypass_Q and np.any(starts_with_U):
-                    excess = curr_Q - (sta_cap + bypass_Q) 
+                                    # need to figure out how much discharge is going to other units
+                                    prev_Q = 0
+                                    for j in prev_units:
+                                        prev_Q = prev_Q + Q_dict[j]
+                                    
+                                    if prev_Q >= prod_Q:
+                                        u_Q = 0.0
+                                    else:
+                                        u_Q = prod_Q - prev_Q
+                                        if u_Q > unit_cap:
+                                            u_Q = unit_cap
+                                
+                                # write data to arrays
+                                locs.append(i)
+        
+                                probs.append(u_Q/(prod_Q  + bypass_Q))
+                                del u_Q, prev_units
+                            else:
+                                locs.append(i)
+                                probs.append(bypass_Q / (prod_Q + bypass_Q))
+                        
+                        # when the current discharge is larger than the station capacity and bypass flows
+                        elif curr_Q >= sta_cap + bypass_Q:
+                            excess = curr_Q - (sta_cap + bypass_Q + env_Q) 
+                            if i[0] == 'U':
+                                q_cap = cap_dict[i]
+                                locs.append(i)
+                                probs.append(q_cap / (sta_cap + bypass_Q))
+                            else:
+                                locs.append(i)
+                                probs.append(bypass_Q / (sta_cap + bypass_Q))
+        
+                elif np.any(found_spill):
+                    # first characterize discharge at this spillway - how much flow
+                    # is provided for production and what is excess?
+                    # get facility associated with this spillway
                     for i in nbors:
-                        if i[0] == 'U':
-                            q_cap = cap_dict[i]
-                            locs.append(i)
-                            #probs.append(q_cap / (curr_Q - bypass_Q))
-                            probs.append(q_cap / (curr_Q - excess))
-                        else:
-                            locs.append(i)
-                            #probs.append(bypass_Q / (curr_Q - env_Q - bypass_Q))
-                            probs.append(bypass_Q / (curr_Q - excess))
+                        if 'spill' in i:
+                            facilities = self.facility_params[self.facility_params.Spillway == i].index
+                    del i
 
+                    # how much discharge is accounted for at facilities associated with this spill?
+                    sta_cap = 0 
+                    min_Q = 0 
+                    env_Q = 0
+                    bypass_Q = 0
                     
-                # the weirghts you provided in the setup sheet determine probability of movement
+                    # sum up all non spill flows associated with this spillway
+                    for i in facilities:
+                        sta_cap_fac = sta_cap_dict[i]
+                        min_Q_fac =  min_Q_dict[i]
+                        env_Q_fac = env_Q_dict[i]
+                        bypass_Q_fac = bypass_Q_dict[i]
+                        sta_cap = sta_cap + sta_cap_fac
+                        min_Q = min_Q + min_Q_fac
+                        env_Q = env_Q + env_Q
+                        bypass_Q = bypass_Q + bypass_Q_fac
+                        
+                    # when current discharge less than the min operating flow - everything is spilled:
+                    for i in nbors:
+
+                        if curr_Q <= min_Q:
+                            if 'spill' in i:
+                                locs.append(i)  
+                                probs.append(1.)  
+                            else:
+                                locs.append(i)
+                                probs.append(0.)
+                                
+                        # when current discharge is greater than hydraulic capacity - excess water above the enviromental discharge are routed through spill:
+                        elif curr_Q >= np.sum(list(sta_cap_dict.values())) + env_Q + bypass_Q:
+                            #TODO 
+                            ''' Is this logic correct, do we need to know what facility 
+                            they are interacting with?  should there be a facility to spill
+                            relationship?'''
+                            excess = curr_Q - np.sum(list(sta_cap_dict.values())) - bypass_Q - env_Q
+                            tot_spill = excess + env_Q
+                            p_spill = tot_spill / curr_Q
+                            if 'spill' in i:
+                                locs.append(i)  
+                                probs.append(p_spill)  
+                            else:
+                                locs.append(i)
+                                probs.append(1 - p_spill)
+                                
+                        # when the current discharge is between min flows and station capacity - the spillway gets what it gets            
+                        elif curr_Q < np.sum(list(sta_cap_dict.values())) + env_Q + bypass_Q:
+                            p_env = env_Q / curr_Q
+                            if 'spill' in i:
+                                locs.append(i)  
+                                probs.append(p_env)
+                            else:
+                                locs.append(i)
+                                probs.append(1 - p_env)
                 else:
+                    # the weights you provided in the setup sheet determine probability of movement
                     for i in nbors:
                         locs.append(i)
                         edge = location, i
@@ -844,7 +903,7 @@ class simulation():
             #probs = np.array(probs) / np.sum(np.array(probs))
             try:
                 new_loc = np.random.choice(locs,1,p = probs)[0]
-            except ValueError:
+            except:
                 print ('fuck')
 
             del nbors, locs, probs
@@ -858,8 +917,11 @@ class simulation():
         # if the fish is dead, it can't move
         else:
             new_loc = location
-    
-        return new_loc
+        try:
+            
+            return new_loc
+        except:
+            print ('fuck')
     
     def speed (L,A,M):
         """
@@ -1014,7 +1076,7 @@ class simulation():
                 flow_df = pd.concat([df, flow_df])             
         return flow_df
     
-    def daily_hours(self, Q_dict, operations = 'independent'):
+    def daily_hours(self, Q_dict, season, operations = 'independent'):
         """
         Simulates the daily operational hours of units in hydroelectric facilities,
         considering the facility type (Run-Of-River or peaking) and operational
@@ -1042,9 +1104,12 @@ class simulation():
         units operate 24/7, while peaking facilities may vary.
         """
 
-        ops_df = self.operating_scenarios_df
+        ops_df = self.operating_scenarios_df[self.operating_scenarios_df.Season == season]
         ops_df.set_index('Unit', inplace = True)
         facilities = ops_df.Facility.unique()
+        
+        seasonal_facs = self.facility_params[self.facility_params.Season == season]
+        #seasonal_facs.set_index('Facility', inplace = True)
         # loop over units, build some dictionaries
         prev_unit_hours = None
         
@@ -1054,24 +1119,26 @@ class simulation():
         
         ''' this is incorrect, it does not account for current discharge 
         and whether or not the facility is capable of operation all units'''
-        curr_Q = Q_dict['curr_Q']   # current discharge
-        min_Q = Q_dict['min_Q']     # minimum operating discharge
-        sta_cap = Q_dict['sta_cap'] # station capacity
-        env_Q = Q_dict['env_Q']     # min environmental discharge 
-        bypass_Q = Q_dict['bypass_Q'] # how much discharge through downstream bypass sluice
-        prod_Q = curr_Q - env_Q - bypass_Q # how much water is left to use for production
+
         
         cum_Q = 0. # current amount of discharge passing through powerhouse
         # for each unit either simulate hours operated or write hours to dictionary
         for facility in facilities:
-            fac_type = self.facility_params.at[facility,'Operations']
+            curr_Q = Q_dict['curr_Q']   # current discharge
+            min_Q = Q_dict['min_Q'][facility]     # minimum operating discharge
+            sta_cap = Q_dict['sta_cap'][facility] # station capacity
+            env_Q = Q_dict['env_Q'][facility]     # min environmental discharge 
+            bypass_Q = Q_dict['bypass_Q'][facility] # how much discharge through downstream bypass sluice
+            prod_Q = curr_Q - env_Q - bypass_Q # how much water is left to use for production
+
+            fac_type = seasonal_facs.at[facility,'Operations']
             fac_units = self.unit_params[self.unit_params.Facility == facility]
-            fac_units.set_index('Unit', inplace = True)
+            #fac_units.set_index('Unit', inplace = True)
             fac_units = fac_units.sort_values(by = 'op_order')
             
             # if operations are modeled with a distribution 
             if fac_type != 'run of river':
-                for i in fac_units.Unit:
+                for i in fac_units.index:
                     order = fac_units.at[i,'op_order']
                     # get log norm shape parameters
                     shape = ops_df.at[i,'shape']
@@ -1082,7 +1149,6 @@ class simulation():
     
                     # flip a coin - see if this unit is running today
                     prob_not_operating = ops_df.at[i,'Prob_Not_Op']
-                    
                     
                     if operations == 'independent':
                         if np.random.uniform(0,1,1) <= prob_not_operating:
@@ -1312,54 +1378,55 @@ class simulation():
         units = []
         op_order_dict = {}
         q_cap_dict = {}
-        
+        unit_fac_dict = {}
         # for every unit, build a whole bunch of dictionaries to pass information        
-        for row in self.unit_params.iterrows():
-            unit = row[1]['Unit']
-            q_cap_dict[unit] = row[1]['Qcap']
+        for index, row in self.unit_params.iterrows():
+            unit = index
+            unit_fac_dict[unit] = row['Facility']
+            q_cap_dict[unit] = row['Qcap']
 
-            runner_type = row[1]['Runner Type']
-            intake_vel_dict[row[1]['Unit']] = row[1]['intake_vel']
+            runner_type = row['Runner Type']
+            intake_vel_dict[unit] = row['intake_vel']
             units.append(unit)
-            op_order_dict[unit] = row[1]['op_order']
+            op_order_dict[unit] = row['op_order']
                 
             # create parameter dictionary for every unit, a dictionary in a dictionary
             if runner_type == 'Kaplan':
                 # built a parameter dictionary for the kaplan function
-                param_dict = {'H':float(row[1]['H']),
-                              'RPM':float(row[1]['RPM']),
-                              'D':float(row[1]['D']),
-                              'ada':float(row[1]['ada']),
-                              'N':float(row[1]['N']),
-                              'Qopt':float(row[1]['Qopt']),
-                              '_lambda':float(row[1]['lambda'])}
+                param_dict = {'H':float(row['H']),
+                              'RPM':float(row['RPM']),
+                              'D':float(row['D']),
+                              'ada':float(row['ada']),
+                              'N':float(row['N']),
+                              'Qopt':float(row['Qopt']),
+                              '_lambda':float(row['lambda'])}
                 u_param_dict[unit] = param_dict
 
             elif runner_type == 'Propeller':
                 # built a parameter dictionary for the kaplan function
-                param_dict = {'H':float(row[1]['H']),
-                              'RPM':float(row[1]['RPM']),
-                              'D':float(row[1]['D']),
-                              'ada':float(row[1]['ada']),
-                              'N':float(row[1]['N']),
-                              'Qopt':float(row[1]['Qopt']),
-                              'Qper':row[1]['Qper'],
-                              '_lambda':float(row[1]['lambda'])}
+                param_dict = {'H':float(row['H']),
+                              'RPM':float(row['RPM']),
+                              'D':float(row['D']),
+                              'ada':float(row['ada']),
+                              'N':float(row['N']),
+                              'Qopt':float(row['Qopt']),
+                              'Qper':row['Qper'],
+                              '_lambda':float(row['lambda'])}
                 u_param_dict[unit] = param_dict                       
                 
             elif runner_type == 'Francis':
                 # built a parameter dictionary for the Francis function
-                param_dict = {'H':float(row[1]['H']),
-                              'RPM':float(row[1]['RPM']),
-                              'D':float(row[1]['D']),
-                              'ada':float(row[1]['ada']),
-                              'N':float(row[1]['N']),
-                              'Qper':float (row[1]['Qper']),
-                              'iota' : float (row[1]['iota']),
-                              'D1' : float (row[1]['D1']),
-                              'D2' : float (row[1]['D2']),
-                              'B' : float (row[1]['B']),
-                              '_lambda':float(row[1]['lambda'])}
+                param_dict = {'H':float(row['H']),
+                              'RPM':float(row['RPM']),
+                              'D':float(row['D']),
+                              'ada':float(row['ada']),
+                              'N':float(row['N']),
+                              'Qper':float (row['Qper']),
+                              'iota' : float (row['iota']),
+                              'D1' : float (row['D1']),
+                              'D2' : float (row['D2']),
+                              'B' : float (row['B']),
+                              '_lambda':float(row['lambda'])}
                 u_param_dict[unit] = param_dict
 
         # create survival dictionary, which is a dictionary of a priori surival rates
@@ -1377,9 +1444,7 @@ class simulation():
             season = scen_df.iat[0,scen_df.columns.get_loc('Season')]                                 
             scenario = scen_df.iat[0,scen_df.columns.get_loc('Scenario')]
             scen_months = scen_df.iat[0,scen_df.columns.get_loc('Months')]
-            min_Q = scen_df.iat[0,scen_df.columns.get_loc('Min_Op_Flow')]
-            env_Q = scen_df.iat[0,scen_df.columns.get_loc('Env_Flow')]
-            bypass_Q = scen_df.iat[0,scen_df.columns.get_loc('Bypass_Flow')]
+
             
             if scen_df.iat[0,scen_df.columns.get_loc('Flow')] == 'hydrograph':
                 self.discharge_type = 'hydrograph'
@@ -1395,7 +1460,7 @@ class simulation():
             
             # get unit operations scenarios and extract data
             ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario Number'] == scen_num]
-            units = self.unit_params.Unit.values
+            units = self.unit_params.index
 
             # identify the species we need to simulate for this scenario
             species = self.pop[self.pop['Season'] == season].Species.unique()
@@ -1452,24 +1517,38 @@ class simulation():
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
                         day = flow_row[1]['datetimeUTC']
                         
-                        # create a Q dictionary - which is used for the movement function 
-                        Q_dict = {'curr_Q': curr_Q,
-                                  'min_Q': min_Q,
-                                  'env_Q': env_Q,
-                                  'bypass_Q': bypass_Q}
-                        
+                        # create a Q dictionary - which is used for the movement function
+                        Q_dict = {'curr_Q': curr_Q}
+                        min_Q_dict = {}
+                        env_Q_dict = {}
+                        bypass_Q_dict = {}
+                        for index, row in self.facility_params[self.facility_params.Season == season].iterrows():
+                            min_Q = row['Min_Op_Flow']
+                            env_Q = row['Env_Flow']
+                            bypass_Q = row['Bypass_Flow']
+                            fac = index
+                            min_Q_dict[fac] = min_Q
+                            env_Q_dict[fac] = env_Q
+                            bypass_Q_dict[fac] = bypass_Q
+                        Q_dict['min_Q'] = min_Q_dict
+                        Q_dict['env_Q'] = env_Q_dict
+                        Q_dict['bypass_Q'] = bypass_Q_dict
+
                         # for unit in units, add curr_Q to u_param_dict, add each unit capacity to Q_dict
-                        sta_cap = 0.0
+                        sta_cap = {}
                         for u in units:
                             u_param_dict[u]['Q'] = curr_Q
-                            unit_df = self.unit_params[self.unit_params.Unit == u]
+                            unit_df = self.unit_params.loc[[u]]
+                            fac = unit_df.iat[0,unit_df.columns.get_loc('Facility')]
+                            if fac not in sta_cap:
+                                sta_cap[fac] = 0
                             Q_dict[u] = unit_df.iat[0,unit_df.columns.get_loc('Qcap')]
-                            sta_cap = sta_cap + unit_df.iat[0,unit_df.columns.get_loc('Qcap')]
+                            sta_cap[fac] = sta_cap[fac] + unit_df.iat[0,unit_df.columns.get_loc('Qcap')]
                             
                         Q_dict['sta_cap'] = sta_cap
 
                         # Are units running today? if they are - test for occurence
-                        tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, operations = 'run-of-river')
+                        tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, season)
                         
                         if np.any(tot_hours > 0):
                             '''we need to roll the dice here and determine whether or not fish are present at site'''
@@ -1554,7 +1633,7 @@ class simulation():
                                     # simulate movement
                                     if k < max(self.moves):
                                         # vectorize movement function
-                                        v_movement = np.vectorize(self.movement,excluded = [3,4,5,6,7])
+                                        v_movement = np.vectorize(self.movement,excluded = [3,4,5,6,7,8])
                                         
                                         # have fish move to the next node
                                         move = v_movement(location, 
@@ -1564,7 +1643,8 @@ class simulation():
                                                           intake_vel_dict,
                                                           Q_dict,
                                                           op_order_dict,
-                                                          q_cap_dict)
+                                                          q_cap_dict,
+                                                          unit_fac_dict)
     
                                     # add onto iteration dataframe, attach columns
                                     fishes['draw_%s'%(k)] = np.float32(dice)
@@ -1575,12 +1655,16 @@ class simulation():
                                         fishes['state_%s'%(k+1)] = move
     
                                 # save that data
+                                max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
+
+
                                 fishes.to_hdf(self.hdf,
-                                              key = 'simulations/%s/%s'%(scen,spc),
-                                              mode = 'a',
-                                              format = 'table',
-                                              append = True)
-                                self.hdf.flush()                               
+                                              key=f'simulations/{scen}/{spc}',
+                                              mode='a',
+                                              format='table',
+                                              append=True,
+                                              min_itemsize=20)  # Replace 'column_name' with your actual column name
+                                self.hdf.flush()                              
                                 
                                 # start filling in that summary dictionar
                                 daily_row_dict = {'species':['{:50}'.format(spc)],
@@ -1733,7 +1817,7 @@ class simulation():
         scens = scen.Scenario.unique()
 
         # get units
-        units = self.hdf['Unit_Parameters'].Unit.values
+        units = self.hdf['Unit_Parameters'].index
 
         self.daily_summary = self.hdf['Daily']
         self.daily_summary.iloc[:,6:] = self.daily_summary.iloc[:,6:].astype(float)
