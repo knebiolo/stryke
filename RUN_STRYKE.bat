@@ -18,11 +18,37 @@ set "SCRIPT_PATH=%BAT_PATH%Scripts\run_simulation_voila.py"
 
 echo Launching Stryke . . .
 
+
+
+:: Check for Anaconda installation in different locations
+set "ACTIVATE_SCRIPT="
+if exist "C:\ProgramData\Anaconda3\Scripts\activate.bat" (
+    set "ACTIVATE_SCRIPT=C:\ProgramData\Anaconda3\Scripts\activate.bat"
+) else if exist "C:\Users\%USER_NAME%\AppData\Local\anaconda3\Scripts\activate.bat" (
+    set "ACTIVATE_SCRIPT=C:\Users\%USER_NAME%\AppData\Local\anaconda3\Scripts\activate.bat"
+) else (
+    echo Error: Could not find Anaconda installation.
+    pause
+    exit /b
+)
+
+
 :: Activate the Conda environment
-call C:\ProgramData\Anaconda3\Scripts\activate.bat
+call "%ACTIVATE_SCRIPT%"
 call conda activate stryke
+
+
+:: old ->
+:: Activate the Conda environment
+::call C:\ProgramData\Anaconda3\Scripts\activate.bat
+::call conda activate stryke
+
+
 
 :: Launch the Jupyter Notebook with Voila
 call voila "%NOTEBOOK_PATH%"
 
 pause
+
+
+
