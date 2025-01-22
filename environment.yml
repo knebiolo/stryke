@@ -53,6 +53,7 @@ dependencies:
   - intervaltree=3.1.0=pyhd3eb1b0_0
   - ipykernel=6.29.5=py312haa95532_0
   - ipywidgets=8.1.5=pyhd8ed1ab_1
+  - ipyfilechooser=0.6.0=pyhd8ed1ab_0
   - isort=5.13.2=py312haa95532_0
   - jaraco.classes=3.2.1=pyhd3eb1b0_0
   - jedi=0.19.1=py312haa95532_0
