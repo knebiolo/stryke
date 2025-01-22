@@ -26,7 +26,7 @@ This project requires specific Python libraries to run properly. To make it easy
 2. Click on `File > Clone Repository...`.
 3. Select this repository from the list or paste the repository URL.
 4. Choose the folder where you want to save the repository locally.
-5. Click `Clone` to download the repository to your machine.
+5. Click `Clone` to download the repository to your machine. 
 
 ### 2. Open Anaconda Navigator
 1. Launch **Anaconda Navigator**.
