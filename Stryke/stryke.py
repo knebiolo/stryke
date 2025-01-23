@@ -46,7 +46,7 @@ import requests
 #import geopandas as gp
 import statsmodels.api as sm
 import math
-from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r, ks_2samp
+from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r, ks_2samp, norm
 import h5py
 #import tables
 from numpy.random import default_rng
@@ -584,6 +584,10 @@ class simulation():
                     print ('fuck')
     
             else:
+                #TODO add impingement logic, bring in tail aspect
+                
+                #TODO add in barotrauma logic
+                
                 param_dict = u_param_dict[route]
                 # if survival is assessed at a Kaplan turbine:
                 if surv_fun == 'Kaplan':
@@ -917,12 +921,9 @@ class simulation():
         # if the fish is dead, it can't move
         else:
             new_loc = location
-        try:
             
-            return new_loc
-        except:
-            print ('fuck')
-    
+        return new_loc
+
     def speed (L,A,M):
         """
         Calculates swimming speed based on fish length, caudal fin aspect ratio,
@@ -1618,7 +1619,7 @@ class simulation():
                                     try:
                                         surv_fun = v_surv_fun(location,self.surv_fun_dict)
                                     except:
-                                        print ('fuck')
+                                        print ('problem with survival function')
     
                                     # simulate survival draws
                                     dice = np.random.uniform(0.,1.,np.int32(n))
@@ -1950,17 +1951,19 @@ class simulation():
                 cum_sum_dict['med_survived'].append(idat.num_survived.median())
                 
                 day_dat = self.daily_summary[(self.daily_summary.species == fishy) & 
-                                             (self.daily_summary.scenario == scen) &
-                                             (self.daily_summary.num_entrained > 0)]
+                                             (self.daily_summary.scenario == scen)]# &
+                                             #(self.daily_summary.num_entrained > 0)]
                 
-                # fit distribution to number entrained
-                dist = pareto.fit(np.log(day_dat.num_entrained))
-                probs_ent = pareto.sf([10,100,1000],dist[0],dist[1],dist[2])
+                # fit distribution to number entrained per day
+                dist = genpareto.fit(day_dat.num_entrained)
+                probs_ent = genpareto.sf([10,100,1000],dist[0],dist[1],dist[2])
                 
-                mean = pareto.mean(dist[0],dist[1],dist[2])
-                lcl = pareto.ppf(0.025,dist[0],dist[1],dist[2])
-                ucl = pareto.ppf(0.975,dist[0],dist[1],dist[2])
-                
+                # fit distribution to number entrained per year
+                dist2 = norm.fit(idat.num_entrained)
+                mean = norm.mean(dist2[0],dist2[1])
+                lcl = norm.ppf(0.025,dist2[0],dist2[1])
+                ucl = norm.ppf(0.975,dist2[0],dist2[1])
+
                 cum_sum_dict['mean_ent'].append(mean)
                 cum_sum_dict['lcl_ent'].append(lcl)
                 cum_sum_dict['ucl_ent'].append(ucl)
