@@ -40,7 +40,7 @@ def calc_k_viscosity(d_viscosity, density):
     
     return k_viscosity
 
-def calc_friction(K, ps_d, v, f_d, k_v):
+def calc_friction(K, ps_d, v, k_v):
     """
     Approximates friction factor for Darcy-Weisbach. Uses Reynolds Number, assumes circular cross section.
     
@@ -48,7 +48,6 @@ def calc_friction(K, ps_d, v, f_d, k_v):
     K: absolute roughness
     ps_d: penstock diameter
     v: flow velocity
-    f_d: flow depth
     k_v: kinematic viscosity of the fluid  
     
     outputs:
@@ -59,14 +58,16 @@ def calc_friction(K, ps_d, v, f_d, k_v):
     rel_r = K/ps_d
     
     # compute Reynolds number
-    Re = v*f_d/k_v
+    Re = v*ps_d/k_v
     
     # use an equation with similar accuracy Colebrook-White (eq 8.4 in Miller)
     f = 0.25 / (np.log((rel_r/(3.7*ps_d)) + (5.74/Re**0.9)))**2
     
     return f
 
-def calc_h_loss(f, ps_l, ps_d, v_head):
+
+
+def calc_h_loss(f, ps_l, ps_d, v):
     """
     Calculates total head loss due to friction from Darcy-Weisbach equation.
     
@@ -80,7 +81,12 @@ def calc_h_loss(f, ps_l, ps_d, v_head):
     h_loss: total head loss due to friction
     
     """
+    g = scipy.constants.g
     
+    # calculate velocity head
+    v_head = ((v_1**v_1)/2*g)
+    
+    # calculate head loss
     h_loss = f*(ps_l/ps_d)*v_head
     
     return h_loss
@@ -100,7 +106,7 @@ def calc_p_2(p_atm, density, h_D):
     """
     
     g = scipy.constants.g
-    #p_atm = scipy.constants.atm
+    p_atm = scipy.constants.atm
     
     p_2 = p_atm + density*g*h_D
     
