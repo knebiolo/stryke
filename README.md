@@ -75,7 +75,7 @@ On the **Flow Scenarios** tab, you will note 10 columns: Scenario Number, Scenar
 |Flow             |String     |(required) value must be 'hydrograph'                                                          |
 |Min_Op_Flow      |Float      |(required) minimum operating discharge, if unknown enter 0                                     |
 |Env_Flow         |Float      |(required) minimum release discharge, if unknown enter 0                                       |
-|Gage             |String     |(required) USGS Gage Number 8 character length                                                 |
+|Gage             |String     |(not required) USGS Gage Number 8 character length, if blank user provides hydrograph          |
 |Prorate          |Float      |(required) project watershed: USGS watershed ratio                                             |
 |Season           |String     |(required) hydrologic season, e.g. winter                                                      |
 |Months           |List       |(required) list of calendar months that make up a hydrologic season, values separated by commas |
@@ -83,6 +83,17 @@ On the **Flow Scenarios** tab, you will note 10 columns: Scenario Number, Scenar
 When set up properly, the **Flow Scenarios** tab should look like the following image.  Note, we are using meteorological seasons as our hydrologic seasons.  However, this isn't required. You can use any season as long as it is a list of integers separated by commas. 
 
 ![native flow scenarios](https://github.com/knebiolo/stryke/assets/61742537/2ac59f67-d3fd-45c6-93bc-59a6f3aa80e7)
+
+## Hydrology
+
+For projects in the United States, Stryke utilizes the Python library 'Hydrofunctions' to fetch stream gage data from the United States Geological Service.  However, there is no such library that fetches Canadian stream gage data.  Therefore, the Canadian end user must provide their own hydrograph.  There may also be projects within the United States that want to provide their own simulated hydrograph to study climate change scenarios.  The default default unit is cubic meters per second, but this can be switched to cubic feet per second.  
+
+| Field           | Data Type |                                             Comment                                           |
+|-----------------|-----------|-----------------------------------------------------------------------------------------------|
+|Date             |DateTime   |(required) Excel formatted data, on import converted to YYYY-MM-DD format                      |
+|Discahrge        |Float      |(required) daily average discharge in CMS or CFS                                               |
+
+![hydrology tab](https://github.com/knebiolo/stryke/blob/master/hydrology_tab.jpg)
 
 ## Operating Scenarios
 
