@@ -82,7 +82,7 @@ On the **Flow Scenarios** tab, you will note 10 columns: Scenario Number, Scenar
 
 When set up properly, the **Flow Scenarios** tab should look like the following image.  Note, we are using meteorological seasons as our hydrologic seasons.  However, this isn't required. You can use any season as long as it is a list of integers separated by commas. 
 
-![native flow scenarios](https://github.com/knebiolo/stryke/assets/61742537/2ac59f67-d3fd-45c6-93bc-59a6f3aa80e7)
+![native flow scenarios](https://github.com/knebiolo/stryke/blob/master/flow_scenarios_tab.jpg)
 
 ## Hydrology
 
