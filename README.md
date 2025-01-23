@@ -73,8 +73,6 @@ On the **Flow Scenarios** tab, you will note 10 columns: Scenario Number, Scenar
 |Scenario Number  |Integer    |(required) scenario number.  **must be unique**                                                |
 |Scenario         |String     |(required) name of scenario, not more than 50 characters                                       |
 |Flow             |String     |(required) value must be 'hydrograph'                                                          |
-|Min_Op_Flow      |Float      |(required) minimum operating discharge, if unknown enter 0                                     |
-|Env_Flow         |Float      |(required) minimum release discharge, if unknown enter 0                                       |
 |Gage             |String     |(not required) USGS Gage Number 8 character length, if blank user provides hydrograph          |
 |Prorate          |Float      |(required) project watershed: USGS watershed ratio                                             |
 |Season           |String     |(required) hydrologic season, e.g. winter                                                      |
@@ -94,6 +92,21 @@ For projects in the United States, Stryke utilizes the Python library 'Hydrofunc
 |Discahrge        |Float      |(required) daily average discharge in CMS or CFS                                               |
 
 ![hydrology tab](https://github.com/knebiolo/stryke/blob/master/hydrology_tab.jpg)
+
+## Facilities
+Stryke is capable of simulating survival and movement through a complex migratory network that can include multiple dependent facilities.  The Facilities tab contains information describing operations and seasonal minimum flow releases for each simulated powerhouse.
+
+| Field           | Data Type |                                             Comment                                           |
+|-----------------|-----------|-----------------------------------------------------------------------------------------------|
+|Facility         |String     |(required) Facility/Powerhouse name.  **must be unique**                                       |
+|Season           |String     |(required) hydrologic season, must be listed on Flow Scenarios tab                             |
+|Operations       |String     |(required) pull down, choose between 'run-of-river', 'pumped storage', or 'peaking'            |
+|Min_Op_Flow      |Float      |(required) minimum operating discharge, if unknown enter 0                                     |
+|Env_Flow         |Float      |(required) minimum release discharge, if unknown enter 0                                       |
+|Bypass_Flow      |Float      |(required) minimum discharge through downstream bypass structure, if unknown enter 0           |
+|Spillway         |String     |(required) spillway that services a particular facility                                        |
+
+![facilities_tab](https://github.com/knebiolo/stryke/blob/master/facilities_tab.jpg)
 
 ## Operating Scenarios
 
