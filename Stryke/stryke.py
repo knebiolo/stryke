@@ -21,8 +21,10 @@ which is modeled with the Franke et. al. 1997 equations.  For fish that pass
 via passage structures or spill, mortality is assessed with a roll of the dice
 using survival metrics determined a priori or sourced from similar studies.
 
-Unfortunately units are in feet - wtf - why can't we get over ourselves and adopt
-metric.  God damnit I hate us sometimes
+Unfortunately Franke et al.  units are imperial and functions have not been 
+tested in metric.  When units are indicated to be in metric on the input spreadsheet,
+stryke converts units from SI into imperial for blade strike survival estimate and
+the entrainment rate estimate which are in units of fish per million cubic feet.
 
 """
 
@@ -119,9 +121,6 @@ class simulation():
             # create workspace directory
             self.wks_dir = os.path.join(proj_dir,wks)
             
-            # extract scenarios from input spreadsheet
-            #self.routing = pd.read_excel(self.wks_dir,'Routing',header = 0,index_col = None, usecols = "B:G", skiprows = 9)
-
             # import nodes and create a survival function dictionary
             self.nodes = pd.read_excel(self.wks_dir,
                                        sheet_name = 'Nodes',
@@ -158,10 +157,7 @@ class simulation():
                                              usecols = "B:H",
                                              skiprows = 3)
             self.facility_params.set_index('Facility', inplace = True)
-            # self.facility_params['Min_Op_Flow'] = self.facility_params.Min_Op_Flow.fillna(0)
-            # self.facility_params['Env_Flow'] = self.facility_params.Env_Flow.fillna(0)  
-            # self.facility_params['Bypass_Flow'] = self.facility_params.Bypass_Flow.fillna(0)
-
+            
             # get hydraulic capacity of facility
             self.flow_cap = self.unit_params.groupby('Facility')['Qcap'].sum()
 
@@ -581,7 +577,7 @@ class simulation():
                 try:
                     prob = surv_dict[route]
                 except:
-                    print ('fuck')
+                    print ('Problem with a priori survival function')
     
             else:
                 #TODO add impingement logic, bring in tail aspect
@@ -908,7 +904,7 @@ class simulation():
             try:
                 new_loc = np.random.choice(locs,1,p = probs)[0]
             except:
-                print ('fuck')
+                print ('Problem with movement function')
 
             del nbors, locs, probs
             
