@@ -16,6 +16,11 @@ Thank you for using this open-source software! Unlike traditional programs that 
 ## What You'll Need:
 To run this software, you'll need to install **GitHub Desktop** and certain Python libraries that the project depends on. But don’t worry, we'll use **Anaconda Navigator** to manage everything for you. Anaconda Navigator provides an easy, graphical way to handle all the software dependencies without needing to use the command line. **By following the steps below, you'll be able to recreate the necessary environment, ensuring the software runs smoothly on your system.**
 
+**Anaconda Navigator:**
+https://www.anaconda.com/download
+**GitHub Desktop App:**
+https://desktop.github.com/download/
+
 ---
 ## How to Set Up the Environment
 
