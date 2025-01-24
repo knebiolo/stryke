@@ -21,11 +21,18 @@ echo Launching Stryke . . .
 
 
 :: Check for Anaconda installation in different locations
+:: This .bat file activates the Anaconda command prompt, then launches the stryke
+:: environemnt and notebook. If you are seeing errors like 'Count not find Anaconda
+:: installation, you will need to add the path to the Anaconda installation.
 set "ACTIVATE_SCRIPT="
 if exist "C:\ProgramData\Anaconda3\Scripts\activate.bat" (
     set "ACTIVATE_SCRIPT=C:\ProgramData\Anaconda3\Scripts\activate.bat"
 ) else if exist "C:\Users\%USER_NAME%\AppData\Local\anaconda3\Scripts\activate.bat" (
     set "ACTIVATE_SCRIPT=C:\Users\%USER_NAME%\AppData\Local\anaconda3\Scripts\activate.bat"
+) else if exist "%USERPROFILE%\Anaconda3\Scripts\activate.bat" (
+    set ACTIVATE_SCRIPT=%USERPROFILE%\Anaconda3\Scripts\activate.bat
+) else if exist "%USERPROFILE%\Miniconda3\Scripts\activate.bat" (
+    set ACTIVATE_SCRIPT=%USERPROFILE%\Miniconda3\Scripts\activate.bat
 ) else (
     echo Error: Could not find Anaconda installation.
     pause
