@@ -121,6 +121,9 @@ class simulation():
             # create workspace directory
             self.wks_dir = os.path.join(proj_dir,wks)
             
+            # extract scenarios from input spreadsheet
+            #self.routing = pd.read_excel(self.wks_dir,'Routing',header = 0,index_col = None, usecols = "B:G", skiprows = 9)
+
             # import nodes and create a survival function dictionary
             self.nodes = pd.read_excel(self.wks_dir,
                                        sheet_name = 'Nodes',
@@ -157,7 +160,10 @@ class simulation():
                                              usecols = "B:H",
                                              skiprows = 3)
             self.facility_params.set_index('Facility', inplace = True)
-            
+            # self.facility_params['Min_Op_Flow'] = self.facility_params.Min_Op_Flow.fillna(0)
+            # self.facility_params['Env_Flow'] = self.facility_params.Env_Flow.fillna(0)  
+            # self.facility_params['Bypass_Flow'] = self.facility_params.Bypass_Flow.fillna(0)
+
             # get hydraulic capacity of facility
             self.flow_cap = self.unit_params.groupby('Facility')['Qcap'].sum()
 
@@ -170,7 +176,25 @@ class simulation():
                                                    skiprows = 5, 
                                                    dtype = {'Gage':str})
             
+            self.input_hydrograph_df = pd.read_excel(self.wks_dir,
+                                                   sheet_name = 'Hydrology',
+                                                   header = 0,
+                                                   index_col = None, 
+                                                   usecols = "B:C", 
+                                                   skiprows = 3, 
+                                                   dtype = {'Date':str,'Discharge':float})
             
+            # fetch units: if metric, convert
+            self.output_unit_cell = pd.read_excel(self.wks_dir,
+                                                   sheet_name = 'Hydrology',
+                                                   header = None,
+                                                   index_col = None, 
+                                                   usecols = "F", 
+                                                   skiprows = 3)
+            self.output_units = self.output_unit_cell.iloc[0, 0]
+            metric_units = ["cms","CMS"]
+            if self.output_units in metric_units:
+                self.input_hydrograph_df["Discharge"] = self.input_hydrograph_df["Discharge"] * 35.31469989
 
             self.operating_scenarios_df = pd.read_excel(self.wks_dir,
                                                         sheet_name = 'Operating Scenarios', 
@@ -1039,16 +1063,32 @@ class simulation():
         flow_df = pd.DataFrame()
         
         scen_df = flow_scenarios_df[flow_scenarios_df.Scenario == scen]
+        
         # if the discharge type is hydrograph - import hydrography and transform using prorate factor
         if discharge_type == 'hydrograph':
             gage = str(scen_df.at[scen_df.index[0],'Gage'])
             prorate = scen_df.at[scen_df.index[0],'Prorate']
             flow_year = scen_df.at[scen_df.index[0],'FlowYear']
             
-            df = self.get_USGS_hydrograph(gage, prorate, flow_year)
-
-            for i in scen_months:
-                flow_df = pd.concat([flow_df, df[df.month == i]])
+            # if a gage number is present, fetch the usgs gage data
+            if sum(char.isdigit() for char in gage) > 1:
+                
+                df = self.get_USGS_hydrograph(gage, prorate, flow_year)
+                for i in scen_months:
+                    flow_df = pd.concat([flow_df, df[df.month == i]])
+            
+            # if not, use the hydrograph data in the Hydrology sheet
+            else: 
+                flow_df = self.input_hydrograph_df
+                # apply prorate
+                flow_df['DAvgFlow_prorate'] = flow_df.Discharge * prorate
+                # convert to datetime
+                flow_df['datetimeUTC'] = pd.to_datetime(flow_df.Date)
+                # extract year
+                flow_df['year'] = pd.DatetimeIndex(flow_df['datetimeUTC']).year
+                flow_df = flow_df[flow_df.year == flow_year]
+                # get months
+                flow_df['month'] = pd.DatetimeIndex(flow_df['datetimeUTC']).month
         
         # if it is a fixed discharge - simulate a hydrograph
         elif discharge_type == 'fixed':
@@ -1070,9 +1110,10 @@ class simulation():
                 df.rename(columns = {'index':'datetimeUTC',0:'DAvgFlow_prorate'},inplace = True) 
                 df['month'] = pd.to_datetime(df.datetimeUTC).dt.month
                 if np.any(df.DAvgFlow_prorate.values < 0):
-                    print ('fuck')
+                    print ('prorated daily average flow value not found')
                 #flow_df = flow_df.append(df)
-                flow_df = pd.concat([df, flow_df])             
+                flow_df = pd.concat([df, flow_df])
+        
         return flow_df
     
     def daily_hours(self, Q_dict, season, operations = 'independent'):
@@ -1323,10 +1364,20 @@ class simulation():
             ent_rate = np.abs(ent_rate / 10**magnitudes)
             #print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
 
+        # flow per day in relation to million cubic FEET
         Mft3 = (60 * 60 * 24 * curr_Q)/1000000
+        # flow per day in relation to million cubic METERS
+        Mm3 = Mft3 * 35.31469989
+        
+        metric_units = ["cms","CMS"]
+        if self.output_units in metric_units:
+            daily_rate = Mm3
+            ent_rate = ent_rate / 35.31469989
+        else: 
+            daily_rate = Mft3
 
         # calcualte sample size
-        return np.round(Mft3 * ent_rate,0)[0]
+        return np.round(daily_rate * ent_rate,0)[0]
 
     def run(self):
         """
@@ -1478,7 +1529,7 @@ class simulation():
                                                  self.flow_scenarios_df, 
                                                  fixed_discharge = fixed_discharge)
                 
-                
+            
             # for each species, perform the simulation for n individuals x times
             for spc in species:
                 # extract a single row based on season and species
@@ -1665,6 +1716,11 @@ class simulation():
                                               min_itemsize=20)  # Replace 'column_name' with your actual column name
                                 self.hdf.flush()                              
                                 
+                                # if needed, convert flow back to metric units
+                                metric_units = ["cms","CMS"]
+                                if self.output_units in metric_units:
+                                    curr_Q = curr_Q * 0.02831683199881
+                                
                                 # start filling in that summary dictionar
                                 daily_row_dict = {'species':['{:50}'.format(spc)],
                                                   'scenario':['{:50}'.format(scenario)],
@@ -1702,6 +1758,7 @@ class simulation():
                                 
                                 # Count the unique fish entrained and survived by checking where `is_entrained` and `is_survived_entrained` are True
                                 total_entrained = fishes['is_entrained'].sum()
+                                
                                 total_survived_entrained = fishes['survived_entrainment'].sum()
                                 daily_row_dict['num_entrained'] = total_entrained
                                 daily_row_dict['num_survived'] = total_survived_entrained
@@ -1716,7 +1773,12 @@ class simulation():
                             else:
                                 n = 0
                                 #print ("No fish of this species on %s"%(day))
-    
+                                
+                                # if needed, convert back to metric units
+                                metric_units = ["cms","CMS"]
+                                if self.output_units in metric_units:
+                                    curr_Q = curr_Q * 0.02831683199881
+                                
                                 daily_row_dict = {'species':['{:50}'.format(spc)],
                                                   'scenario':['{:50}'.format(scenario)],
                                                   'season':['{:50}'.format(season)],
@@ -1729,9 +1791,15 @@ class simulation():
     
      
                         else:
+                            
                             n = 0
                             #print ("Units not operating on %s"%(day))
-
+                            
+                            # if needed, convert back to metric units
+                            metric_units = ["cms","CMS"]
+                            if self.output_units in metric_units:
+                                curr_Q = curr_Q * 0.02831683199881
+                            
                             daily_row_dict = {'species':['{:50}'.format(spc)],
                                               'scenario':['{:50}'.format(scenario)],
                                               'season':['{:50}'.format(season)],
@@ -1743,14 +1811,16 @@ class simulation():
                                               'num_survived':[np.int64(0)]}
                                 
                         daily = pd.DataFrame.from_dict(daily_row_dict, orient = 'columns')
+                        
                         daily.to_hdf(self.hdf,
                                      key = 'Daily',
                                      mode = 'a',
                                      format = 'table',
                                      append = True)
                             
-                            
+                           
                         self.hdf.flush()
+                    
                     print ("Scenario %s Iteration %s for Species %s complete"%(scenario,i,species))
 
                         
@@ -1988,7 +2058,7 @@ class simulation():
 
         # plt.figure()
         # plt.hist(day_dat.total_entrained,color = 'r')
-        # #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'fuck.png'), dpi = 700)
+        # #plt.savefig(os.path.join(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Output",'fish.png'), dpi = 700)
         # plt.show()        
                 
 
