@@ -14,7 +14,12 @@ Stryke was developed on a 64-bit Windows operating system and utilizes Microsoft
 Thank you for using this open-source software! Unlike traditional programs that come with simple `.exe` installers, open-source projects often require a bit more setup to get started. Don’t worry though—this guide will walk you through everything step-by-step.
 
 ## What You'll Need:
-To run this software, you'll need to install certain Python libraries that the project depends on. But don’t worry, we'll use **Anaconda Navigator** to manage everything for you. Anaconda Navigator provides an easy, graphical way to handle all the software dependencies without needing to use the command line.  **By following the steps below, you'll be able to recreate the necessary environment, ensuring the software runs smoothly on your system.**
+To run this software, you'll need to install **GitHub Desktop** and certain Python libraries that the project depends on. But don’t worry, we'll use **Anaconda Navigator** to manage everything for you. Anaconda Navigator provides an easy, graphical way to handle all the software dependencies without needing to use the command line. **By following the steps below, you'll be able to recreate the necessary environment, ensuring the software runs smoothly on your system.**
+
+**Anaconda Navigator:**
+https://www.anaconda.com/download
+**GitHub Desktop App:**
+https://desktop.github.com/download/
 
 ---
 ## How to Set Up the Environment
@@ -22,11 +27,13 @@ To run this software, you'll need to install certain Python libraries that the p
 This project requires specific Python libraries to run properly. To make it easy, you can recreate the environment using Anaconda Navigator after cloning this repository from GitHub. Follow these steps:
 
 ### 1. Clone the Repository Using GitHub Desktop
-1. Open **GitHub Desktop**.
-2. Click on `File > Clone Repository...`.
-3. Select this repository from the list or paste the repository URL.
-4. Choose the folder where you want to save the repository locally.
-5. Click `Clone` to download the repository to your machine. 
+1. Download and install **GitHub Desktop**.
+2. Open **GitHub Desktop**.
+3. Click on `File > Clone Repository > URL`.
+4. Copy the URL for this project **https://github.com/knebiolo/stryke**
+5. Select this repository from the list or paste the repository URL.
+6. Choose the folder where you want to save the repository locally. e.g. documents or your desktop, make note of this folder as it is where you will access the excel interface.
+7. Click `Clone` to download the repository to your machine. 
 
 ### 2. Open Anaconda Navigator
 1. Launch **Anaconda Navigator**.
@@ -46,6 +53,12 @@ Anaconda Navigator will install all the required packages listed in the `environ
 1. Once the environment is created, it will appear in the **Environments** list in Anaconda Navigator.
 2. Click on the environment name (e.g., `stryke`) to activate it.
 3. You can now launch applications like **Jupyter Notebook** or **Spyder** from within the activated environment.
+4. Within the Anaconda interface, go to Home. Here you can click **Jupyter Notebook**, **Spyder** or **JupyterLab**. To start, launch **JupyterLab**.
+5. **JupyterLab** will launch as a window in your default browser.
+6. Within **JupyterLab** you will need to import the file `stryke_project_notebook.ipynb` from the `GitHub > stryke` folder (located in the same place as defined in step 1.6 above) into the area below the list of file folders in JupyterLab. Then click on this file within **JupyterLab** to launch Stryke.
+
+### 5. Simplified User Interface  
+1. To launch the simplified user interface, open the file folder where Stryke is located and click the `RUN_STRYKE.bat` file. Please note, this file may need to be tailored to point to the user’s Anaconda installation.
 
 ---
 
