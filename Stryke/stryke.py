@@ -169,6 +169,8 @@ class simulation():
                                                    usecols = "B:I", 
                                                    skiprows = 5, 
                                                    dtype = {'Gage':str})
+            
+            
 
             self.operating_scenarios_df = pd.read_excel(self.wks_dir,
                                                         sheet_name = 'Operating Scenarios', 
