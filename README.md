@@ -73,16 +73,40 @@ On the **Flow Scenarios** tab, you will note 10 columns: Scenario Number, Scenar
 |Scenario Number  |Integer    |(required) scenario number.  **must be unique**                                                |
 |Scenario         |String     |(required) name of scenario, not more than 50 characters                                       |
 |Flow             |String     |(required) value must be 'hydrograph'                                                          |
-|Min_Op_Flow      |Float      |(required) minimum operating discharge, if unknown enter 0                                     |
-|Env_Flow         |Float      |(required) minimum release discharge, if unknown enter 0                                       |
-|Gage             |String     |(required) USGS Gage Number 8 character length                                                 |
+|Gage             |String     |(not required) USGS Gage Number 8 character length, if blank user provides hydrograph          |
 |Prorate          |Float      |(required) project watershed: USGS watershed ratio                                             |
 |Season           |String     |(required) hydrologic season, e.g. winter                                                      |
 |Months           |List       |(required) list of calendar months that make up a hydrologic season, values separated by commas |
 
 When set up properly, the **Flow Scenarios** tab should look like the following image.  Note, we are using meteorological seasons as our hydrologic seasons.  However, this isn't required. You can use any season as long as it is a list of integers separated by commas. 
 
-![native flow scenarios](https://github.com/knebiolo/stryke/assets/61742537/2ac59f67-d3fd-45c6-93bc-59a6f3aa80e7)
+![native flow scenarios](https://github.com/knebiolo/stryke/blob/master/flow_scenarios_tab.jpg)
+
+## Hydrology
+
+For projects in the United States, Stryke utilizes the Python library 'Hydrofunctions' to fetch stream gage data from the United States Geological Service.  However, there is no such library that fetches Canadian stream gage data.  Therefore, the Canadian end user must provide their own hydrograph.  There may also be projects within the United States that want to provide their own simulated hydrograph to study climate change scenarios.  The default default unit is cubic meters per second, but this can be switched to cubic feet per second.  
+
+| Field           | Data Type |                                             Comment                                           |
+|-----------------|-----------|-----------------------------------------------------------------------------------------------|
+|Date             |DateTime   |(required) Excel formatted data, on import converted to YYYY-MM-DD format                      |
+|Discahrge        |Float      |(required) daily average discharge in CMS or CFS                                               |
+
+![hydrology tab](https://github.com/knebiolo/stryke/blob/master/hydrology_tab.jpg)
+
+## Facilities
+Stryke is capable of simulating survival and movement through a complex migratory network that can include multiple dependent facilities.  The Facilities tab contains information describing operations and seasonal minimum flow releases for each simulated powerhouse.
+
+| Field           | Data Type |                                             Comment                                           |
+|-----------------|-----------|-----------------------------------------------------------------------------------------------|
+|Facility         |String     |(required) Facility/Powerhouse name.  **must be unique**                                       |
+|Season           |String     |(required) hydrologic season, must be listed on Flow Scenarios tab                             |
+|Operations       |String     |(required) pull down, choose between 'run-of-river', 'pumped storage', or 'peaking'            |
+|Min_Op_Flow      |Float      |(required) minimum operating discharge, if unknown enter 0                                     |
+|Env_Flow         |Float      |(required) minimum release discharge, if unknown enter 0                                       |
+|Bypass_Flow      |Float      |(required) minimum discharge through downstream bypass structure, if unknown enter 0           |
+|Spillway         |String     |(required) spillway that services a particular facility                                        |
+
+![facilities_tab](https://github.com/knebiolo/stryke/blob/master/facilities_tab.jpg)
 
 ## Operating Scenarios
 
