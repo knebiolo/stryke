@@ -50,10 +50,10 @@ Anaconda Navigator will install all the required packages listed in the `environ
 3. You can now launch applications like **Jupyter Notebook** or **Spyder** from within the activated environment.
 4. Within the Anaconda interface, go to Home. Here you can click **Jupyter Notebook**, **Spyder** or **JupyterLab**. To start, launch **JupyterLab**.
 5. **JupyterLab** will launch as a window in your default browser.
-6. Within **JupyterLab** you will need to import the file `stryke_project_notebook.ipynb` from the `GitHub > stryke` folder (located in the same place as defined in step 1.6) into the area below the list of file folders in JupyterLab. Then click on this file within **JupyterLab** to launch Stryke.
+6. Within **JupyterLab** you will need to import the file `stryke_project_notebook.ipynb` from the `GitHub > stryke` folder (located in the same place as defined in step 1.6 above) into the area below the list of file folders in JupyterLab. Then click on this file within **JupyterLab** to launch Stryke.
 
 ### 5. Simplified User Interface  
-1. To launch the simplified user interface, open the file folder where Stryke is located and click the RUN_STRYKE.bat file. Please note, this file may need to be tailored to point to the user’s Anaconda installation.
+1. To launch the simplified user interface, open the file folder where Stryke is located and click the `RUN_STRYKE.bat` file. Please note, this file may need to be tailored to point to the user’s Anaconda installation.
 
 ---
 
