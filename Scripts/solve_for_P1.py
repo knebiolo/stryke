@@ -1,21 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Mar  2 21:04:18 2023
-
 @author: KNebiolo
 
 script intent: 
-    The intent of this script is to use Sympy to solve a complex algebraic expression
-    that will allow us to calculate tail beat frequency (Hz) by setting Lighthills 
-    equation equal to drag.  
+    The intent of this script is to use Sympy to solve for the inlet pressure at a turbine
+    runner.  This pressure should represent the maximum pressure experienced by a 
+    fish during turbine passage.  
     
-    Then we will import Webb 1975 Table 20 and examine relationships between:
-    1) Amplitude (A) and length (L)
-    2) Propulsive Wave (V) and Swimming Speed (U)
-    3) Trailing Edge Span (B) and Length (L)
-    
-    Then we will create functions for Thrust and Frequency, and validate 
-    the Sympy solution by recreating f values in Table 20
+    We will use Bernoullis  principle:
+    P_1 + 1/2(ρ*v)_1^2 + (ρ*g*h)_1= P_2 + 1/2(ρ*v)_2^2 +(ρ*g*h)_2+ (ρ*g*h)_loss   
     
 """
 # import modules
@@ -36,19 +29,19 @@ outputWS = r"J:\2819\005\Calcs\ABM\Output"
 #%% Part 1: Solve For f
 
 # delcare symbols used in expressions.  
-D,ρ,S,C_D,U_f,U_w,π,B,f,A,U,θ,λ,m,W,w,V  = symbols ('D,ρ,S,C_D,U_f,U_w,π,B,f,A,U,θ,λ,m,W,w,V')
+P,ρ,v,g,h  = symbols('P,ρ,v,g,h')
 
-# Fully expand out the RHS of the equation, including original terms for m,w, and W (Lighthill 1970)
-rhs = ((π*ρ*B**2)/4)*((f*A*π)/1.414)*((f*A*π)/1.414*(1-(U/V)))*U-(((π*ρ*B**2)/4)*((f*A*π)/1.414*(1-(U/V)))**2*U)/(2*cos(θ))
+# RHS of the equation
+rhs = P_2 + 1/2(ρ*v)_2^2 +(ρ*g*h)_2+ (ρ*g*h)_loss 
 
-# Make the left hand side of the equation equal to drag.  
-lhs = D
+# LHS of the equation.  
+lhs = P_1 + 1/2(ρ*v)_1^2 + (ρ*g*h)_1
 
 # declare domain for sympy, we are in Real numbers
 R = Reals
 
 # Solve for frequency algebraicly with sympy.solveset
-print (solveset(Eq(lhs,simplify(rhs)),f,R))
+print (solveset(Eq(lhs,srhs)),f,R))
 #print (solveset(Eq(lhs,simplify(rhs)),U,R))
 
 #%% Part 2: Fit functions to Webb 1975
