@@ -185,14 +185,10 @@ class simulation():
                                                    dtype = {'Date':str,'Discharge':float})
             
             # fetch units: if metric, convert
-            self.output_unit_cell = pd.read_excel(self.wks_dir,
-                                                   sheet_name = 'Hydrology',
-                                                   header = None,
-                                                   index_col = None, 
-                                                   usecols = "F", 
-                                                   skiprows = 3)
-            self.output_units = self.output_unit_cell.iloc[0, 0]
+            df = pd.read_excel(self.wks_dir, sheet_name='Hydrology')
+            self.output_units  = df.iat[2, 5]
             metric_units = ["cms","CMS"]
+            
             if self.output_units in metric_units:
                 self.input_hydrograph_df["Discharge"] = self.input_hydrograph_df["Discharge"] * 35.31469989
 
@@ -2053,7 +2049,6 @@ class simulation():
             results.to_excel(writer,sheet_name = 'beta fit')
             day_sum.to_excel(writer,sheet_name = 'daily summary')    
             year_sum.to_excel(writer,sheet_name = 'yearly summary')
-            length.to_excel(writer,sheet_name = 'length data')
 
 
         # plt.figure()
