@@ -29,10 +29,12 @@ if exist "C:\ProgramData\Anaconda3\Scripts\activate.bat" (
     set "ACTIVATE_SCRIPT=C:\ProgramData\Anaconda3\Scripts\activate.bat"
 ) else if exist "C:\Users\%USER_NAME%\AppData\Local\anaconda3\Scripts\activate.bat" (
     set "ACTIVATE_SCRIPT=C:\Users\%USER_NAME%\AppData\Local\anaconda3\Scripts\activate.bat"
-) else if exist "%USERPROFILE%\Anaconda3\Scripts\activate.bat" (
-    set ACTIVATE_SCRIPT=%USERPROFILE%\Anaconda3\Scripts\activate.bat
-) else if exist "%USERPROFILE%\Miniconda3\Scripts\activate.bat" (
-    set ACTIVATE_SCRIPT=%USERPROFILE%\Miniconda3\Scripts\activate.bat
+) else if exist "C:\%USERPROFILE%\Anaconda3\Scripts\activate.bat" (
+    set ACTIVATE_SCRIPT=C:\%USERPROFILE%\Anaconda3\Scripts\activate.bat
+) else if exist "C:\%USERPROFILE%\Anaconda\Scripts\activate.bat" (
+    set ACTIVATE_SCRIPT=C:\%USERPROFILE%\Anaconda\Scripts\activate.bat
+) else if exist "C:\%USERPROFILE%\Miniconda3\Scripts\activate.bat" (
+    set ACTIVATE_SCRIPT=C:\%USERPROFILE%\Miniconda3\Scripts\activate.bat
 ) else (
     echo Error: Could not find Anaconda installation.
     pause
@@ -42,14 +44,20 @@ if exist "C:\ProgramData\Anaconda3\Scripts\activate.bat" (
 
 :: Activate the Conda environment
 call "%ACTIVATE_SCRIPT%"
-call conda activate stryke
+:: List of environment names to try
+set ENV_LIST=stryke Stryke stryke_beta_test stryke_env stryke_environment
 
-
-:: old ->
-:: Activate the Conda environment
-::call C:\ProgramData\Anaconda3\Scripts\activate.bat
-::call conda activate stryke
-
+for %%E in (%ENV_LIST%) do (
+    call conda activate %%E 2>nul
+    if %errorlevel% == 0 (
+        echo Activated environment: %%E
+        goto env_activated
+    )
+)
+echo No specified Conda environment found. Exiting.
+exit /b 1
+:env_activated
+echo Environment successfully activated.
 
 
 :: Launch the Jupyter Notebook with Voila
