@@ -63,11 +63,11 @@ Anaconda Navigator will install all the required packages listed in the `environ
 ![import_button](https://github.com/knebiolo/stryke/blob/master/pics/import_button.jpg)
 ![load_notebook](https://github.com/knebiolo/stryke/blob/master/pics/load_notebook.jpg)
 ### 5. Simplified User Interface  
-To launch the simplified user interface, open the file folder where Stryke is located and double click the `RUN_STRYKE.bat` file. This will launch a command window, find the Anaconda environment, and open a browser tab with a codeless interface. Use the file explorer in the tab to select the input spreadsheet and click the 'Run Stryke' button. After clicking run, text output will show that either Stryke ran or encountered an error. 
+To launch the simplified user interface, open the folder where Stryke is located and double click the `RUN_STRYKE.bat` file. This will automatically launch a command window, find the Anaconda environment, and open a browser tab with a codeless interface. Use the file explorer in the tab to select the input spreadsheet and click the 'Run Stryke' button. After clicking run, text output will show that either Stryke finished running or encountered an error. 
 
 Please note, this file may need to be tailored to point to the user’s Anaconda installation if it is not a common installation location.
 
-If you are getting an error like `ValueError: Sheet 'beta fit' already exists and if_sheet_exists is set to 'error'`, the output Excel sheets are still in the file and will not let you overwrite them. Please delete the output sheets (last sheets in the file, starting with lowercase letters), save and close the file, and click run again.
+If you are getting an error `ValueError: Sheet 'beta fit' already exists and if_sheet_exists is set to 'error'`, the output Excel sheets are still in the file and will not let you overwrite them. Please delete the output sheets (last sheets in the file, starting with lowercase letters), save and close the file, and click run again.
 
 ---
 
