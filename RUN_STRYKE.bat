@@ -44,10 +44,8 @@ if exist "C:\ProgramData\Anaconda3\Scripts\activate.bat" (
 
 :: Activate the Conda environment
 call "%ACTIVATE_SCRIPT%"
-:: List of environment names to try
-set ENV_LIST=stryke Stryke stryke_beta_test stryke_env stryke_environment
-
-for %%E in (%ENV_LIST%) do (
+:: Get the list of all environments, pick out the one with 'stryke' in the name
+for /f "tokens=1 delims= " %%E in ('conda env list ^| findstr /i "stryke"') do (
     call conda activate %%E 2>nul
     if %errorlevel% == 0 (
         echo Activated environment: %%E
