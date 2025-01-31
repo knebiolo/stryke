@@ -30,15 +30,18 @@ This project requires specific Python libraries to run properly. To make it easy
 1. Download and install **GitHub Desktop**.
 2. Open **GitHub Desktop**.
 3. Click on `File > Clone Repository > URL`.
+![file_clone_repository](https://github.com/knebiolo/stryke/blob/master/pics/file_clone_repository.jpg)
 4. Copy the URL for this project **https://github.com/knebiolo/stryke**
 5. Select this repository from the list or paste the repository URL.
 6. Choose the folder where you want to save the repository locally. e.g. documents or your desktop, make note of this folder as it is where you will access the excel interface.
-7. Click `Clone` to download the repository to your machine. 
+7. Click `Clone` to download the repository to your machine.
+![cloning](https://github.com/knebiolo/stryke/blob/master/pics/cloning.jpg)
 
 ### 2. Open Anaconda Navigator
 1. Launch **Anaconda Navigator**.
 2. Go to the **"Environments"** tab on the left side of the interface.
 3. In the bottom-left corner, click the **"Import"** button.
+![environment_import](https://github.com/knebiolo/stryke/blob/master/pics/environment_import.jpg)
 
 ### 3. Import the `environment.yml` File
 1. In the **Import** dialog:
@@ -46,7 +49,7 @@ This project requires specific Python libraries to run properly. To make it easy
    - Click the **"Browse"** button next to **"Specification File"**.
    - Navigate to the folder where you cloned the repository and select the `environment.yml` file.
    - Click **"Import"** to create the environment.
-   
+![setting_up_env](https://github.com/knebiolo/stryke/blob/master/pics/setting_up_environment.jpg)   
 Anaconda Navigator will install all the required packages listed in the `environment.yml` file.
 
 ### 4. Activate the Environment
@@ -54,9 +57,11 @@ Anaconda Navigator will install all the required packages listed in the `environ
 2. Click on the environment name (e.g., `stryke`) to activate it.
 3. You can now launch applications like **Jupyter Notebook** or **Spyder** from within the activated environment.
 4. Within the Anaconda interface, go to Home. Here you can click **Jupyter Notebook**, **Spyder** or **JupyterLab**. To start, launch **JupyterLab**.
+![launch_jupyter_notebook](https://github.com/knebiolo/stryke/blob/master/pics/launch_jupyter_notebook.jpg)
 5. **JupyterLab** will launch as a window in your default browser.
 6. Within **JupyterLab** you will need to import the file `stryke_project_notebook.ipynb` from the `GitHub > stryke` folder (located in the same place as defined in step 1.6 above) into the area below the list of file folders in JupyterLab. Then click on this file within **JupyterLab** to launch Stryke.
-
+![import_button](https://github.com/knebiolo/stryke/blob/master/pics/import_button.jpg)
+![load_notebook](https://github.com/knebiolo/stryke/blob/master/pics/load_notebook.jpg)
 ### 5. Simplified User Interface  
 1. To launch the simplified user interface, open the file folder where Stryke is located and click the `RUN_STRYKE.bat` file. Please note, this file may need to be tailored to point to the user’s Anaconda installation.
 
@@ -104,7 +109,7 @@ For projects in the United States, Stryke utilizes the Python library 'Hydrofunc
 |Date             |DateTime   |(required) Excel formatted data, on import converted to YYYY-MM-DD format                      |
 |Discahrge        |Float      |(required) daily average discharge in CMS or CFS                                               |
 
-![hydrology tab](https://github.com/knebiolo/stryke/blob/master/hydrology_tab.jpg)
+![hydrology tab](https://github.com/knebiolo/stryke/blob/master/pics/hydrology_tab.jpg)
 
 ## Facilities
 Stryke is capable of simulating survival and movement through a complex migratory network that can include multiple dependent facilities.  The Facilities tab contains information describing operations and seasonal minimum flow releases for each simulated powerhouse.
@@ -119,7 +124,7 @@ Stryke is capable of simulating survival and movement through a complex migrator
 |Bypass_Flow      |Float      |(required) minimum discharge through downstream bypass structure, if unknown enter 0           |
 |Spillway         |String     |(required) spillway that services a particular facility                                        |
 
-![facilities_tab](https://github.com/knebiolo/stryke/blob/master/facilities_tab.jpg)
+![facilities_tab](https://github.com/knebiolo/stryke/blob/master/pics/facilities_tab.jpg)
 
 ## Operating Scenarios
 
