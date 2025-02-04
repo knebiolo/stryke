@@ -41,7 +41,9 @@ This project requires specific Python libraries to run properly. To make it easy
 1. Launch **Anaconda Navigator**.
 2. Go to the **"Environments"** tab on the left side of the interface.
 3. In the bottom-left corner, click the **"Import"** button.
-![environment_import](https://github.com/knebiolo/stryke/blob/master/pics/environment_import.jpg)
+![environment_import](https://github.com/knebiolo/stryke/blob/master/pics/environment_import_v2.jpg)
+4. **"Stryke"** will show up as an environment, click on it and a green arrow will appear.
+![environment_load](https://github.com/knebiolo/stryke/blob/master/pics/environment_load.jpg)
 
 ### 3. Import the `environment.yml` File
 1. In the **Import** dialog:
