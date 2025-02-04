@@ -244,7 +244,7 @@ fish = stryke.epri(Genus = 'Alosa', Month = [1,2,3,4,5,6,7,8,9], HUC02= [2,3,4,5
 
 Families and genera of fishes for which there are data within the EPRI dataset.
 
-| Family                | Genus                            |
+| Family                | Genus       |                    |
 |-----------------------|-------------|--------------------|
 | Acipenseridae         | Acipenser   | Lepisosteus        |
 | Amiidae               | Alosa       | Lepomis            |
