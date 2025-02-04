@@ -235,3 +235,48 @@ The unit parameters tab is another complex tab that contains measurable properti
 |$\lambda$          |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2)|
 
 With data entered into the spreadsheet interface, open up the project notebook and start simulating!
+
+# Notebook Interface
+
+## Fit Entrainment Rates
+
+fish = stryke.epri(Genus = 'Alosa', Month = [1,2,3,4,5,6,7,8,9], HUC02= [2,3,4,5,7])
+
+Families and genera of fishes for which there are data within the EPRI dataset.
+
+| Family                | Genus                            |
+|-----------------------|-------------|--------------------|
+| Acipenseridae         | Acipenser   | Lepisosteus        |
+| Amiidae               | Alosa       | Lepomis            |
+| Anguillidae           | Ambloplites | Lethenteron        |
+| Atherinopsidae        | Ameiurus    | Lota               |
+| Catostomidae          | Amia        | Luxilus            |
+| Centrarchidae         | Ammocrypta  | Margariscus        |
+| Clupeidae             | Anguilla    | Micropterus        |
+| Cottidae              | Aplodinotus | Minytrema          |
+| Cyprinidae            | Campostoma  | Morone             |
+| Esocidae              | Carassius   | Moxostoma          |
+| Fundulidae            | Carpiodes   | Nacomis            |
+| Gasterosteidae        | Catostomus  | Nocomis            |
+| Ictaluridae           | Chrosomus   | Notemigonus        |
+| Lepisosteidae         | Coregonus   | Notropis           |
+| Lotidae               | Cottus      | Noturus            |
+| Moronidae             | Couesius    | Oncorhynchus       |
+| Osmeridae             | Culaea      | Opsopoeodus        |
+| Percidae              | Cyprinella  | Osmerus            |
+| Percopsidae           | Cyprinus    | Perca              |
+| Petromyzontiformes    | Dorosoma    | Percina            |
+| Salmonidae            | Erimyzon    | Percopsis          |
+| Sciaenidae            | Esox        | Petromyzon         |
+| Umbridae              | Etheostoma  | Pimephales         |
+|                       | Exoglossum  | Pomoxis            |
+|                       | Fundulus    | Pylodictis         |
+|                       | Gasterosteus| Rhinichthys        |
+|                       | Hybognathus | Salmo              |
+|                       | Hypentelium | Salmonidae         |
+|                       | Hypomesus   | Salvelinus         |
+|                       | Ichthyomyzon| Sander             |
+|                       | Ictalurus   | Semotilus          |
+|                       | Labidesthes | Umbra              |
+|                       | Lampetra    |                    |
+
