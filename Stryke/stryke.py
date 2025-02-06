@@ -2288,7 +2288,19 @@ class epri():
         feeding guild, habitat preference, water body type, and more, to explore
         entrainment patterns across different environmental and operational conditions.
         """
-        def __init__(self, states = None, plant_cap = None, Month = None, Family = None, Genus = None, Species = None, HUC02 = None, HUC04 = None, HUC06 = None, HUC08 = None, NIDID = None, River = None):
+        def __init__(self, 
+                     states = None, 
+                     plant_cap = None,
+                     Family = None,
+                     Genus = None,
+                     Species = None,
+                     Month = None,
+                     HUC02 = None,
+                     HUC04 = None,
+                     HUC06 = None,
+                     HUC08 = None,
+                     NIDID = None,
+                     River = None):
             """
             Initializes the epri class by querying the EPRI database based on the
             provided criteria. Optional arguments allow for targeted analysis of
@@ -2309,10 +2321,9 @@ class epri():
             Upon initialization, the relevant subset of the EPRI database is loaded
             for subsequent analysis.
             """
+              
     
             # import EPRI database
-    
-    
             data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), r'..\Data\epri1997.csv')
             self.epri = pd.read_csv(data_dir,  encoding= 'unicode_escape')
     

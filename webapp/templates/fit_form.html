@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fit Distributions</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    nav {
+      margin-bottom: 20px;
+    }
+    nav a {
+      margin-right: 15px;
+      text-decoration: none;
+      color: #007BFF;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    h1, h2, h3 {
+      color: #0056b3;
+    }
+    form {
+      margin-bottom: 30px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 15px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .results {
+      margin-top: 30px;
+    }
+    .results img {
+      max-width: 100%;
+      border: 1px solid #ccc;
+      padding: 5px;
+      background: #fff;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 10px;
+      border: 1px solid #ccc;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <a href="{{ url_for('index') }}">Home</a> |
+    <a href="{{ url_for('upload_file') }}">Upload Simulation Input</a> |
+    <a href="{{ url_for('fit_distributions') }}">Fit Distributions</a> |
+    <a href="{{ url_for('results') }}">Results</a>
+  </nav>
+  
+  <div class="container">
+    <h1>Fit Distributions</h1>
+    <form method="post" action="{{ url_for('fit_distributions') }}">
+      <div class="form-group">
+        <label for="states">States:</label>
+        <input type="text" name="states" placeholder="e.g., WI, MN" value="{{ request.form.states or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="plant_cap">Plant Capacity:</label>
+        <input type="text" name="plant_cap" placeholder="e.g., >500" value="{{ request.form.plant_cap or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="family">Family:</label>
+        <input type="text" name="family" placeholder="Enter Family" value="{{ request.form.family or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="genus">Genus:</label>
+        <input type="text" name="genus" placeholder="Enter Genus" value="{{ request.form.genus or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="species">Species:</label>
+        <input type="text" name="species" placeholder="Enter Species" value="{{ request.form.species or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="month">Months (comma separated):</label>
+        <input type="text" name="month" placeholder="e.g., 1,2,12" value="{{ request.form.month or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="huc02">HUC02 (comma separated):</label>
+        <input type="text" name="huc02" placeholder="e.g., 4" value="{{ request.form.huc02 or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="huc04">HUC04 (comma separated):</label>
+        <input type="text" name="huc04" placeholder="e.g., 12" value="{{ request.form.huc04 or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="huc06">HUC06 (comma separated):</label>
+        <input type="text" name="huc06" placeholder="e.g., 34" value="{{ request.form.huc06 or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="huc08">HUC08 (comma separated):</label>
+        <input type="text" name="huc08" placeholder="e.g., 56" value="{{ request.form.huc08 or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="nidid">NIDID:</label>
+        <input type="text" name="nidid" placeholder="e.g., WI00757" value="{{ request.form.nidid or '' }}">
+      </div>
+      <div class="form-group">
+        <label for="river">River:</label>
+        <input type="text" name="river" placeholder="Enter River" value="{{ request.form.river or '' }}">
+      </div>
+      <button type="submit">Run Distribution Fitting</button>
+    </form>
+    
+    {% if summary %}
+    <div class="results">
+      <h2>Fitting Results</h2>
+      <p>{{ summary }}</p>
+      <h3>Generated Plot:</h3>
+      <img src="{{ url_for('serve_plot', filename=plot_filename) }}" alt="Fitting Results">
+      <h3>Detailed Fitting Output:</h3>
+      <pre>{{ log_text }}</pre>
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>

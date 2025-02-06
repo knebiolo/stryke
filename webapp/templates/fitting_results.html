@@ -1,0 +1,28 @@
+<!-- webapp/templates/fitting_results.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fitting Results</title>
+    <style>
+        pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav>
+        <a href="{{ url_for('index') }}">Home</a> |
+        <a href="{{ url_for('upload_file') }}">Upload Simulation Input</a> |
+        <a href="{{ url_for('fit_distributions') }}">Fit Distributions</a>
+    </nav>
+    
+    <h1>Distribution Fitting Results</h1>
+    <p>{{ summary }}</p>
+    <h2>Resulting Figure:</h2>
+    <!-- Display the generated plot; the plot route will serve the file -->
+    <img src="{{ url_for('serve_plot', filename='fitting_results.png') }}" alt="Fitting Results">
+    
+    <h2>Additional Output:</h2>
+    <pre>{{ log_text }}</pre>
+</body>
+</html>

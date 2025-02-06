@@ -3,10 +3,57 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Stryke Web App</title>
+    <title>Stryke Web App Home</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f7f7f7;
+            color: #333;
+        }
+        nav {
+            margin-bottom: 20px;
+        }
+        nav a {
+            margin-right: 15px;
+            text-decoration: none;
+            color: #007BFF;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0056b3;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.5;
+        }
+    </style>
 </head>
 <body>
-    <h1>Hello, Stryke Web App!</h1>
-    <p>Your Flask app is now running inside the GitHub repository.</p>
+    <nav>
+        <a href="{{ url_for('index') }}">Home</a> |
+        <a href="{{ url_for('upload_file') }}">Upload Simulation Input</a> |
+        <a href="{{ url_for('fit_distributions') }}">Fit Distributions</a> |
+        <a href="{{ url_for('results') }}">Results</a>
+    </nav>
+    <div class="container">
+        <h1>Welcome to Stryke</h1>
+        <p>
+            Stryke is an individual-based Monte Carlo simulation model designed to assess fish entrainment and turbine blade strike risks at hydroelectric facilities.
+            It integrates hydraulic, operational, and biological data to predict fish survival and downstream passage.
+        </p>
+        <p>
+            For more detailed information and documentation, visit the 
+            <a href="https://github.com/knebiolo/stryke" target="_blank">Stryke Project Website</a>.
+        </p>
+    </div>
 </body>
 </html>

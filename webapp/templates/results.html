@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simulation Results</title>
+    <style>
+      pre {
+        background-color: #f4f4f4;
+        padding: 10px;
+        border: 1px solid #ccc;
+      }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav>
+        <a href="{{ url_for('index') }}">Home</a> |
+        <a href="{{ url_for('upload_file') }}">Upload New Simulation</a>
+    </nav>
+
+    <h1>Simulation Results</h1>
+    <p>{{ summary }}</p>
+    <p>
+      <a href="{{ url_for('download_output', filename=output_file) }}">Download Output File</a>
+    </p>
+    <h2>Live Simulation Log:</h2>
+    <div id="logs" style="white-space: pre-wrap; border: 1px solid #ccc; padding: 10px; max-height: 300px; overflow-y: scroll;"></div>
+
+    <script>
+      // Create a new EventSource listening to the /stream endpoint
+      var eventSource = new EventSource("{{ url_for('stream') }}");
+      eventSource.onmessage = function(e) {
+          var logsDiv = document.getElementById("logs");
+          logsDiv.innerHTML += e.data + "\n";
+          logsDiv.scrollTop = logsDiv.scrollHeight;
+      };
+      eventSource.onerror = function(e) {
+          console.error("EventSource failed:", e);
+          eventSource.close();
+      };
+    </script>
+</body>
+</html>

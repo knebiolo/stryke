@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulation Upload & Results</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 20px;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    nav {
+      margin-bottom: 20px;
+    }
+    nav a {
+      margin-right: 15px;
+      text-decoration: none;
+      color: #007BFF;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    h1, h2 {
+      color: #0056b3;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="file"], input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 15px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .results {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #ccc;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 10px;
+      border: 1px solid #ccc;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav>
+    <a href="{{ url_for('upload_simulation') }}">Upload Simulation</a> |
+    <a href="{{ url_for('download_output', filename=output_filename) }}">Download Output</a>
+  </nav>
+  
+  <div class="container">
+    <h1>Simulation Upload & Results</h1>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul style="color: red;">
+          {% for message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+    
+    <!-- Simulation Upload Form -->
+    <form method="post" action="{{ url_for('upload_simulation') }}" enctype="multipart/form-data">
+      <div class="form-group">
+        <label for="excel_file">Select Simulation Spreadsheet:</label>
+        <input type="file" name="excel_file" accept=".xlsx,.xls" required>
+      </div>
+      <button type="submit">Upload and Run Simulation</button>
+    </form>
+    
+    <!-- Simulation Results Section -->
+    {% if simulation_results %}
+    <div class="results">
+      <h2>Simulation Results</h2>
+      <p>{{ simulation_results }}</p>
+      {% if output_filename %}
+      <p>
+        <a href="{{ url_for('download_output', filename=output_filename) }}">Download Output File ({{ output_filename }})</a>
+      </p>
+      {% endif %}
+      {% if simulation_log %}
+      <h3>Detailed Log Output:</h3>
+      <pre>{{ simulation_log }}</pre>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</body>
+</html>
