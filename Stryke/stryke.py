@@ -2390,11 +2390,11 @@ class epri():
                     self.epri = self.epri[self.epri['HUC06'].isin(HUC06)]
                     
             if HUC08 is not None:
-                if isinstance(HUC08,int):
+                if isinstance(HUC08, int):
                     self.epri = self.epri[self.epri.HUC08 == HUC08]
                 else:
-                    self.epri = self.epri[self.epri['HUC02'].isin(HUC08)]
-                    
+                    self.epri = self.epri[self.epri['HUC08'].isin(HUC08)]
+ 
             if River is not None:
                 if isinstance(River,str):
                     self.epri = self.epri[self.epri.River == River]
@@ -2521,18 +2521,14 @@ class epri():
             print ("--------------------------------------------------------------------------------------------")
            
         def LengthSummary(self):
-            """
-            Summarizes fish lengths from the filtered EPRI dataset, aggregating counts
-            across specified length cohorts and fitting the aggregated lengths to a
-            Log Normal distribution.
+            # Ensure all required columns exist; if not, create them with zeros.
+            required_columns = ['0_5', '5_10', '10_15', '15_20', '20_25', 
+                                '25_38', '38_51', '51_64', '64_76', 'GT76']
+            for col in required_columns:
+                if col not in self.epri.columns:
+                    self.epri[col] = 0
         
-            The method samples uniformly within each size cohort to approximate the
-            distribution of lengths and then fits a Log Normal distribution to these
-            sampled lengths, providing an analysis of the size distribution of the
-            entrained fish in the studied dataset.
-            """
-    
-            # sum up the number of observations within each size cohort
+            # Sum up the counts for each cohort.
             cm_0_5 = np.int32(self.epri['0_5'].sum())
             cm_5_10 = np.int32(self.epri['5_10'].sum())
             cm_10_15 = np.int32(self.epri['10_15'].sum())
@@ -2543,143 +2539,391 @@ class epri():
             cm_51_64 = np.int32(self.epri['51_64'].sum())
             cm_64_76 = np.int32(self.epri['64_76'].sum())
             cm_GT76 = np.int32(self.epri['GT76'].sum())
-    
-            # sample from uniform distribution within each size cohort
-            cm_0_5_arr = np.random.uniform(low = 0, high = 5.0, size = cm_0_5)
-            cm_5_10_arr = np.random.uniform(low = 5.0, high = 10.0, size = cm_5_10)
-            cm_10_55_arr = np.random.uniform(low = 10.0, high = 15.0, size = cm_10_15)
-            cm_15_20_arr = np.random.uniform(low = 15.0, high = 20.0, size = cm_15_20)
-            cm_20_25_arr = np.random.uniform(low = 20.0, high = 25.0, size = cm_20_25)
-            cm_25_38_arr = np.random.uniform(low = 25.0, high = 38.0, size = cm_25_38)
-            cm_38_51_arr = np.random.uniform(low = 38.0, high = 51.0, size = cm_38_51)
-            cm_51_64_arr = np.random.uniform(low = 51.0, high = 64.0, size = cm_51_64)
-            cm_64_76_arr = np.random.uniform(low = 64.0, high = 76.0, size = cm_64_76)
-            cm_GT76_arr = np.random.uniform(low = 76.0, high = 100.0, size = cm_GT76)
-    
-            # append them all together into 1 array
-            self.lengths = np.concatenate((cm_0_5_arr,
-                                           cm_5_10_arr,
-                                           cm_10_55_arr,
-                                           cm_15_20_arr,
-                                           cm_20_25_arr,
-                                           cm_25_38_arr,
-                                           cm_38_51_arr,
-                                           cm_51_64_arr,
-                                           cm_64_76_arr,
-                                           cm_GT76_arr),
-                                          axis = 0)
-    
-            # now fit that array to a log normal
+        
+            # Check if there is any data.
+            total_counts = (cm_0_5 + cm_5_10 + cm_10_15 + cm_15_20 + cm_20_25 +
+                            cm_25_38 + cm_38_51 + cm_51_64 + cm_64_76 + cm_GT76)
+            if total_counts == 0:
+                print("Warning: No fish length data available.")
+                self.lengths = np.array([])
+                self.len_dist = (np.nan, np.nan, np.nan)
+                return
+        
+            # Generate arrays of lengths by sampling uniformly within each cohort.
+            cm_0_5_arr = np.random.uniform(low=0, high=5.0, size=cm_0_5)
+            cm_5_10_arr = np.random.uniform(low=5.0, high=10.0, size=cm_5_10)
+            cm_10_15_arr = np.random.uniform(low=10.0, high=15.0, size=cm_10_15)
+            cm_15_20_arr = np.random.uniform(low=15.0, high=20.0, size=cm_15_20)
+            cm_20_25_arr = np.random.uniform(low=20.0, high=25.0, size=cm_20_25)
+            cm_25_38_arr = np.random.uniform(low=25.0, high=38.0, size=cm_25_38)
+            cm_38_51_arr = np.random.uniform(low=38.0, high=51.0, size=cm_38_51)
+            cm_51_64_arr = np.random.uniform(low=51.0, high=64.0, size=cm_51_64)
+            cm_64_76_arr = np.random.uniform(low=64.0, high=76.0, size=cm_64_76)
+            cm_GT76_arr = np.random.uniform(low=76.0, high=100.0, size=cm_GT76)
+        
+            # Concatenate all arrays.
+            try:
+                self.lengths = np.concatenate((cm_0_5_arr,
+                                                cm_5_10_arr,
+                                                cm_10_15_arr,
+                                                cm_15_20_arr,
+                                                cm_20_25_arr,
+                                                cm_25_38_arr,
+                                                cm_38_51_arr,
+                                                cm_51_64_arr,
+                                                cm_64_76_arr,
+                                                cm_GT76_arr), axis=0)
+            except Exception as e:
+                print("Error concatenating length arrays:", e)
+                self.lengths = np.array([])
+                self.len_dist = (np.nan, np.nan, np.nan)
+                return
+        
+            # If the resulting array is empty, skip fitting.
+            if self.lengths.size == 0:
+                print("Warning: Concatenated lengths array is empty.")
+                self.len_dist = (np.nan, np.nan, np.nan)
+                return
+        
+            # Fit the concatenated array to a lognormal distribution.
             self.len_dist = lognorm.fit(self.lengths)
-            print("The log normal distribution has a shape parameter s: %s, location: %s and scale: %s"%(round(self.len_dist[0],4),
-                                                                                                         round(self.len_dist[1],4),
-                                                                                                         round(self.len_dist[2],4)))
-        def plot (self):
-            # get a sample
-            pareto_sample = pareto.rvs(self.dist_pareto[0],self.dist_pareto[1],self.dist_pareto[2],1000)
-            lognorm_sample = lognorm.rvs(self.dist_lognorm[0],self.dist_lognorm[1],self.dist_lognorm[2],1000)
-            weibull_sample = weibull_min.rvs(self.dist_weibull[0],self.dist_weibull[1],self.dist_weibull[2],1000)
-    
-            # get our observations
-            observations = self.epri.FishPerMft3.values
-    
-            # KS test comnpare distribution with observations are they from the same distribution?
-            t1 = ks_2samp(observations,pareto_sample,alternative = 'two-sided')
-            t2 = ks_2samp(observations,lognorm_sample,alternative = 'two-sided')
-            t3 = ks_2samp(observations,weibull_sample,alternative = 'two-sided')
-            self.pareto_t = round(t1[1],4)
-            self.log_normal_t = round(t2[1],4)
-            self.weibull_t = round(t3[1],4)
-    
-
-            # make a figure
-            # Set rcParams within the plot function to ensure local application
-            plt.rcParams['font.size'] = 6
-            plt.rcParams['font.family'] = 'serif'
-            figSize = (4,4)
-            #plt.figure()
-            fig, axs = plt.subplots(2,2,tight_layout = True,figsize = figSize)
-            axs[0,0].hist(np.log(observations), color='darkorange', density = True)
-            axs[0,0].set_title('Observations')
-            axs[0,0].set_xlabel('org per Mft3')
-            axs[0,1].hist(np.log(pareto_sample), color='blue',lw=2, density = True)
-            axs[0,1].set_title('Pareto p = %s'%(round(t1[1],4)))
-            axs[0,1].set_xlabel('org per Mft3')
-            axs[1,0].hist(np.log(lognorm_sample), color='blue',lw=2, density = True)
-            axs[1,0].set_title('Log Normal p = %s'%(round(t2[1],4)))
-            axs[1,0].set_xlabel('org per Mft3')
-            axs[1,1].hist(np.log(weibull_sample), color='darkorange',lw=2, density = True)
-            axs[1,1].set_title('Weibull p = %s'%(round(t3[1],4)))
-            axs[1,1].set_xlabel('org per Mft3')
-    
-            plt.show()
+            print("The log normal distribution has a shape parameter s: %s, location: %s and scale: %s" %
+                  (round(self.len_dist[0], 4), round(self.len_dist[1], 4), round(self.len_dist[2], 4)))
 
             
 
            
-        def summary_output(self, output_dir, dist = 'Log Normal'):
-            # species data
-            if dist == 'Log Normal' or dist == 'Weibull' or dist == 'Pareto':
-                family = self.family
-                genus = self.genus 
-                species = self.species
+        # def summary_output(self, output_dir, dist = 'Log Normal'):
+        #     # species data
+        #     if dist == 'Log Normal' or dist == 'Weibull' or dist == 'Pareto':
+        #         family = self.family
+        #         genus = self.genus 
+        #         species = self.species
                 
-                # months
-                month = self.month 
+        #         # months
+        #         month = self.month 
                 
-                huc02 = self.HUC02
+        #         huc02 = self.HUC02
                 
-                # presence and entrainment rate
-                presence = self.presence 
-                max_ent_rate = self.max_ent_rate 
-                sample_size = self.sample_size
+        #         # presence and entrainment rate
+        #         presence = self.presence 
+        #         max_ent_rate = self.max_ent_rate 
+        #         sample_size = self.sample_size
                 
-                # weibull c, location, scale
-                weibull_p = self.weibull_t
-                weibull_c = round(self.dist_weibull[0],4)
-                weibull_loc = round(self.dist_weibull[1],4)
-                weibull_scale = round(self.dist_weibull[2],4)
+        #         # weibull c, location, scale
+        #         weibull_p = self.weibull_t
+        #         weibull_c = round(self.dist_weibull[0],4)
+        #         weibull_loc = round(self.dist_weibull[1],4)
+        #         weibull_scale = round(self.dist_weibull[2],4)
                 
-                # log normal b, location, scale
-                log_normal_p = self.log_normal_t
-                log_normal_b = round(self.dist_lognorm[0],4)
-                log_normal_loc = round(self.dist_lognorm[1],4)
-                log_normal_scale = round(self.dist_lognorm[2],4)
+        #         # log normal b, location, scale
+        #         log_normal_p = self.log_normal_t
+        #         log_normal_b = round(self.dist_lognorm[0],4)
+        #         log_normal_loc = round(self.dist_lognorm[1],4)
+        #         log_normal_scale = round(self.dist_lognorm[2],4)
                 
-                pareto_p = self.pareto_t
-                pareto_b = round(self.dist_pareto[0],4)
-                pareto_loc = round(self.dist_pareto[1],4)
-                pareto_scale = round(self.dist_pareto[2],4)
+        #         pareto_p = self.pareto_t
+        #         pareto_b = round(self.dist_pareto[0],4)
+        #         pareto_loc = round(self.dist_pareto[1],4)
+        #         pareto_scale = round(self.dist_pareto[2],4)
                 
-                length_b = round(self.len_dist[0],4)
-                length_loc = round(self.len_dist[1],4)
-                length_scale = round(self.len_dist[2],4)
+        #         length_b = round(self.len_dist[0],4)
+        #         length_loc = round(self.len_dist[1],4)
+        #         length_scale = round(self.len_dist[2],4)
                 
-                if dist == 'Log Normal':
-                    row = np.array([family, genus, species, log_normal_b, 
-                                    log_normal_loc, log_normal_scale, max_ent_rate, 
-                                    presence, length_b,length_loc,length_scale])
-                elif dist == 'Weibull':
-                    row = np.array([family, genus, species, weibull_c, 
-                                    weibull_loc, weibull_scale, max_ent_rate, 
-                                    presence, length_b,length_loc,length_scale])    
-                else:
-                    row = np.array([family, genus, species, pareto_b, 
-                                    pareto_loc, pareto_scale, max_ent_rate, 
-                                    presence, length_b,length_loc,length_scale])
+        #         if dist == 'Log Normal':
+        #             row = np.array([family, genus, species, log_normal_b, 
+        #                             log_normal_loc, log_normal_scale, max_ent_rate, 
+        #                             presence, length_b,length_loc,length_scale])
+        #         elif dist == 'Weibull':
+        #             row = np.array([family, genus, species, weibull_c, 
+        #                             weibull_loc, weibull_scale, max_ent_rate, 
+        #                             presence, length_b,length_loc,length_scale])    
+        #         else:
+        #             row = np.array([family, genus, species, pareto_b, 
+        #                             pareto_loc, pareto_scale, max_ent_rate, 
+        #                             presence, length_b,length_loc,length_scale])
                 
-                columns = ['family','genus','species','ent_shape','ent_loc',
-                           'ent_scale','max_ent_rate','presence','length_b',
-                           'length_loc','length_scale']
-                new_row_df = pd.DataFrame([row],columns = columns)
+        #         columns = ['family','genus','species','ent_shape','ent_loc',
+        #                    'ent_scale','max_ent_rate','presence','length_b',
+        #                    'length_loc','length_scale']
+        #         new_row_df = pd.DataFrame([row],columns = columns)
                 
-                try:
-                    results = pd.read_csv(os.path.join(output_dir,'epri_fit.csv'))
-                except FileNotFoundError:
-                    results = pd.DataFrame(columns = columns)
+        #         try:
+        #             results = pd.read_csv(os.path.join(output_dir,'epri_fit.csv'))
+        #         except FileNotFoundError:
+        #             results = pd.DataFrame(columns = columns)
                     
-                results = pd.concat([results,new_row_df], ignore_index = True)
-                results.to_csv(os.path.join(output_dir,'epri_fit.csv'), index = False)
+        #         results = pd.concat([results,new_row_df], ignore_index = True)
+        #         results.to_csv(os.path.join(output_dir,'epri_fit.csv'), index = False)
                 
+        #     else:
+        #         return print('Distribution no supported by stryke')
+
+        def plot(self):
+            """
+            Generates a 2x2 subplot figure showing histograms (with natural log-transformed data)
+            for the observed entrainment rates and for simulated samples drawn from the fitted Pareto,
+            Log Normal, and Weibull distributions. It also performs KS tests comparing the observed data
+            with each simulated sample, storing the KS p-values in the object.
+            """
+            from scipy.stats import ks_2samp, pareto, lognorm, weibull_min
+            import matplotlib.pyplot as plt
+            import numpy as np
+        
+            # Generate simulated samples using explicit conditionals.
+            if self.dist_pareto is not None:
+                pareto_sample = pareto.rvs(self.dist_pareto[0], loc=self.dist_pareto[1],
+                                           scale=self.dist_pareto[2], size=1000)
             else:
-                return print('Distribution no supported by stryke')
+                pareto_sample = np.array([])
+        
+            if self.dist_lognorm is not None:
+                lognorm_sample = lognorm.rvs(self.dist_lognorm[0], loc=self.dist_lognorm[1],
+                                             scale=self.dist_lognorm[2], size=1000)
+            else:
+                lognorm_sample = np.array([])
+        
+            if self.dist_weibull is not None:
+                weibull_sample = weibull_min.rvs(self.dist_weibull[0], loc=self.dist_weibull[1],
+                                                 scale=self.dist_weibull[2], size=1000)
+            else:
+                weibull_sample = np.array([])
+        
+            # Get the observed entrainment data.
+            observations = self.epri.FishPerMft3.values
+        
+            # Perform KS tests to compare the observed data with each simulated sample.
+            t1 = ks_2samp(observations, pareto_sample, alternative='two-sided')
+            t2 = ks_2samp(observations, lognorm_sample, alternative='two-sided')
+            t3 = ks_2samp(observations, weibull_sample, alternative='two-sided')
+            self.pareto_t = round(t1[1], 4)
+            self.log_normal_t = round(t2[1], 4)
+            self.weibull_t = round(t3[1], 4)
+        
+            # Set matplotlib style parameters.
+            plt.rcParams['font.size'] = 6
+            plt.rcParams['font.family'] = 'serif'
+            figSize = (4, 4)
+            
+            # Create a 2x2 subplot figure.
+            fig, axs = plt.subplots(2, 2, tight_layout=True, figsize=figSize)
+            
+            # Plot the histogram of the log-transformed observed data.
+            axs[0, 0].hist(np.log(observations), color='darkorange', density=True)
+            axs[0, 0].set_title('Observations')
+            axs[0, 0].set_xlabel('org per Mft3')
+            
+            # Plot the histogram for the Pareto simulated sample.
+            axs[0, 1].hist(np.log(pareto_sample), color='blue', lw=2, density=True)
+            axs[0, 1].set_title('Pareto p = %s' % (self.pareto_t))
+            axs[0, 1].set_xlabel('org per Mft3')
+            
+            # Plot the histogram for the Log Normal simulated sample.
+            axs[1, 0].hist(np.log(lognorm_sample), color='blue', lw=2, density=True)
+            axs[1, 0].set_title('Log Normal p = %s' % (self.log_normal_t))
+            axs[1, 0].set_xlabel('org per Mft3')
+            
+            # Plot the histogram for the Weibull simulated sample.
+            axs[1, 1].hist(np.log(weibull_sample), color='darkorange', lw=2, density=True)
+            axs[1, 1].set_title('Weibull p = %s' % (self.weibull_t))
+            axs[1, 1].set_xlabel('org per Mft3')
+            
+            plt.show()
+            
+
+        def summary_output(self, output_dir, dist='Log Normal'):
+            """
+            Generates a detailed formatted summary report that includes:
+              - Query filters (Family, Genus, Species, Month, HUC02, etc.)
+              - Basic statistics: Sample size, probability of presence, maximum entrainment rate
+              - Fish length distribution: Mean and standard deviation of fish lengths
+              - Fitted parameters for Pareto, Log Normal, and Weibull distributions along with their KS p-values
+            The report is written to a file "epri_summary_report.txt" in output_dir and is also returned.
+            """
+            # Basic query information
+            family = self.family if self.family is not None else "N/A"
+            genus = self.genus if self.genus is not None else "N/A"
+            species = self.species if self.species is not None else "N/A"
+            month = self.month if self.month is not None else []
+            huc02 = self.HUC02 if self.HUC02 is not None else "N/A"
+            # Basic statistics
+            presence = self.presence if hasattr(self, 'presence') else "N/A"
+            max_ent_rate = self.max_ent_rate if hasattr(self, 'max_ent_rate') else "N/A"
+            sample_size = self.sample_size if hasattr(self, 'sample_size') else "N/A"
+            
+            # Fish length distribution stats (if available)
+            if hasattr(self, 'lengths') and self.lengths.size > 0:
+                mean_length = round(np.mean(self.lengths), 4)
+                std_length = round(np.std(self.lengths), 4)
+            else:
+                mean_length = "N/A"
+                std_length = "N/A"
+            
+            # For Pareto:
+            if hasattr(self, 'dist_pareto'):
+                pareto_shape = round(self.dist_pareto[0], 4)
+                pareto_loc = round(self.dist_pareto[1], 4)
+                pareto_scale = round(self.dist_pareto[2], 4)
+                pareto_ks = getattr(self, 'pareto_t', "N/A")
+            else:
+                pareto_shape = pareto_loc = pareto_scale = pareto_ks = "N/A"
+            
+            # For Log Normal:
+            if hasattr(self, 'dist_lognorm'):
+                lognorm_shape = round(self.dist_lognorm[0], 4)
+                lognorm_loc = round(self.dist_lognorm[1], 4)
+                lognorm_scale = round(self.dist_lognorm[2], 4)
+                lognorm_ks = getattr(self, 'log_normal_t', "N/A")
+            else:
+                lognorm_shape = lognorm_loc = lognorm_scale = lognorm_ks = "N/A"
+            
+            # For Weibull:
+            if hasattr(self, 'dist_weibull'):
+                weibull_shape = round(self.dist_weibull[0], 4)
+                weibull_loc = round(self.dist_weibull[1], 4)
+                weibull_scale = round(self.dist_weibull[2], 4)
+                weibull_ks = getattr(self, 'weibull_t', "N/A")
+            else:
+                weibull_shape = weibull_loc = weibull_scale = weibull_ks = "N/A"
+            
+            # Build the report lines.
+            lines = []
+            lines.append("--------------------------------------------------")
+            lines.append("            EPRI Fitting Summary Report           ")
+            lines.append("--------------------------------------------------")
+            lines.append(f"Species: {family} {genus} {species}")
+            lines.append("")
+            lines.append("Filters Applied:")
+            lines.append(f"   Months: {month}")
+            lines.append(f"   HUC02: {huc02}")
+            lines.append("")
+            lines.append("Statistics:")
+            lines.append(f"   Sample Size: {sample_size}")
+            lines.append(f"   Presence: {presence}")
+            lines.append(f"   Maximum Entrainment Rate: {max_ent_rate}")
+            lines.append("")
+            lines.append("Fish Length Distribution:")
+            lines.append(f"   Mean Length: {mean_length}")
+            lines.append(f"   Standard Deviation: {std_length}")
+            lines.append("")
+            lines.append("Pareto Distribution:")
+            lines.append(f"   Shape: {pareto_shape}")
+            lines.append(f"   Location: {pareto_loc}")
+            lines.append(f"   Scale: {pareto_scale}")
+            lines.append(f"   KS p-value: {pareto_ks}")
+            lines.append("")
+            lines.append("Log Normal Distribution:")
+            lines.append(f"   Shape: {lognorm_shape}")
+            lines.append(f"   Location: {lognorm_loc}")
+            lines.append(f"   Scale: {lognorm_scale}")
+            lines.append(f"   KS p-value: {lognorm_ks}")
+            lines.append("")
+            lines.append("Weibull Distribution:")
+            lines.append(f"   Shape: {weibull_shape}")
+            lines.append(f"   Location: {weibull_loc}")
+            lines.append(f"   Scale: {weibull_scale}")
+            lines.append(f"   KS p-value: {weibull_ks}")
+            lines.append("--------------------------------------------------")
+            
+            final_report = "\n".join(lines)
+            
+            # Write the report to a text file.
+            report_file = os.path.join(output_dir, "epri_summary_report.txt")
+            with open(report_file, "w") as f:
+                f.write(final_report)
+            
+            print(final_report)
+            return final_report
+
+
+
+        # def summary_output(self, output_dir, dist='Log Normal'):
+        #     """
+        #     Generates a formatted summary report (as a multi‐line string) including:
+        #       - Query filters (Family, Genus, Species, Month, HUC02, etc.)
+        #       - Basic statistics: sample size, maximum entrainment rate, probability of presence
+        #       - Fish length distribution: mean and standard deviation (if available)
+        #       - Fitting results for the chosen distribution (shape, location, scale, KS p-value)
+            
+        #     The report is written to a text file ("epri_summary_report.txt") in output_dir.
+        #     """
+        #     # Check that the distribution is supported.
+        #     if dist not in ['Log Normal', 'Weibull', 'Pareto']:
+        #         return "Distribution not supported by stryke"
+            
+        #     # Species / query information.
+        #     family = self.family if self.family is not None else "N/A"
+        #     genus = self.genus if self.genus is not None else "N/A"
+        #     species = self.species if self.species is not None else "N/A"
+        #     month = self.month if self.month is not None else []
+        #     huc02 = self.HUC02 if self.HUC02 is not None else "N/A"
+        #     # Basic stats.
+        #     presence = self.presence if hasattr(self, 'presence') else "N/A"
+        #     max_ent_rate = self.max_ent_rate if hasattr(self, 'max_ent_rate') else "N/A"
+        #     sample_size = self.sample_size if hasattr(self, 'sample_size') else "N/A"
+            
+        #     # Fish length distribution stats.
+        #     if hasattr(self, 'lengths') and self.lengths.size > 0:
+        #         mean_length = round(np.mean(self.lengths), 4)
+        #         std_length = round(np.std(self.lengths), 4)
+        #     else:
+        #         mean_length = "N/A"
+        #         std_length = "N/A"
+            
+        #     # Distribution parameters.
+        #     if dist == 'Log Normal':
+        #         shape_val = round(self.dist_lognorm[0], 4) if hasattr(self, 'dist_lognorm') else "N/A"
+        #         loc_val   = round(self.dist_lognorm[1], 4) if hasattr(self, 'dist_lognorm') else "N/A"
+        #         scale_val = round(self.dist_lognorm[2], 4) if hasattr(self, 'dist_lognorm') else "N/A"
+        #         ks_p      = self.log_normal_t if hasattr(self, 'log_normal_t') else "N/A"
+        #     elif dist == 'Weibull':
+        #         shape_val = round(self.dist_weibull[0], 4) if hasattr(self, 'dist_weibull') else "N/A"
+        #         loc_val   = round(self.dist_weibull[1], 4) if hasattr(self, 'dist_weibull') else "N/A"
+        #         scale_val = round(self.dist_weibull[2], 4) if hasattr(self, 'dist_weibull') else "N/A"
+        #         ks_p      = self.weibull_t if hasattr(self, 'weibull_t') else "N/A"
+        #     else:  # Pareto
+        #         shape_val = round(self.dist_pareto[0], 4) if hasattr(self, 'dist_pareto') else "N/A"
+        #         loc_val   = round(self.dist_pareto[1], 4) if hasattr(self, 'dist_pareto') else "N/A"
+        #         scale_val = round(self.dist_pareto[2], 4) if hasattr(self, 'dist_pareto') else "N/A"
+        #         ks_p      = self.pareto_t if hasattr(self, 'pareto_t') else "N/A"
+            
+        #     # Build the report lines.
+        #     lines = []
+        #     lines.append("--------------------------------------------------")
+        #     lines.append("            EPRI Fitting Summary Report           ")
+        #     lines.append("--------------------------------------------------")
+        #     lines.append(f"Species: {family} {genus} {species}")
+        #     lines.append("")
+        #     lines.append("Filters Applied:")
+        #     lines.append(f"   Months: {month}")
+        #     lines.append(f"   HUC02: {huc02}")
+        #     # (Add additional filters if desired, e.g., states, plant_cap, etc.)
+        #     lines.append("")
+        #     lines.append("Statistics:")
+        #     lines.append(f"   Sample Size: {sample_size}")
+        #     lines.append(f"   Presence: {presence}")
+        #     lines.append(f"   Maximum Entrainment Rate: {max_ent_rate}")
+        #     lines.append("")
+        #     lines.append("Fish Length Distribution:")
+        #     lines.append(f"   Mean Length: {mean_length}")
+        #     lines.append(f"   Standard Deviation: {std_length}")
+        #     lines.append("")
+        #     lines.append(f"{dist} Distribution:")
+        #     lines.append(f"   Shape: {shape_val}")
+        #     lines.append(f"   Location: {loc_val}")
+        #     lines.append(f"   Scale: {scale_val}")
+        #     lines.append(f"   KS p-value: {ks_p}")
+        #     lines.append("--------------------------------------------------")
+            
+        #     final_report = "\n".join(lines)
+            
+        #     # Write the report to a text file.
+        #     report_file = os.path.join(output_dir, "epri_summary_report.txt")
+        #     with open(report_file, "w") as f:
+        #         f.write(final_report)
+            
+        #     # Also print it.
+        #     print(final_report)
+            
+        #     return final_report
