@@ -40,12 +40,16 @@
 <body>
     <nav>
         <a href="{{ url_for('index') }}">Home</a> |
-        <a href="{{ url_for('upload_file') }}">Upload Simulation Input</a> |
-        <a href="{{ url_for('fit_distributions') }}">Fit Distributions</a> |
-        <a href="{{ url_for('results') }}">Results</a>
+        <a href="{{ url_for('upload_simulation') }}">Upload and Run </a> |
+        <a href="{{ url_for('fit_distributions') }}">Fit Entrainment Rate Distributions</a> |
     </nav>
     <div class="container">
-        <h1>Welcome to Stryke</h1>
+        <h1>Welcome to the FEIRA web app</h1>
+        
+        <p>
+            The Fish Entrainment and Impingement Risk Assessment is both quantitative and qualitative.  
+            FEIRA uses the open source software stryke for quantifying impacts to fish populations.
+        </p> 
         <p>
             Stryke is an individual-based Monte Carlo simulation model designed to assess fish entrainment and turbine blade strike risks at hydroelectric facilities.
             It integrates hydraulic, operational, and biological data to predict fish survival and downstream passage.

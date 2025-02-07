@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Simulation Upload & Results</title>
+  <title>Simulation Upload & Live Results</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -62,23 +62,29 @@
       padding-top: 20px;
       border-top: 2px solid #ccc;
     }
-    pre {
+    #live-log {
       background: #f4f4f4;
       padding: 10px;
       border: 1px solid #ccc;
       white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: scroll;
     }
   </style>
 </head>
 <body>
   <!-- Navigation Bar -->
   <nav>
-    <a href="{{ url_for('upload_simulation') }}">Upload Simulation</a> |
-    <a href="{{ url_for('download_output', filename=output_filename) }}">Download Output</a>
+    <a href="{{ url_for('index') }}">Home</a> |
+    <a href="{{ url_for('upload_simulation') }}">Upload and Run </a> |
+    <a href="{{ url_for('fit_distributions') }}">Fit Entrainment Rate Distributions</a> |
+    {% if output_filename %}
+    | <a href="{{ url_for('download_output', filename=output_filename) }}">Download Output</a>
+    {% endif %}
   </nav>
   
   <div class="container">
-    <h1>Simulation Upload & Results</h1>
+    <h1>Simulation Upload & Live Results</h1>
     {% with messages = get_flashed_messages() %}
       {% if messages %}
         <ul style="color: red;">
@@ -103,17 +109,27 @@
     <div class="results">
       <h2>Simulation Results</h2>
       <p>{{ simulation_results }}</p>
-      {% if output_filename %}
-      <p>
-        <a href="{{ url_for('download_output', filename=output_filename) }}">Download Output File ({{ output_filename }})</a>
-      </p>
-      {% endif %}
-      {% if simulation_log %}
-      <h3>Detailed Log Output:</h3>
-      <pre>{{ simulation_log }}</pre>
-      {% endif %}
+      <h3>Live Log Output:</h3>
+      <div id="live-log"></div>
     </div>
     {% endif %}
   </div>
+  
+  <!-- JavaScript to receive live log updates via SSE -->
+  <script>
+    // Only start the live log stream if the simulation_results variable is defined (i.e., simulation has started)
+    {% if simulation_results %}
+      var source = new EventSource("{{ url_for('stream') }}");
+      source.onmessage = function(event) {
+          var liveLogDiv = document.getElementById("live-log");
+          liveLogDiv.innerHTML += event.data + "\n";
+          liveLogDiv.scrollTop = liveLogDiv.scrollHeight;
+      };
+      source.onerror = function(event) {
+          console.error("SSE error:", event);
+          source.close();
+      };
+    {% endif %}
+  </script>
 </body>
 </html>

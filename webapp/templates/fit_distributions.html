@@ -62,6 +62,8 @@
     }
     .results {
       margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #ccc;
     }
     .results img {
       max-width: 100%;
@@ -81,9 +83,8 @@
   <!-- Navigation Bar -->
   <nav>
     <a href="{{ url_for('index') }}">Home</a> |
-    <a href="{{ url_for('upload_file') }}">Upload Simulation Input</a> |
-    <a href="{{ url_for('fit_distributions') }}">Fit Distributions</a> |
-    <a href="{{ url_for('results') }}">Results</a>
+    <a href="{{ url_for('upload_simulation') }}">Upload and Run </a> |
+    <a href="{{ url_for('fit_distributions') }}">Fit Entrainment Rate Distributions</a> |
   </nav>
   
   <div class="container">
