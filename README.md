@@ -98,7 +98,7 @@ Within the notebook 'stryke_project_notebook.ipynb' you will be able to access t
 
 If you do not have existing empirical data for your facility of interest, stryke can query the EPRI entrainment database and develop them for you.  To fit a distribution, simply pass a list of arguments to stryke. The list of arguments, their datatype, and explanations are below.  The following example queries the EPRI database to return a sample of entrainment observations of Catastomidae in the winter within The Great Lakes watershed while leaving out Potato Rapids from the sample: 
 
-'Family = 'Catostomidae', Month = [1,2,12], HUC02= [4], NIDID= 'WI00757''
+`Family = 'Catostomidae', Month = [1,2,12], HUC02= [4], NIDID= 'WI00757'`
 
 | Parameter       | Data Type |                                             Comment                                           |
 |-----------------|-----------|-----------------------------------------------------------------------------------------------|
@@ -157,17 +157,17 @@ Within the level of HUC02 there are five geographical regions for which there ar
 - HUC02-05 The Ohio River
 - HUC02-07 The Mississippi River
 
-When cell [3] is run ('fish = stryke.epri(Genus = ' ', Month = [ ], HUC02 = [ ])) stryke will return a figure with four histograms that depict natural logarithm transformed entrainment rates (one observed, three simulated).  Stryke fits a Log Normal, Weibull, and Pareto distribution to the returned data and produces a p-value from a Kolmogorov-Smirnof test, where H0 = no difference between observed and simulated histogram.  The distribution with the largest p-value  best describes trends in observed data. The query above produced the figure below.  In this instance, the Log Normal had the highest p-value and is most like the observed data.  For most queries, the Log Normal will be the best distribution.  The Weibull works when there are fewer observations with low rates, and the Pareto only works in special cases when observations are monotonically decreasing after log transforming them.
+When cell [3] is run (`fish = stryke.epri(Genus = ' ', Month = [ ], HUC02 = [ ])`) stryke will return a figure with four histograms that depict natural logarithm transformed entrainment rates (one observed, three simulated).  Stryke fits a Log Normal, Weibull, and Pareto distribution to the returned data and produces a p-value from a Kolmogorov-Smirnof test, where H0 = no difference between observed and simulated histogram.  The distribution with the largest p-value  best describes trends in observed data. The query above produced the figure below.  In this instance, the Log Normal had the highest p-value and is most like the observed data.  For most queries, the Log Normal will be the best distribution.  The Weibull works when there are fewer observations with low rates, and the Pareto only works in special cases when observations are monotonically decreasing after log transforming them.
 
 <img src="https://github.com/knebiolo/stryke/assets/61742537/1b57783c-0913-40d9-913a-4f45ee2ab8a0" width="400" height="auto"/>
 
-If, and only if you are satisfied with the distribution's fit, run the 'fish.summary_output()' fuction cell. This will arrange the parameters so that you can copy and paste them directly onto the **Population tab**.
+If, and only if you are satisfied with the distribution's fit, run the `fish.summary_output()` fuction cell. This will arrange the parameters so that you can copy and paste them directly onto the **Population tab**.
 
 # Spreadsheet Interface
 
 To implement a desktop entrainment study, Stryke will need data describing river discharge scenarios, project operating scenarios, seasonal entrainment events, turbine parameters, and migratory routes.  There is a tab for each major study component; you can find directions to complete them below.  It is possible to configure a Stryke project (spreadsheet) for resident or anadromous species impact assessments for different operating configurations (run of river, peaking, and pumped storage operations), and it allows for an expanded migratory network with multiple dependent facilities.
 
-**_NOTE:_** Stryke will not overwrite output tabs in the spreadsheet interface. Therefore ensure that the input spreadsheet does not contain tabs of 'beta fit', 'daily summary' and 'yearly summary' before running a new simulation. After running a simulation it is advisable to save the input file with output tabs so that simulation parameters and outputs are contained in a single file and subsequent simulations should start with different spreadsheets.
+>**_NOTE:_** Stryke will not overwrite output tabs in the spreadsheet interface. Therefore ensure that the input spreadsheet does not contain tabs of 'beta fit', 'daily summary' and 'yearly summary' before running a new simulation. After running a simulation it is advisable to save the input file with output tabs so that simulation parameters and outputs are contained in a single file and subsequent simulations should start with different spreadsheets.
 
 ## Flow Scenarios
 
@@ -318,4 +318,26 @@ The unit parameters tab is another complex tab that contains measurable properti
 |D2                 |Float      |(required - Francis) diameter of runner at outlet (ft)                                         |
 |$\lambda$          |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2)|
 
+## Simulation Outputs
+
+Upon completion of a simulation, the stryke tool will print three output tabs in the excel document interface. These three tabs are **beta fit**, **daily summary** and **yearly summary**.
+
+**beta fit** describes the survival rates for the target fish genus/family/species in each waterbody segment for the flow scenario, with variance, "ll" lower confidence limit, "ul" upper confidence limit.
+
+**daily summary** shows the daily rates of entrained fish for the target genus/family/species along with the population size and survival rate.
+
+**yearly summary** shows the yearly rates of entrainment with columns for the target genus/family/species, flow scenario, median fish population, median number of individual fish entrained, median number of fish which survived, the mean entrainment rate, lower and upper confidence levels for entrainment, the probability that >10 fish, >100 fish and >1000 fish will be entrained. With the field abbreviations defined below.
+
+|Field      | Definition                                 |
+|-------------|--------------------------------------------|
+|scenario     | flow scenario defined by user              |
+|med_pop      | median population                          |
+|med_entrained| median number of fish entrained            |
+|med_survived | median number of fish that survived         |
+|mean_ent      | mean number of fish entrained   |
+|lcl_ent   | lower confidence level of entrainment |
+|ucl_ent   | upper confidence level of entrainment   |
+|prob_gt_10_entrained | probability that >10 fish will be entrained   |
+|gt_100_entrained | probability that >100 fish will be entrained   |
+|gt_1000_entrained | probability that >1000 fish will be entrained   |
 
