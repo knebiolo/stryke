@@ -1,0 +1,815 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+    <title>stryke module &#8212; stryke 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-stryke">
+<span id="stryke-module"></span><h1>stryke module<a class="headerlink" href="#module-stryke" title="Permalink to this heading">¶</a></h1>
+<p>Created on Wed Jan 29 19:59:19 2020</p>
+<p>&#64;author: Kevin Nebiolo
+&#64;qaqc: Isha Deo</p>
+<p>Stryke: Kleinschmidt Associates Turbine Blade Strike Simulation Model</p>
+<p>The intent of Stryke is to model downstream the passage mortality through a
+theoretical hydroelectric facility.  The simulation will employ Monte Carlo
+methods wihtin an individual based modeling framework.  Meaning we are
+modeling the individual fates of a theoretical population of fish and
+summarizing the results for a single simulation.  Then, we iterate that IBM
+thousands of times and eventually, through black magic, we have a pretty good
+estimate of what the overall downstream passage survival would be of a
+theoretical population of fish through a theoretical hydroelectric facility.</p>
+<p>For fish passing via entrainment, individuals are exposed to turbine strike,
+which is modeled with the Franke et. al. 1997 equations.  For fish that pass
+via passage structures or spill, mortality is assessed with a roll of the dice
+using survival metrics determined a priori or sourced from similar studies.</p>
+<p>Unfortunately units are in feet - wtf - why can’t we get over ourselves and adopt
+metric.  God damnit I hate us sometimes</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="stryke.enable_matplotlib_inline">
+<span class="sig-prename descclassname"><span class="pre">stryke.</span></span><span class="sig-name descname"><span class="pre">enable_matplotlib_inline</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.enable_matplotlib_inline" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="stryke.epri">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">stryke.</span></span><span class="sig-name descname"><span class="pre">epri</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">states</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">plant_cap</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Month</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Family</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Genus</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Species</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">HUC02</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">HUC04</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">HUC06</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">HUC08</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">NIDID</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">River</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A Python class for querying the Electric Power Research Institute (EPRI)
+entrainment database and fitting a distribution to the observed
+entrainment rates. The class allows for flexible querying of the database
+based on various ecological and hydrological parameters.</p>
+<p>The class supports analysis by state, plant capacity, date, taxonomy,
+feeding guild, habitat preference, water body type, and more, to explore
+entrainment patterns across different environmental and operational conditions.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.epri.ExtremeFit">
+<span class="sig-name descname"><span class="pre">ExtremeFit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri.ExtremeFit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits an Extreme Value distribution to the filtered EPRI dataset to model entrainment
+rates. This method provides an analysis of entrainment patterns based on
+the shape, location, and scale parameters of the distribution.</p>
+<p>Outputs detailed statistics of the fitted Pareto distribution, including the
+mean, variance, and standard deviation, offering insights into the
+entrainment rates’ distribution characteristics within the selected dataset.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.epri.GumbelFit">
+<span class="sig-name descname"><span class="pre">GumbelFit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri.GumbelFit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits a Gumbel distribution to the filtered EPRI dataset to model entrainment
+rates. This method provides an analysis of entrainment patterns based on
+the shape, location, and scale parameters of the distribution.</p>
+<p>Outputs detailed statistics of the fitted Pareto distribution, including the
+mean, variance, and standard deviation, offering insights into the
+entrainment rates’ distribution characteristics within the selected dataset.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.epri.LengthSummary">
+<span class="sig-name descname"><span class="pre">LengthSummary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri.LengthSummary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Summarizes fish lengths from the filtered EPRI dataset, aggregating counts
+across specified length cohorts and fitting the aggregated lengths to a
+Log Normal distribution.</p>
+<p>The method samples uniformly within each size cohort to approximate the
+distribution of lengths and then fits a Log Normal distribution to these
+sampled lengths, providing an analysis of the size distribution of the
+entrained fish in the studied dataset.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.epri.LogNormalFit">
+<span class="sig-name descname"><span class="pre">LogNormalFit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri.LogNormalFit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits a Log Normal distribution to the filtered EPRI dataset to model entrainment
+rates. This method provides an analysis of entrainment patterns based on
+the shape, location, and scale parameters of the distribution.</p>
+<p>Outputs detailed statistics of the fitted Pareto distribution, including the
+mean, variance, and standard deviation, offering insights into the
+entrainment rates’ distribution characteristics within the selected dataset.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.epri.ParetoFit">
+<span class="sig-name descname"><span class="pre">ParetoFit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri.ParetoFit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits a Pareto distribution to the filtered EPRI dataset to model entrainment
+rates. This method provides an analysis of entrainment patterns based on
+the shape, location, and scale parameters of the distribution.</p>
+<p>Outputs detailed statistics of the fitted Pareto distribution, including the
+mean, variance, and standard deviation, offering insights into the
+entrainment rates’ distribution characteristics within the selected dataset.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.epri.WeibullMinFit">
+<span class="sig-name descname"><span class="pre">WeibullMinFit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri.WeibullMinFit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fits a Frachet distribution to the filtered EPRI dataset to model entrainment
+rates. This method provides an analysis of entrainment patterns based on
+the shape, location, and scale parameters of the distribution.</p>
+<p>Outputs detailed statistics of the fitted Pareto distribution, including the
+mean, variance, and standard deviation, offering insights into the
+entrainment rates’ distribution characteristics within the selected dataset.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="stryke.epri.epri">
+<span class="sig-name descname"><span class="pre">epri</span></span><a class="headerlink" href="#stryke.epri.epri" title="Permalink to this definition">¶</a></dt>
+<dd><p>I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.epri.plot">
+<span class="sig-name descname"><span class="pre">plot</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri.plot" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.epri.summary_output">
+<span class="sig-name descname"><span class="pre">summary_output</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.epri.summary_output" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="stryke.hydrologic">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">stryke.</span></span><span class="sig-name descname"><span class="pre">hydrologic</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">nid_near_gage_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_dir</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.hydrologic" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>A Python class for conducting flow exceedance analysis using recent USGS data
+in relation to the contributing watershed size. It utilizes a linear relationship
+between drainage area and flow exceedances derived from the 100 nearest USGS
+gages to a given dam. This relationship is used to predict flow conditions such
+as what constitutes a wet spring.</p>
+<p>The class is designed to import relevant data, including dam locations and
+nearby USGS gages, and to calculate flow exceedances based on this data.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.hydrologic.curve_fit">
+<span class="sig-name descname"><span class="pre">curve_fit</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">season</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dam</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exceedance</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.hydrologic.curve_fit" title="Permalink to this definition">¶</a></dt>
+<dd><p>Performs an Ordinary Least Squares (OLS) regression to model the relationship
+between watershed size and flow exceedance probability for a specific dam
+and season. This method uses the statsmodels library to fit the model and
+provides a summary of the regression results.</p>
+<p>Parameters:
+- season (str): The season for which the analysis is conducted (e.g., ‘Spring’).
+- dam (str): The identifier for the dam of interest, corresponding to entries</p>
+<blockquote>
+<div><p>in the NID_to_gage DataFrame.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>exceedance (str): Specifies the exceedance threshold being modeled (e.g.,
+‘exc_90’ for the 90th percentile exceedance flow).</p></li>
+</ul>
+<p>The function retrieves the relevant dam data, filters the exceedance DataFrame
+for the specified season and exceedance threshold, and extracts the drainage
+area and flow data for regression analysis.</p>
+<p>Outputs:
+- Prints a summary of the regression model, including the p-value and model</p>
+<blockquote>
+<div><p>coefficients. If the model is statistically significant (p-value &lt; 0.05),
+it calculates and prints the exceedance flow for the specified dam based
+on its drainage area.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>Updates class attributes with the regression data (X, Y), the predicted
+exceedance flow for the specified dam (DamY), and the dam’s drainage area
+(DamX) for potential further analysis.</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.hydrologic.seasonal_exceedance">
+<span class="sig-name descname"><span class="pre">seasonal_exceedance</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seasonal_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exceedence</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">HUC</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.hydrologic.seasonal_exceedance" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates seasonal flow exceedance probabilities for each gage and compiles
+the results into a DataFrame. The method considers predefined seasons and
+specific exceedance thresholds to evaluate flow rates.</p>
+<p>Parameters:
+- seasonal_dict (dict): A dictionary mapping seasons to lists of month numbers,</p>
+<blockquote>
+<div><p>defining the temporal scope of each season.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>exceedence (list): A list of exceedance thresholds (percentages) for which
+flow rates are calculated.</p></li>
+<li><p>HUC (int, optional): Hydrologic Unit Code to filter the analysis to a specific
+watershed or sub-watershed. If provided, only gages within the specified HUC
+are considered.</p></li>
+</ul>
+<p>The method iterates through the gages, applying the seasonal definitions and
+exceedance thresholds to calculate minimum flow rates that are exceeded at
+the specified percentages of time within each season. Results include gage
+identifiers, names, HUCs, drainage areas, seasons, calculated flow rates, and
+exceedance percentages.</p>
+<p>Outputs:
+- Updates the <cite>exceedance</cite> attribute of the class instance, storing the compiled</p>
+<blockquote>
+<div><p>exceedance data as a DataFrame.</p>
+</div></blockquote>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="stryke.simulation">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">stryke.</span></span><span class="sig-name descname"><span class="pre">simulation</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">proj_dir</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">wks</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">output_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">existing</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation" title="Permalink to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Python class object that initiates, runs, and holds data for a facility
+specific simulation</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.Francis">
+<span class="sig-name descname"><span class="pre">Francis</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">param_dict</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.Francis" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the survival probability of a fish passing through a Francis turbine,
+based on the blade strike model developed by Franke et al. 1997. This model 
+incorporates various turbine and biological parameters to estimate the likelihood 
+of a fish surviving after potential blade strikes within a Francis turbine.</p>
+<p>Parameters:
+- length (float): Length of the fish in feet. This parameter is crucial as it</p>
+<blockquote>
+<div><p>directly influences the probability of blade strike.</p>
+</div></blockquote>
+<ul>
+<li><p>param_dict (dict): A dictionary of turbine and operational parameters required 
+for the survival probability calculation. The expected keys and their descriptions 
+are as follows:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘H’: Net head of water across the turbine (in feet).</p></li>
+<li><p>‘RPM’: Rotational speed of the turbine runner (in revolutions per minute).</p></li>
+<li><p>‘D’: Diameter of the turbine runner (in feet).</p></li>
+<li><p>‘Q’: Volumetric flow rate through the turbine (in cubic feet per second).</p></li>
+<li><p>‘Qper’: Percentage of the optimum flow rate, contributing to the relative 
+flow angle calculation.</p></li>
+<li><p>‘ada’: Efficiency of the turbine, a factor in calculating the tangential 
+flow angle.</p></li>
+<li><p>‘N’: Number of blades on the turbine.</p></li>
+<li><p>‘iota’: Ratio between discharge with no exit swirl and optimum discharge, 
+used in calculating the relative flow angle (β).</p></li>
+<li><p>‘D1’: Diameter at the turbine entrance (in feet).</p></li>
+<li><p>‘D2’: Diameter at the turbine exit (in feet).</p></li>
+<li><p>‘B’: Width of a turbine blade (in feet).</p></li>
+<li><p>‘_lambda’: Empirical constant for blade strike probability, recommended by 
+the U.S. Fish and Wildlife Service.</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+<p>The function first calculates the energy and discharge coefficients of the turbine, 
+followed by the relative flow angle (β) and the tangential flow angle upstream of 
+the runner (α). Utilizing these angles, it estimates the probability of a fish 
+striking a blade. The survival probability is then derived as the complement of 
+the strike probability.</p>
+<p>Returns:
+- float: The probability of a fish surviving a blade strike in a Francis turbine,</p>
+<blockquote>
+<div><p>ranging from 0 (no survival) to 1 (certain survival).</p>
+</div></blockquote>
+<dl>
+<dt>Example:</dt><dd><dl class="simple">
+<dt>param_dict = {‘H’: 100, ‘RPM’: 100, ‘D’: 10, ‘Q’: 500, ‘Qper’: 1.1, ‘ada’: 0.8,</dt><dd><p>‘N’: 4, ‘iota’: 1.1, ‘D1’: 5, ‘D2’: 10, ‘B’: 1, ‘_lambda’: 0.2}</p>
+</dd>
+</dl>
+<p>fish_length = 1  # 1 foot
+survival_probability = Francis(fish_length, param_dict)
+print(f’Survival Probability: {survival_probability}’)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.Kaplan">
+<span class="sig-name descname"><span class="pre">Kaplan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">param_dict</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.Kaplan" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the probability of a fish surviving a blade strike in a Kaplan 
+turbine based on the model proposed by Franke et al. 1997.</p>
+<p>The function takes into account various turbine parameters and the length 
+of the fish to compute the survival probability.  It employs a blend of 
+deterministic and stochastic elements to model the interaction between 
+fish and turbine blades, particularly considering the location of the 
+strike along the blade.</p>
+<p>Parameters:
+- length (float): The length of the fish in meters.
+- param_dict (dict): A dictionary containing key turbine parameters 
+necessary for the calculation. Expected keys and their</p>
+<blockquote>
+<div><dl>
+<dt>meanings are as follows:</dt><dd><ul class="simple">
+<li><p>‘H’: The net head of water across the turbine (m).</p></li>
+<li><p>‘RPM’: The revolutions per minute of the turbine.</p></li>
+<li><p>‘D’: The diameter of the turbine (m).</p></li>
+<li><p>‘Q’: The flow rate through the turbine (m^3/s).</p></li>
+<li><p>‘ada’: The specific speed of the turbine.</p></li>
+<li><p>‘N’: The number of blades on the turbine.</p></li>
+<li><p>‘_lambda’: The empirically derived constant for blade strike probability,</p></li>
+</ul>
+<p>suggested by the U.S. Fish and Wildlife Service.</p>
+</dd>
+</dl>
+</div></blockquote>
+<p>The function first computes the energy coefficient (Ewd) and discharge 
+coefficient (Qwd) of the turbine, followed by the angle of absolute flow 
+to the axis of rotation. Utilizing these parameters, it estimates the 
+probability of a fish striking a blade and subsequently computes the 
+survival probability by subtracting the strike probability from one.</p>
+<p>Returns:
+- The probability of a fish surviving a blade strike in a Kaplan turbine, 
+ranging from 0 (no survival) to 1 (certain survival).</p>
+<p>Note: The function assumes the position of the fish strike along the blade 
+(rR) is uniformly distributed between 0.3 and 1.0, based on recommendations 
+from Deng et al. (please refer to the specific study for more details).</p>
+<dl class="simple">
+<dt>Example:</dt><dd><p>param_dict = {‘H’: 30, ‘RPM’: 100, ‘D’: 5, ‘Q’: 200, ‘ada’: 0.8, ‘N’: 4, ‘_lambda’: 0.2}
+fish_length = 0.5  # 50 cm
+survival_probability = Kaplan(fish_length, param_dict)
+print(f’Survival Probability: {survival_probability}’)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.Propeller">
+<span class="sig-name descname"><span class="pre">Propeller</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">param_dict</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.Propeller" title="Permalink to this definition">¶</a></dt>
+<dd><p>Estimates the survival probability of a fish passing through a propeller 
+turbine, adapting the blade strike model from Franke et al. 1997. This 
+function considers the physical characteristics of the fish and turbine 
+operational parameters to calculate the likelihood of fish survival after 
+potential blade strikes.</p>
+<p>The calculation assumes a fixed position on the blade where the fish 
+strike might occur and incorporates both deterministic and empirical 
+parameters to model the interaction dynamics.</p>
+<p>Parameters:
+- length (float): The length of the fish in meters, which is a critical 
+factor in determining the probability of a blade strike.
+- param_dict (dict): A dictionary containing essential turbine parameters 
+for the calculation. Expected keys include:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>‘H’: The net head of water across the turbine (m).</p></li>
+<li><p>‘RPM’: The revolutions per minute of the turbine.</p></li>
+<li><p>‘D’: The diameter of the turbine (m).</p></li>
+<li><p>‘Q’: The actual flow rate through the turbine (m^3/s).</p></li>
+<li><p>‘ada’: The specific speed of the turbine.</p></li>
+<li><p>‘N’: The number of blades on the turbine.</p></li>
+<li><p>‘Qopt’: The optimum flow rate through the turbine (m^3/s), used in</p></li>
+</ul>
+<p>beta angle calculations.
+- ‘Qper’: The percentage of the optimum flow rate, contributing to
+the beta calculation.
+- ‘_lambda’: An empirical constant for blade strike probability, suggested 
+by the U.S. Fish and Wildlife Service.</p>
+</div></blockquote>
+<p>The function computes the energy coefficient (Ewd) and discharge coefficient (Qwd)
+to determine the turbine’s operational state, followed by the calculation 
+of the absolute flow angle to the rotation axis (a_a). The strike probability 
+is then estimated using the fish length, turbine diameter, and the 
+calculated flow angle, with the survival probability being the complement of
+the strike probability.</p>
+<p>Returns:
+- The probability of a fish surviving a blade strike in a propeller turbine, 
+with values ranging from 0 (no survival) to 1 (certain survival).</p>
+<p>Note: The function assumes a fixed radial position (rR = 0.75) for the 
+fish strike on the blade, simplifying the model while maintaining relevance 
+to typical turbine conditions. This decision is based on empirical observations
+and simplifies the model’s complexity.</p>
+<dl>
+<dt>Example:</dt><dd><dl class="simple">
+<dt>param_dict = {‘H’: 25, ‘RPM’: 120, ‘D’: 3, ‘Q’: 180, ‘ada’: 0.7, ‘N’: 3, </dt><dd><p>‘Qopt’: 160, ‘Qper’: 0.8, ‘_lambda’: 0.2}</p>
+</dd>
+</dl>
+<p>fish_length = 0.4  # 40 cm
+survival_probability = Propeller(fish_length, param_dict)
+print(f’Survival Probability: {survival_probability}’)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.Pump">
+<span class="sig-name descname"><span class="pre">Pump</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">param_dict</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.Pump" title="Permalink to this definition">¶</a></dt>
+<dd><p>pump mode calculations from fish entrainment analysis report:
+J:Q0DocsEntrainmentEntrainment CalcsBladeStrike_CabotStation.xlsx</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.create_hydrograph">
+<span class="sig-name descname"><span class="pre">create_hydrograph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">discharge_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scen</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scen_months</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flow_scenarios_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">fixed_discharge</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.create_hydrograph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a hydrograph for simulation based on specified scenarios, either by
+importing and adjusting actual hydrograph data or by simulating a hydrograph
+with a fixed discharge rate across specified months.</p>
+<p>Parameters:
+- discharge_type (str): Specifies the type of discharge data to use; can be</p>
+<blockquote>
+<div><p>‘hydrograph’ for actual hydrograph data or ‘fixed’ for a constant discharge rate.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>scen (str): The scenario identifier to filter the relevant data in the flow
+scenarios dataframe.</p></li>
+<li><p>scen_months (list): List of integers representing the months to include in the
+hydrograph simulation.</p></li>
+<li><p>flow_scenarios_df (DataFrame): A dataframe containing flow scenario data,
+including gage information, proration factors, and flow years for ‘hydrograph’
+type scenarios.</p></li>
+<li><p>fixed_discharge (float, optional): The fixed discharge rate (in cubic feet per
+second) to use for ‘fixed’ discharge type simulations.</p></li>
+</ul>
+<p>Returns:
+- DataFrame: A pandas DataFrame representing the hydrograph for the specified</p>
+<blockquote>
+<div><p>scenario, containing columns for dates, prorated daily average flow, and month.</p>
+</div></blockquote>
+<p>The function handles two main types of simulations: importing and adjusting USGS
+hydrograph data based on a proration factor or simulating a hydrograph with a
+constant discharge rate across the specified months.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.create_route">
+<span class="sig-name descname"><span class="pre">create_route</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">wks_dir</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.create_route" title="Permalink to this definition">¶</a></dt>
+<dd><p>Constructs a directed graph representing the migratory network of fish, 
+using data from nodes and edges defined within a specified project database. 
+The graph is built using the NetworkX library, allowing for the utilization 
+of its extensive graph analysis functionalities.</p>
+<p>The method reads node and edge information from an Excel file located in the 
+provided directory, ‘wks_dir’. Nodes represent points within the migratory 
+network (such as entry, exit, and decision points), while edges represent 
+the possible paths a fish can take between these nodes, along with associated 
+weights (e.g., probabilities or costs associated with each path).</p>
+<p>Parameters:
+- wks_dir (str): The directory path where the project database Excel file is</p>
+<blockquote>
+<div><p>located. This file should contain ‘Nodes’ and ‘Edges’ sheets with the 
+necessary data to construct the network graph.</p>
+</div></blockquote>
+<p>The method performs the following steps:
+1. Reads the ‘Nodes’ and ‘Edges’ sheets from the Excel file, extracting relevant</p>
+<blockquote>
+<div><p>data for graph construction.</p>
+</div></blockquote>
+<ol class="arabic simple" start="2">
+<li><p>Initializes an empty directed graph (DiGraph) object using NetworkX.</p></li>
+<li><p>Adds nodes to the graph based on locations specified in the ‘Nodes’ data.</p></li>
+<li><p>Iterates over the ‘Edges’ data to add directed edges between nodes, assigning 
+weights to these edges as specified in the data.</p></li>
+<li><p>Calculates the maximum number of moves a fish can make within the network, 
+based on all shortest paths from a predefined start node (‘river_node_0’) 
+to the furthest node, identified by ‘self.max_river_node’.</p></li>
+</ol>
+<p>The constructed graph and the maximum number of moves are stored in ‘self.graph’ 
+and ‘self.moves’, respectively, for use in subsequent analyses or simulations 
+within the broader context of the project.</p>
+<p>Note: This method assumes the presence of a start node labeled ‘river_node_0’ 
+and relies on ‘self.max_river_node’ being set prior to its call to determine 
+the endpoint for path calculations.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.daily_hours">
+<span class="sig-name descname"><span class="pre">daily_hours</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ops_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q_cap_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op_order_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">operations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'independent'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.daily_hours" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simulates the daily operational hours of units in hydroelectric facilities,
+considering the facility type (Run-Of-River or peaking) and operational
+dependencies between units. The function adjusts flow rates based on operational
+hours and unit capacities.</p>
+<p>Parameters:
+- ops_df (DataFrame): Contains unit operation parameters, including potential</p>
+<blockquote>
+<div><p>log-normal distribution parameters for operation hours and probability of
+not operating.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>q_cap_dict (dict): Maps each unit to its flow capacity (cubic feet per second).</p></li>
+<li><p>op_order_dict (dict): Maps each unit to its operational order, important for
+facilities with dependent unit operations.</p></li>
+<li><p>operations (str, optional): Defines the operational mode of the units; can be
+‘independent’ for units operating independently or ‘dependent’ for units with
+sequential dependencies. Defaults to ‘independent’.</p></li>
+</ul>
+<p>Returns:
+- tuple: Contains total operational hours, total flow, a dictionary of operational</p>
+<blockquote>
+<div><p>hours per unit, and a dictionary of flow per unit.</p>
+</div></blockquote>
+<p>The function supports various operational scenarios, including fixed hours,
+hours determined by a log-normal distribution, or dependent operations where
+the operation of one unit depends on another. For Run-Of-River facilities,
+units operate 24/7, while peaking facilities may vary.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.get_USGS_hydrograph">
+<span class="sig-name descname"><span class="pre">get_USGS_hydrograph</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">gage</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prorate</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">flow_year</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.get_USGS_hydrograph" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves and standardizes a hydrograph from the USGS for a specified flow year,
+and adjusts the flow based on watershed size. The function fetches gage data
+online, extracts relevant flow data, and applies a proration factor to account
+for differences in watershed size.</p>
+<p>Parameters:
+- gage (str): The USGS gage identifier for which the hydrograph is requested.
+- prorate (float): Factor by which to adjust the flow data, typically based on</p>
+<blockquote>
+<div><p>the relative size of the watershed of interest compared to that of the gage.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>flow_year (int): The year for which flow data is to be retrieved and processed.</p></li>
+</ul>
+<p>Returns:
+- DataFrame: A pandas DataFrame containing the daily average flow data for the</p>
+<blockquote>
+<div><p>specified flow year, adjusted by the proration factor. The DataFrame includes
+columns for date, original daily average flow (‘DAvgFlow’), prorated daily
+average flow (‘DAvgFlow_prorate’), year, and month.</p>
+</div></blockquote>
+<p>Note: The function assumes the availability of USGS gage data online and may
+require internet access to fetch the data. The use of ‘verify=False’ in the
+requests.get call may lead to security warnings and should be used with caution.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.movement">
+<span class="sig-name descname"><span class="pre">movement</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">location</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">status</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">swim_speed</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">graph</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">intake_vel_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">Q_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op_order</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.movement" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simulates the movement of a fish through a hydroelectric project’s
+infrastructure, considering operational conditions, the fish’s swimming
+capabilities, and environmental requirements. It calculates the probability
+of the fish choosing various paths based on water discharge and unit status.</p>
+<p>Parameters:
+- location (str): Current location within the project infrastructure.
+- status (int): Survival status of the fish, 1 for alive and 0 for dead.
+- swim_speed (float): Swimming speed of the fish, for intake velocity resistance.
+- graph (networkx.Graph): Directed graph of the project, with nodes as locations</p>
+<blockquote>
+<div><p>and edges as paths between locations.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>intake_vel_dict (dict): Maps each turbine to its intake velocity.</p></li>
+<li><p>Q_dict (dict): Contains discharge information, including ‘curr_Q’ for current
+discharge, ‘min_Q’ for minimum operating discharge, ‘env_Q’ for environmental
+flow, ‘sta_cap’ for station capacity, and turbine capacities.</p></li>
+<li><p>op_order (dict): Maps each turbine to its operational order, for sequence
+determination as discharge increases.</p></li>
+</ul>
+<p>Special logic is applied in the forebay area, considering the variety of paths
+(turbines vs. spillway) and operational conditions. Movement probabilities are
+calculated based on edge weights, apportioned by operational conditions and the
+fish’s swimming abilities.</p>
+<p>Returns:
+- str: New location after movement simulation, which could be a specific turbine,</p>
+<blockquote>
+<div><p>‘spill’ for the spillway, or the same location if the fish cannot move.</p>
+</div></blockquote>
+<p>This method provides a detailed simulation of fish movement, incorporating
+environmental flows, operational priorities, and biological capabilities to
+inform management decisions and impact assessments within hydroelectric projects.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.node_surv_rate">
+<span class="sig-name descname"><span class="pre">node_surv_rate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">length</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">status</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">surv_fun</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">route</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">surv_dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">u_param_dict</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.node_surv_rate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates the survival probability of a fish passing through a node in 
+the migratory network, taking into account the type of hydraulic structure 
+encountered (e.g., Kaplan, Propeller, Francis turbines, or pump mode operation) 
+and the fish’s length. The method supports both predefined survival probabilities 
+(a priori values) and dynamic calculations based on turbine parameters.</p>
+<p>Parameters:
+- length (float): The length of the fish, which is a critical factor in 
+calculating the blade strike probability.
+- status (int): The status of the fish, where 0 indicates a condition 
+(such as mortality) that precludes further survival calculation.
+- surv_fun (str): The survival function or method to be used. This can be
+‘a priori’ for predefined survival probabilities, or the name of a specific
+turbine type (‘Kaplan’, ‘Propeller’, ‘Francis’) for dynamic survival 
+probability calculation. ‘Pump’ mode is also supported for scenarios 
+involving fish entrainment during pumping operations.
+- route (str): The migratory route or node identifier. In the case of 
+‘a priori’ survival probabilities, this corresponds to the key in the 
+‘surv_dict’ dictionary. For dynamic calculations, it specifies the turbine 
+for which parameters are provided in ‘u_param_dict’.
+- surv_dict (dict): A dictionary containing predefined survival probabilities 
+for various routes or nodes, used when ‘surv_fun’ is set to ‘a priori’. 
+The keys correspond to route identifiers, and the values are the survival 
+probabilities.
+- u_param_dict (dict): A dictionary of dictionaries containing turbine 
+parameters necessary for calculating survival probabilities. Each key
+corresponds to a route or turbine identifier, with the associated value 
+being another dictionary of parameters relevant to the specific turbine 
+type indicated by ‘surv_fun’.</p>
+<p>Returns:
+- float: The calculated survival probability for the fish at the given 
+node, converted to a 32-bit float. If the ‘status’ parameter is 0, 
+indicating a non-survivable condition, the method immediately returns 0.0.</p>
+<p>This method integrates various survival probability models, including 
+those based on empirical data (‘a priori’) and dynamic models for
+different turbine types, providing a versatile tool for assessing fish
+survival in hydroelectric project simulations.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.population_sim">
+<span class="sig-name descname"><span class="pre">population_sim</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">spc_df</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">discharge_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tot_hours</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tot_flow</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">curr_Q</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.population_sim" title="Permalink to this definition">¶</a></dt>
+<dd><p>Simulates a population of fish based on species-specific parameters and
+operational conditions of a hydroelectric facility. The function uses
+distribution parameters to simulate entrainment rates, which are then
+adjusted based on operational conditions and historical data.</p>
+<p>Parameters:
+- spc_df (DataFrame): Contains species-specific parameters for simulating</p>
+<blockquote>
+<div><p>entrainment rates, including distribution type and parameters.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>discharge_type (str): Type of discharge operation (‘fixed’ or variable).</p></li>
+<li><p>tot_hours (float): Total operational hours of the facility.</p></li>
+<li><p>tot_flow (float): Total flow through the facility in cubic feet.</p></li>
+<li><p>curr_Q (float): Current discharge rate in cubic feet per second.</p></li>
+</ul>
+<p>Returns:
+- int: Simulated number of fish entrained, rounded to the nearest whole number.</p>
+<p>The simulation considers the discharge type, operational hours, and current
+flow to estimate the volume of water interacting with the fish population.
+The entrainment rate is drawn from the specified distribution and adjusted
+for feasibility based on historical data.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.run" title="Permalink to this definition">¶</a></dt>
+<dd><p>Executes a comprehensive simulation of fish populations navigating through
+a hydroelectric facility, accounting for various operational scenarios,
+species-specific behaviors, and environmental conditions. The function
+integrates multiple components including route creation, operational
+parameters setup, and survival probability calculations.</p>
+<p>The simulation workflow includes:
+1. Route creation for fish movement based on facility layout.
+2. Initialization of dictionaries for operational parameters, survival</p>
+<blockquote>
+<div><p>probabilities, intake velocities, unit capacities, and operational orders.</p>
+</div></blockquote>
+<ol class="arabic simple" start="3">
+<li><p>Iteration over hydroelectric units to populate dictionaries with unit-
+specific operational data.</p></li>
+<li><p>Scenario-based simulation, considering different flow conditions and
+species presence.</p></li>
+<li><p>Population simulation for each species under each scenario, including
+entrainment rate calculations and survival assessments.</p></li>
+<li><p>Movement and survival simulation for individual fish, with results
+stored in a hierarchical data format (HDF) file for analysis.</p></li>
+</ol>
+<p>No parameters are passed directly to this function as it operates on
+the class attributes set during initialization and updated through
+other methods.</p>
+<p>The function logs progress and notable events (e.g., entrainment events,
+units not operating) throughout the simulation, providing insights into
+the simulation dynamics and outcomes.</p>
+<p>Outputs:
+The function generates and stores detailed simulation results in an HDF file,
+including daily summaries, entrainment statistics, and length distributions
+for simulated fish populations across different scenarios.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.speed">
+<span class="sig-name descname"><span class="pre">speed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">M</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.speed" title="Permalink to this definition">¶</a></dt>
+<dd><p>Calculates swimming speed based on fish length, caudal fin aspect ratio,
+and swimming mode, according to Sambilay 1990. The function is vectorizable,
+allowing for efficient calculations over arrays of inputs.</p>
+<p>Parameters:
+- L (float or array-like): Fish length in centimeters.
+- A (float or array-like): Caudal fin aspect ratio (dimensionless), obtained</p>
+<blockquote>
+<div><p>from fish morphological data.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>M (int or array-like): Swimming mode, where 0 represents sustained swimming
+and 1 represents burst swimming.</p></li>
+</ul>
+<p>Returns:
+- float or array-like: Swimming speed in kilometers per hour. The conversion</p>
+<blockquote>
+<div><p>factor used (0.911344) translates the speed to feet per second for
+compatibility with certain applications.</p>
+</div></blockquote>
+<p>This model provides an estimate of swimming speeds for fish based on physical
+characteristics and behavior, useful in ecological and engineering studies
+related to aquatic locomotion and habitat interactions.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="stryke.simulation.summary">
+<span class="sig-name descname"><span class="pre">summary</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#stryke.simulation.summary" title="Permalink to this definition">¶</a></dt>
+<dd><p>Summarizes the results of fish entrainment simulations stored in an HDF file.
+This function aggregates and analyzes data across species, scenarios, and units
+to provide insights into entrainment risks and outcomes.</p>
+<p>The summary process includes:
+1. Accessing the HDF store and retrieving relevant data tables (Population,</p>
+<blockquote>
+<div><p>Flow Scenarios, Unit Parameters, Daily summaries, and Length distributions).</p>
+</div></blockquote>
+<ol class="arabic simple" start="2">
+<li><p>Iterating through species and scenarios to calculate survival rates, length
+statistics, and entrainment outcomes.</p></li>
+<li><p>Fitting beta distributions to survival probabilities and summarizing the
+results.</p></li>
+<li><p>Aggregating daily data to provide cumulative summaries, including median
+population sizes, entrainment and mortality rates, and confidence intervals.</p></li>
+<li><p>Analyzing entrainment and mortality distributions to calculate probabilities
+of exceeding certain thresholds (e.g., 10, 100, 1000 individuals).</p></li>
+</ol>
+<p>Outputs:
+- Detailed summaries are printed to the console, providing an overview of</p>
+<blockquote>
+<div><p>simulation outcomes.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>Key summary statistics, including beta distribution parameters and cumulative
+sums, are stored as class attributes for further analysis or reporting.</p></li>
+<li><p>The function updates the HDF file with aggregated summary data and closes
+the file upon completion.</p></li>
+</ul>
+<p>Note: This function assumes that the HDF file contains the necessary data
+tables from previous simulation runs and that the file structure adheres to
+the expected format.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">stryke</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2024, Kevin P. Nebiolo, PhD..
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.0.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/stryke.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

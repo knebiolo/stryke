@@ -196,10 +196,10 @@ class simulation():
                                                         sheet_name = 'Operating Scenarios', 
                                                         header = 0, 
                                                         index_col = None,
-                                                        usecols = "B:J",
+                                                        usecols = "B:I",
                                                         skiprows = 8)
             
-            self.operating_scenarios_df['Scenario Name'] = self.operating_scenarios_df.Season + " " + self.operating_scenarios_df.Unit
+            self.operating_scenarios_df['Scenario Name'] = self.operating_scenarios_df.Scenario + " " + self.operating_scenarios_df.Unit
             self.ops_scens = None
             
             self.flow_scenarios = self.flow_scenarios_df['Scenario'].unique()
@@ -1112,7 +1112,7 @@ class simulation():
         
         return flow_df
     
-    def daily_hours(self, Q_dict, season, operations = 'independent'):
+    def daily_hours(self, Q_dict, scenario, operations = 'independent'):
         """
         Simulates the daily operational hours of units in hydroelectric facilities,
         considering the facility type (Run-Of-River or peaking) and operational
@@ -1140,11 +1140,11 @@ class simulation():
         units operate 24/7, while peaking facilities may vary.
         """
 
-        ops_df = self.operating_scenarios_df[self.operating_scenarios_df.Season == season]
+        ops_df = self.operating_scenarios_df[self.operating_scenarios_df.Scenario == scenario]
         ops_df.set_index('Unit', inplace = True)
         facilities = ops_df.Facility.unique()
         
-        seasonal_facs = self.facility_params[self.facility_params.Season == season]
+        seasonal_facs = self.facility_params[self.facility_params.Scenario == scenario]
         #seasonal_facs.set_index('Facility', inplace = True)
         # loop over units, build some dictionaries
         prev_unit_hours = None
@@ -1173,7 +1173,7 @@ class simulation():
             fac_units = fac_units.sort_values(by = 'op_order')
             
             # if operations are modeled with a distribution 
-            if fac_type != 'run of river':
+            if fac_type != 'run-of-river':
                 for i in fac_units.index:
                     order = fac_units.at[i,'op_order']
                     # get log norm shape parameters
@@ -1505,11 +1505,11 @@ class simulation():
                 scen_months = [scen_months]
             
             # get unit operations scenarios and extract data
-            ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario Number'] == scen_num]
+            ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario'] == scenario]
             units = self.unit_params.index
 
             # identify the species we need to simulate for this scenario
-            species = self.pop[self.pop['Season'] == season].Species.unique()
+            species = self.pop[self.pop['Scenario'] == scenario].Species.unique()
             
             # create a hydrograph for this scenario
             if self.discharge_type == 'hydrograph':
@@ -1529,7 +1529,7 @@ class simulation():
             # for each species, perform the simulation for n individuals x times
             for spc in species:
                 # extract a single row based on season and species
-                spc_dat = self.pop[(self.pop['Season'] == season) & (self.pop.Species == spc)]
+                spc_dat = self.pop[(self.pop['Scenario'] == scenario) & (self.pop.Species == spc)]
 
                 # get scipy log normal distribution paramters - note values in centimeters
                 s = spc_dat.iat[0,spc_dat.columns.get_loc('length shape')]
@@ -1568,7 +1568,7 @@ class simulation():
                         min_Q_dict = {}
                         env_Q_dict = {}
                         bypass_Q_dict = {}
-                        for index, row in self.facility_params[self.facility_params.Season == season].iterrows():
+                        for index, row in self.facility_params[self.facility_params.Scenario == scenario].iterrows():
                             min_Q = row['Min_Op_Flow']
                             env_Q = row['Env_Flow']
                             bypass_Q = row['Bypass_Flow']
@@ -1594,7 +1594,7 @@ class simulation():
                         Q_dict['sta_cap'] = sta_cap
 
                         # Are units running today? if they are - test for occurence
-                        tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, season)
+                        tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
                         
                         if np.any(tot_hours > 0):
                             '''we need to roll the dice here and determine whether or not fish are present at site'''
