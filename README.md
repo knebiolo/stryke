@@ -96,7 +96,7 @@ Within the notebook 'stryke_project_notebook.ipynb' you will be able to access t
 
 ## Fit Entrainment Rates
 
-If you do not have existing empirical data for your facility of interest, stryke can query the EPRI entrainment database and develop them for you.  To fit a distribution, simply pass a list of arguments to stryke. The list of arguments, their datatype, and explanations are below.  The following example queries the EPRI database to return a sample of entrainment observations of Catastomidae in the winter within The Great Lakes watershed while leaving out Potato Rapids from the sample: 
+If you do not have existing empirical data for your facility of interest, stryke can query the EPRI entrainment database and develop them for you.  To fit a distribution, simply pass a list of arguments (example below). The list of arguments, their datatype, and explanations are below.  The following example shows how to fit entrainment rates for a leave-one-out validation exercise, it queries the EPRI database to return a sample of entrainment observations of Catastomidae in the winter within The Great Lakes watershed while leaving out Potato Rapids from the sample: 
 
 `Family = 'Catostomidae', Month = [1,2,12], HUC02= [4], NIDID= 'WI00757'`
 
@@ -110,7 +110,7 @@ If you do not have existing empirical data for your facility of interest, stryke
 |River             |String     |(not required) River name for filtering                                                 |
 
 
-Families and genera of fishes for which there are data within the EPRI 1997 dataset.
+The families and genera of fishes are present within the EPRI 1997 dataset.  **Check spelling if no data is returned**
 | Family                | Genus       |                    |
 |-----------------------|-------------|--------------------|
 | Acipenseridae         | Acipenser   | Lepisosteus        |
@@ -147,9 +147,9 @@ Families and genera of fishes for which there are data within the EPRI 1997 data
 |                       | Labidesthes | Umbra              |
 |                       | Lampetra    |                    |
 
-Stryke users should determine what genus, family or species of fish are to be modelled through consultation with involved parties on each project.
+It is recommended that end users identify species and fit distributions with consultation from resource agencies.
 
-Within the level of HUC02 there are five geographical regions for which there are fish entrainment data from the EPRI 1997 database. When pooling data among HUCs or seasons to achieve more statistical power, please consult our accompanying **strategies document** to ensure that data pooled is compatible.
+The United States Geological Service defined hydrologic regions within the United States and developed a hierarchical identification system known as Hydrologic Unit Codes (HUCS).  The EPRI entrainment dataset has HUC02, HUC04, HUC06 and HUC08 tiers, which delineate hydrologic regions from the large scale basin level, to the smallest catchment level.  The major basins of the United States are defined at the HUC02 level.  When pooling data among HUCs or seasons to achieve more statistical power, please consult the accompanying **strategies document** for tips and tricks.
 
 - HUC02-02 Mid-Atlantic
 - HUC02-03 Southeastern United States
@@ -157,11 +157,11 @@ Within the level of HUC02 there are five geographical regions for which there ar
 - HUC02-05 The Ohio River
 - HUC02-07 The Mississippi River
 
-When cell [3] is run (`fish = stryke.epri(Genus = ' ', Month = [ ], HUC02 = [ ])`) stryke will return a figure with four histograms that depict natural logarithm transformed entrainment rates (one observed, three simulated).  Stryke fits a Log Normal, Weibull, and Pareto distribution to the returned data and produces a p-value from a Kolmogorov-Smirnof test, where H0 = no difference between observed and simulated histogram.  The distribution with the largest p-value  best describes trends in observed data. The query above produced the figure below.  In this instance, the Log Normal had the highest p-value and is most like the observed data.  For most queries, the Log Normal will be the best distribution.  The Weibull works when there are fewer observations with low rates, and the Pareto only works in special cases when observations are monotonically decreasing after log transforming them.
+When an EPRI query is passed (e.g. `fish = stryke.epri(Genus = 'Micropterus', Month = [3,4,5], HUC02 = [2])`), stryke will return a figure with four histograms that depict natural logarithm transformed entrainment rates (one observed, three simulated).  Stryke fits a Log Normal, Weibull, and Pareto distribution to the returned data and produces a p-value from a Kolmogorov-Smirnof test, where H0 = no difference between observed and simulated histogram.  The distribution with the largest p-value  best describes trends in observed data. The query above produced the figure below.  In this instance, the Log Normal had the highest p-value and is most like the observed data.  For most queries, the Log Normal will be the best distribution.  The Weibull one of the tails is heavy, and the Pareto only works in special cases when observations are monotonically decreasing after log transforming them.
 
 <img src="https://github.com/knebiolo/stryke/assets/61742537/1b57783c-0913-40d9-913a-4f45ee2ab8a0" width="400" height="auto"/>
 
-If, and only if you are satisfied with the distribution's fit, run the `fish.summary_output()` fuction cell. This will arrange the parameters so that you can copy and paste them directly onto the **Population tab**.
+The end user then inputs the parameters from the best performing distribution into the input spreadsheet.
 
 # Spreadsheet Interface
 
