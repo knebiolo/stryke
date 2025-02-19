@@ -33,6 +33,3 @@ EXPOSE 5000
 # Run the Flask app
 CMD ["python", "/app/webapp/app.py"]
 
-# docker build -t stryke-webapp -f webapp/Dockerfile .
-# docker run -p 5000:5000 stryke-webapp
-# expensive5rudabega!@1
