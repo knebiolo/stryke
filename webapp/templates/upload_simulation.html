@@ -78,9 +78,7 @@
     <a href="{{ url_for('index') }}">Home</a> |
     <a href="{{ url_for('upload_simulation') }}">Upload and Run </a> |
     <a href="{{ url_for('fit_distributions') }}">Fit Entrainment Rate Distributions</a> |
-    {% if output_filename %}
-    | <a href="{{ url_for('download_output', filename=output_filename) }}">Download Output</a>
-    {% endif %}
+
   </nav>
   
   <div class="container">
@@ -109,6 +107,7 @@
     <div class="results">
       <h2>Simulation Results</h2>
       <p>{{ simulation_results }}</p>
+      <a href="{{ url_for('download_zip') }}" class="btn btn-primary">Download Results</a>
       <h3>Live Log Output:</h3>
       <div id="live-log"></div>
     </div>

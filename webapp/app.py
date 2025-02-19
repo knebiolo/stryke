@@ -4,20 +4,21 @@ Created on Tue Feb  4 19:48:03 2025
 
 @author: Kevin.Nebiolo
 """
-# webapp/app.py
 import os
 import sys
 import shutil
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
-# Ensure your repository is in the Python path so you can import Stryke
-sys.path.append(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke")  # Adjust the path if needed
-from Stryke import stryke
 import threading
 import queue
-from flask import Response
-import datetime 
-import matplotlib.pyplot as plt
+import datetime
 import io
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, after_this_request, send_from_directory, session, Response
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
+# Import Stryke components
+from Stryke import stryke
+from Stryke.stryke import epri
 
 # Create a global log queue
 LOG_QUEUE = queue.Queue()
@@ -27,7 +28,6 @@ class QueueStream:
     def __init__(self, q):
         self.q = q
     def write(self, message):
-        # Only push non-empty messages (you can adjust filtering as needed)
         if message.strip():
             self.q.put(message)
     def flush(self):
@@ -35,6 +35,37 @@ class QueueStream:
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
+app.config['PASSWORD'] = 'secret123'  # Set your desired password here
+
+# ----------------- Password Protection -----------------
+@app.before_request
+def require_login():
+    if not session.get('logged_in') and request.endpoint not in ['login', 'static']:
+        return redirect(url_for('login'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    error = None
+    if request.method == 'POST':
+        if request.form.get('password') == app.config['PASSWORD']:
+            session['logged_in'] = True
+            flash("Logged in successfully!")
+            return redirect(url_for('index'))
+        else:
+            error = 'Invalid password. Please try again.'
+    return render_template('login.html', error=error)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    # Optional: clear folders if desired
+    upload_folder = os.path.join(UPLOAD_FOLDER, "upload")
+    results_folder = os.path.join(SIM_PROJECT_FOLDER, "simulation_project")
+    clear_folder(upload_folder)
+    clear_folder(results_folder)
+    flash("Logged out successfully.")
+    return redirect(url_for('login'))
+# -------------------------------------------------------
 
 # Define directories for uploads and simulation projects
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
@@ -44,9 +75,7 @@ os.makedirs(SIM_PROJECT_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def run_simulation(ws, wks, output_name):
-    # Save the original stdout
     old_stdout = sys.stdout
-    # Redirect stdout to our queue stream
     sys.stdout = QueueStream(LOG_QUEUE)
     try:
         simulation_instance = stryke.simulation(ws, wks, output_name=output_name)
@@ -55,13 +84,10 @@ def run_simulation(ws, wks, output_name):
     except Exception as e:
         print(f"Error during simulation: {e}")
     finally:
-        # Restore stdout
         sys.stdout = old_stdout
-        # Put a sentinel value to indicate the simulation is done
         LOG_QUEUE.put(None)
         
 def run_simulation_in_background(ws, wks, output_name):
-    # Redirect stdout to our custom stream
     old_stdout = sys.stdout
     sys.stdout = QueueStream(LOG_QUEUE)
     try:
@@ -71,7 +97,6 @@ def run_simulation_in_background(ws, wks, output_name):
     except Exception as e:
         print("Error during simulation:", e)
     finally:
-        # Restore stdout and signal completion
         sys.stdout = old_stdout
         LOG_QUEUE.put("[Simulation Complete]")
 
@@ -83,7 +108,6 @@ def index():
 def upload_simulation():
     simulation_results = None
     output_filename = None
-    # We no longer capture all output synchronously; we stream live via SSE.
     if request.method == 'POST':
         if 'excel_file' not in request.files:
             flash('No file part in the request')
@@ -94,22 +118,18 @@ def upload_simulation():
             flash('No file selected')
             return render_template('upload_simulation.html')
         
-        # Save the uploaded file in UPLOAD_FOLDER.
         up_file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(up_file_path)
         flash(f'File successfully uploaded: {file.filename}')
         
-        # Copy the file to SIM_PROJECT_FOLDER (where the simulation expects it).
         simulation_file_path = os.path.join(SIM_PROJECT_FOLDER, file.filename)
         shutil.copy(up_file_path, simulation_file_path)
         
-        # Set up simulation parameters.
-        ws = SIM_PROJECT_FOLDER     # Simulation project folder.
-        wks = file.filename         # Uploaded file name.
-        output_name = 'Simulation_Output'  # Fixed output name (will overwrite previous output).
+        ws = SIM_PROJECT_FOLDER
+        wks = file.filename
+        output_name = 'Simulation_Output'
         
         try:
-            # Start the simulation in a background thread.
             simulation_thread = threading.Thread(
                 target=run_simulation_in_background,
                 args=(ws, wks, output_name)
@@ -117,16 +137,16 @@ def upload_simulation():
             simulation_thread.start()
             flash("Simulation started. Live log will appear below.")
             simulation_results = "Simulation is running..."
-            output_filename = f"{output_name}.h5"  # Expected output file (when simulation completes)
+            output_filename = f"{output_name}.h5"
         except Exception as e:
             flash(f"Error starting simulation: {e}")
             return render_template('upload_simulation.html')
     
-    # Render the page with (or without) simulation results.
     return render_template('upload_simulation.html',
                            simulation_results=simulation_results,
                            output_filename=output_filename)
 
+# Added download route for output file
 @app.route('/download/<filename>')
 def download_output(filename):
     output_path = os.path.join(SIM_PROJECT_FOLDER, filename)
@@ -136,10 +156,33 @@ def download_output(filename):
         flash("Output file not found.")
         return redirect(url_for('upload_simulation'))
 
+@app.route('/download_zip')    
+def download_zip():
+    zip_filename = f"simulation_results_{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S')}.zip"
+    zip_path = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
+
+    if os.path.exists(zip_path):
+        os.remove(zip_path)
+
+    archive_name = zip_path.replace(".zip", "")
+    shutil.make_archive(archive_name, "zip", SIM_PROJECT_FOLDER)
+
+    if not os.path.exists(zip_path):
+        return "Error: Zip file was not created successfully.", 500
+
+    @after_this_request
+    def remove_file(response):
+        try:
+            os.remove(zip_path)
+        except Exception as e:
+            app.logger.error(f"Error deleting zip file: {str(e)}")
+        return response
+
+    return send_file(zip_path, as_attachment=True)
+
 @app.route('/stream')
 def stream():
     def event_stream():
-        # Continue streaming until the sentinel message "[Simulation Complete]" is received.
         while True:
             message = LOG_QUEUE.get()
             if message is None:
@@ -158,136 +201,149 @@ def results():
 
 @app.route('/fit', methods=['GET', 'POST'])
 def fit_distributions():
-    # Initialize variables for context.
     summary_text = ""
     log_text = ""
     plot_filename = ""
     
     if request.method == 'POST':
-        # Retrieve parameters from the form.
-        states = request.form.get('states', '').strip()
-        plant_cap = request.form.get('plant_cap', '').strip()
-        family = request.form.get('family', '').strip()
-        genus = request.form.get('genus', '').strip()
-        species = request.form.get('species', '').strip()
-        month_str = request.form.get('month', '').strip()
-        huc02_str = request.form.get('huc02', '').strip()
-        huc04_str = request.form.get('huc04', '').strip()
-        huc06_str = request.form.get('huc06', '').strip()
-        huc08_str = request.form.get('huc08', '').strip()
-        nidid = request.form.get('nidid', '').strip()
-        river = request.form.get('river', '').strip()
-        
-        # Helper function to parse comma-separated values.
-        def parse_list(text):
-            return [item.strip() for item in text.split(',') if item.strip()] if text else []
-        
         try:
-            month = [int(m) for m in parse_list(month_str)]
-        except Exception:
-            month = []
-        try:
-            huc02 = [int(x) for x in parse_list(huc02_str)]
-        except Exception:
-            huc02 = []
-        try:
-            huc04 = [int(x) for x in parse_list(huc04_str)]
-        except Exception:
-            huc04 = []
-        try:
-            huc06 = [int(x) for x in parse_list(huc06_str)]
-        except Exception:
-            huc06 = []
-        try:
-            huc08 = [int(x) for x in parse_list(huc08_str)]
-        except Exception:
-            huc08 = []
-        
-        # Build the filter dictionary only with non-empty values.
-        filter_args = {}
-        if states:
-            filter_args["states"] = states
-        if plant_cap:
-            filter_args["plant_cap"] = plant_cap
-        if family:
-            filter_args["Family"] = family
-        if genus:
-            filter_args["Genus"] = genus
-        if species:
-            filter_args["Species"] = species
-        if month:
-            filter_args["Month"] = month
-        if huc02:
-            filter_args["HUC02"] = huc02
-        if huc04:
-            filter_args["HUC04"] = huc04
-        if huc06:
-            filter_args["HUC06"] = huc06
-        if huc08:
-            filter_args["HUC08"] = huc08
-        if nidid:
-            filter_args["NIDID"] = nidid
-        if river:
-            filter_args["River"] = river
-        
-        # Redirect stdout BEFORE initializing fish so that __init__ output is captured.
-        old_stdout = sys.stdout
-        sys.stdout = mystdout = io.StringIO()
-        try:
-            # Initialize the EPRI query. This will capture print output from __init__.
-            fish = stryke.epri(**filter_args)
-            # Run the fitting functions.
-            fish.ParetoFit()
-            fish.LogNormalFit()
-            fish.WeibullMinFit()
-            fish.LengthSummary()
-        except Exception as e:
-            sys.stdout = old_stdout  # Restore stdout before handling the error.
-            flash(f"Error during fitting: {e}")
-            return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
-        finally:
-            captured_output = mystdout.getvalue()
-            sys.stdout = old_stdout
+            print("LOG: Received POST request for fitting.")
+            old_stdout = sys.stdout
+            mystdout = io.StringIO()
+            sys.stdout = mystdout
 
-        # Generate and save the plot (overwrite any previous file).
-        plt.clf()
-        fish.plot()  # Generate the matplotlib figure.
-        plot_filename = 'fitting_results.png'  # Fixed filename.
-        plot_path = os.path.join(SIM_PROJECT_FOLDER, plot_filename)
-        plt.savefig(plot_path)
-        plt.close()
-        
-        # Create a summary text that includes the query.
-        summary_text = (
-            "Distribution fitting complete for filters: "
-            f"States: '{states}', Plant Capacity: '{plant_cap}', Family: '{family}', "
-            f"Genus: '{genus}', Species: '{species}', Months: {month}, "
-            f"HUC02: {huc02}, HUC04: {huc04}, HUC06: {huc06}, HUC08: {huc08}, "
-            f"NIDID: '{nidid}', River: '{river}'."
-        )
-        
-        # Generate the new detailed report.
-        try:
-            report_text = fish.summary_output(SIM_PROJECT_FOLDER, dist='Log Normal')
-        except Exception as e:
-            report_text = f"Error generating detailed summary report: {e}"
-        
-        # Use the new report as our log_text.
-        log_text = report_text
-        
-        # Write a log entry (optional).
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_filename_full = os.path.join(SIM_PROJECT_FOLDER, "fitting_results_log.txt")
-        with open(log_filename_full, "a") as log_file:
-            log_file.write(f"{timestamp} - Query: {summary_text}\n")
-            log_file.write(f"{timestamp} - Report: {report_text}\n")
-            log_file.write("--------------------------------------------------\n")
-        
-        return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
-        
+            states = request.form.get('states', '').strip()
+            plant_cap = request.form.get('plant_cap', '').strip()
+            family = request.form.get('family', '').strip()
+            genus = request.form.get('genus', '').strip()
+            species = request.form.get('species', '').strip()
+            month_str = request.form.get('month', '').strip()
+            huc02_str = request.form.get('huc02', '').strip()
+            huc04_str = request.form.get('huc04', '').strip()
+            huc06_str = request.form.get('huc06', '').strip()
+            huc08_str = request.form.get('huc08', '').strip()
+            nidid = request.form.get('nidid', '').strip()
+            river = request.form.get('river', '').strip()
+            
+            def parse_list(text):
+                return [item.strip() for item in text.split(',') if item.strip()] if text else []
+            
+            try:
+                month = [int(m) for m in parse_list(month_str)]
+            except Exception:
+                month = []
+            try:
+                huc02 = [int(x) for x in parse_list(huc02_str)]
+            except Exception:
+                huc02 = []
+            try:
+                huc04 = [int(x) for x in parse_list(huc04_str)]
+            except Exception:
+                huc04 = []
+            try:
+                huc06 = [int(x) for x in parse_list(huc06_str)]
+            except Exception:
+                huc06 = []
+            try:
+                huc08 = [int(x) for x in parse_list(huc08_str)]
+            except Exception:
+                huc08 = []
+            
+            filter_args = {}
+            if states:
+                filter_args["states"] = states
+            if plant_cap:
+                filter_args["plant_cap"] = plant_cap
+            if family:
+                filter_args["Family"] = family
+            if genus:
+                filter_args["Genus"] = genus
+            if species:
+                filter_args["Species"] = species
+            if month:
+                filter_args["Month"] = month
+            if huc02:
+                filter_args["HUC02"] = huc02
+            if huc04:
+                filter_args["HUC04"] = huc04
+            if huc06:
+                filter_args["HUC06"] = huc06
+            if huc08:
+                filter_args["HUC08"] = huc08
+            if nidid:
+                filter_args["NIDID"] = nidid
+            if river:
+                filter_args["River"] = river
+            
+            print(f"LOG: Extracted filter arguments - {filter_args}")
+
+            try:
+                print("LOG: Running EPRI fitting function...")
+                fish = stryke.epri(**filter_args)
+                fish.ParetoFit()
+                fish.LogNormalFit()
+                fish.WeibullMinFit()
+                fish.LengthSummary()
+                print("LOG: Fitting functions executed successfully.")
+            except Exception as e:
+                sys.stdout = old_stdout
+                flash(f"Error during fitting: {e}")
+                return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
+            finally:
+                captured_output = mystdout.getvalue()
+                sys.stdout = old_stdout
     
-    # For GET requests, simply render the form.
-    return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
+            plt.clf()
+            fish.plot()
+            plot_filename = 'fitting_results.png'
+            plot_path = os.path.join(SIM_PROJECT_FOLDER, plot_filename)
+            plt.savefig(plot_path)
+            plt.close()
+            
+            plt.clf()
+            plt.figure(figsize=(5, 3))
+            plt.hist(fish.lengths.tolist(), bins=30, edgecolor='black', alpha=0.7)
+            plt.xlabel("Fish Length (cm)")
+            plt.ylabel("Frequency")
+            plt.title("Distribution of Fish Lengths")
+        
+            other_filename = 'fish_lengths.png'
+            plot_path = os.path.join(SIM_PROJECT_FOLDER, other_filename)
+            plt.savefig(plot_path)
+            plt.close()
+            
+            summary_text = (
+                "Distribution fitting complete for filters: "
+                f"States: '{states}', Plant Capacity: '{plant_cap}', Family: '{family}', "
+                f"Genus: '{genus}', Species: '{species}', Months: {month}, "
+                f"HUC02: {huc02}, HUC04: {huc04}, HUC06: {huc06}, HUC08: {huc08}, "
+                f"NIDID: '{nidid}', River: '{river}'."
+            )
+            
+            try:
+                report_text = fish.summary_output(SIM_PROJECT_FOLDER, dist='Log Normal')
+            except Exception as e:
+                report_text = f"Error generating detailed summary report: {e}"
+            
+            log_text = report_text
+            
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_filename_full = os.path.join(SIM_PROJECT_FOLDER, "fitting_results_log.txt")
+            with open(log_filename_full, "a") as log_file:
+                log_file.write(f"{timestamp} - Query: {summary_text}\n")
+                log_file.write(f"{timestamp} - Report: {report_text}\n")
+                log_file.write("--------------------------------------------------\n")
+            
+            return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
+
+        except Exception as e:
+             sys.stdout = old_stdout
+             error_message = f"ERROR: {e}"
+             print(error_message)
+             return render_template('fit_distributions.html', summary=error_message)
+             
+    else:
+        return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
 
 @app.route('/plot/<filename>')
 def serve_plot(filename):
@@ -296,9 +352,24 @@ def serve_plot(filename):
         return send_file(file_path, mimetype='image/png')
     else:
         return "Plot not found", 404
-
     
-if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False)
-    
+@app.route("/plot_lengths")
+def plot_lengths():
+    lengths = session.get("lengths", [])
+    filename = epri.plot_fish_lengths(lengths, SIM_PROJECT_FOLDER)
+    return send_from_directory(SIM_PROJECT_FOLDER, filename)
 
+def clear_folder(folder_path):
+    if os.path.exists(folder_path):
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(f"Failed to delete {file_path}: {e}")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
