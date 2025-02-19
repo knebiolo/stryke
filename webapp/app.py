@@ -10,7 +10,7 @@ import sys
 import shutil
 import threading
 import queue
-import datetime
+#import datetime
 import io
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, after_this_request, send_from_directory, session, Response
 import matplotlib
@@ -188,7 +188,6 @@ def download_output(filename):
         flash("Output file not found.")
         return redirect(url_for('upload_simulation'))
 
-
 @app.route('/download_zip')
 def download_zip():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Generate timestamp
@@ -197,15 +196,15 @@ def download_zip():
 
     print(f"Creating ZIP file: {zip_filepath}")  # Debugging output
 
-    # Create the ZIP archive
+    # Create the ZIP archive more efficiently
     try:
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for root, _, files in os.walk(SIM_PROJECT_FOLDER):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    zipf.write(file_path, os.path.relpath(file_path, SIM_PROJECT_FOLDER))
-        
-        print(f"ZIP file created: {zip_filepath}")  # Debugging output
+            for file in os.listdir(SIM_PROJECT_FOLDER):
+                file_path = os.path.join(SIM_PROJECT_FOLDER, file)
+                if os.path.isfile(file_path):  # Ensure it's a file
+                    zipf.write(file_path, os.path.basename(file_path))
+
+        print(f"ZIP file successfully created: {zip_filepath}")  # Debugging output
     except Exception as e:
         print(f"Error creating ZIP file: {e}")
         flash("Failed to create ZIP file.")
@@ -213,10 +212,25 @@ def download_zip():
 
     # Serve the ZIP file for download
     if os.path.exists(zip_filepath):
-        return send_file(zip_filepath, as_attachment=True)
+        response = send_file(zip_filepath, as_attachment=True)
+
+        # **After sending the file, delete all files in the simulation_project folder**
+        try:
+            for file in os.listdir(SIM_PROJECT_FOLDER):
+                file_path = os.path.join(SIM_PROJECT_FOLDER, file)
+                if os.path.isfile(file_path):
+                    os.remove(file_path)  # Delete individual files
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)  # Delete folders if any
+            print("Simulation project folder cleaned successfully.")
+        except Exception as e:
+            print(f"Error cleaning up simulation project folder: {e}")
+
+        return response
     else:
         flash("ZIP file not found.")
         return redirect(url_for('upload_simulation'))
+
 
 @app.route('/stream')
 def stream():
