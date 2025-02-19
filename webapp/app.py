@@ -203,7 +203,7 @@ def download_zip():
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for file in os.listdir(SIM_PROJECT_FOLDER):
                 file_path = os.path.join(SIM_PROJECT_FOLDER, file)
-                if not file.endswith(".hdf"):  # Keep .hdf files out of the ZIP
+                if not (file.endswith(".hdf") or file.endswith(".h5")):
                     zipf.write(file_path, os.path.basename(file_path))
                     print(f"Added to ZIP: {file}")
 
