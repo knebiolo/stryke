@@ -379,7 +379,7 @@ def fit_distributions():
             
             log_text = report_text
             
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             log_filename_full = os.path.join(SIM_PROJECT_FOLDER, "fitting_results_log.txt")
             with open(log_filename_full, "a") as log_file:
                 log_file.write(f"{timestamp} - Query: {summary_text}\n")
