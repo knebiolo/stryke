@@ -35,7 +35,7 @@ class QueueStream:
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
-app.config['PASSWORD'] = 'secret123'  # Set your desired password here
+app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password here
 
 # ----------------- Password Protection -----------------
 @app.before_request
