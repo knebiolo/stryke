@@ -9,6 +9,10 @@ h5py
 pyproj
 rasterio
 pyogrio
+matplotlib
+xlrd
+networkx
+hydrofunctions
 
 # Flask Web App
 Flask
