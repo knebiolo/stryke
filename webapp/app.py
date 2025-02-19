@@ -176,76 +176,138 @@ def upload_simulation():
                            simulation_results=simulation_results,
                            output_filename=output_filename)
 
-# Added download route for output file
-@app.route('/download/<filename>')
-def download_output(filename):
-    output_path = os.path.join(SIM_PROJECT_FOLDER, filename)
-    print(f"Looking for file: {output_path}")  # Debugging output
-    if os.path.exists(output_path):
-        print(f"File found: {output_path}")  # Debugging output
-        return send_file(output_path, as_attachment=True)
-    else:
-        print("Error: File not found!")  # Debugging output
-        flash("Output file not found.")
-        return redirect(url_for('upload_simulation'))
-
-@app.route('/download_distribution_zip')
-def download_distribution_zip():
+@app.route('/download_zip')
+def download_zip():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    zip_filename = f"distribution_fitting_results_{timestamp}.zip"
+    zip_filename = f"simulation_results_{timestamp}.zip"
     zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
 
-    print(f"Creating Distribution ZIP file: {zip_filepath}")  # Debugging
+    print(f"Creating ZIP file: {zip_filepath}")  # Debugging output
 
     try:
-        # Ensure file isn't still being written
-        if not os.path.exists(zip_filepath):
-            print(f"Error: ZIP file {zip_filepath} not found.")
-            flash("Distribution ZIP file not found.")
-            return redirect(url_for('fit_distributions'))
-
-        # Debugging: Check for locked files inside the ZIP
-        for file in os.listdir(SIM_PROJECT_FOLDER):
-            file_path = os.path.join(SIM_PROJECT_FOLDER, file)
-            if os.path.isfile(file_path):
+        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file in os.listdir(SIM_PROJECT_FOLDER):
+                file_path = os.path.join(SIM_PROJECT_FOLDER, file)
+                
+                # Debugging: Check if file is locked
                 try:
                     with open(file_path, "rb") as f:
                         pass  # If this fails, the file is locked
                 except Exception as e:
                     print(f"Skipping locked file: {file_path} - Error: {e}")
+                    continue
 
-        # Small delay to ensure file write is completed
-        time.sleep(1)  
+                if not (file.endswith(".hdf") or file.endswith(".h5")):
+                    zipf.write(file_path, os.path.basename(file_path))
+                    print(f"Added to ZIP: {file}")
+        
+        print(f"ZIP file successfully created: {zip_filepath}")  # Debugging output
+    except Exception as e:
+        print(f"Error creating ZIP file: {e}")
+        flash("Failed to create ZIP file.")
+        return redirect(url_for('fit_distributions'))
 
-        print(f"ZIP file {zip_filepath} exists. Preparing to send.")
+    # **Serve the ZIP file for download**
+    if os.path.exists(zip_filepath):
         response = send_file(zip_filepath, as_attachment=True)
 
+        # **Cleanup simulation project folder after sending ZIP**
         @after_this_request
         def cleanup(response):
-            """Delete all distribution fitting files after sending the ZIP."""
             try:
-                print("Cleaning up distribution fitting results folder...")
+                print("Cleaning up simulation_project folder after sending ZIP...")
                 for file in os.listdir(SIM_PROJECT_FOLDER):
                     file_path = os.path.join(SIM_PROJECT_FOLDER, file)
-                    if file_path != zip_filepath:  # Keep latest ZIP, delete the rest
+                    if file_path != zip_filepath:  # Keep latest ZIP, delete everything else
                         if os.path.isfile(file_path):
-                            os.remove(file_path)
+                            os.remove(file_path)  # Delete files
                             print(f"Deleted: {file_path}")
                         elif os.path.isdir(file_path):
-                            shutil.rmtree(file_path)
+                            shutil.rmtree(file_path)  # Delete directories
                             print(f"Deleted directory: {file_path}")
                 print("Cleanup complete.")
             except Exception as e:
                 print(f"Error during cleanup: {e}")
             return response
 
-        print(f"ZIP file {zip_filepath} is being sent.")  # Debugging output
+        print(f"Preparing to send ZIP: {zip_filepath}")  # Debugging output
         return response
 
-    except Exception as e:
-        print(f"Error serving ZIP file: {e}")
-        flash("Failed to serve ZIP file.")
+    else:
+        flash("ZIP file not found.")
         return redirect(url_for('fit_distributions'))
+
+
+# # Added download route for output file
+# @app.route('/download/<filename>')
+# def download_output(filename):
+#     output_path = os.path.join(SIM_PROJECT_FOLDER, filename)
+#     print(f"Looking for file: {output_path}")  # Debugging output
+#     if os.path.exists(output_path):
+#         print(f"File found: {output_path}")  # Debugging output
+#         return send_file(output_path, as_attachment=True)
+#     else:
+#         print("Error: File not found!")  # Debugging output
+#         flash("Output file not found.")
+#         return redirect(url_for('upload_simulation'))
+
+# @app.route('/download_distribution_zip')
+# def download_distribution_zip():
+#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#     zip_filename = f"distribution_fitting_results_{timestamp}.zip"
+#     zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
+
+#     print(f"Creating Distribution ZIP file: {zip_filepath}")  # Debugging
+
+#     try:
+#         # Ensure file isn't still being written
+#         if not os.path.exists(zip_filepath):
+#             print(f"Error: ZIP file {zip_filepath} not found.")
+#             flash("Distribution ZIP file not found.")
+#             return redirect(url_for('fit_distributions'))
+
+#         # Debugging: Check for locked files inside the ZIP
+#         for file in os.listdir(SIM_PROJECT_FOLDER):
+#             file_path = os.path.join(SIM_PROJECT_FOLDER, file)
+#             if os.path.isfile(file_path):
+#                 try:
+#                     with open(file_path, "rb") as f:
+#                         pass  # If this fails, the file is locked
+#                 except Exception as e:
+#                     print(f"Skipping locked file: {file_path} - Error: {e}")
+
+#         # Small delay to ensure file write is completed
+#         time.sleep(1)  
+
+#         print(f"ZIP file {zip_filepath} exists. Preparing to send.")
+#         response = send_file(zip_filepath, as_attachment=True)
+
+#         @after_this_request
+#         def cleanup(response):
+#             """Delete all distribution fitting files after sending the ZIP."""
+#             try:
+#                 print("Cleaning up distribution fitting results folder...")
+#                 for file in os.listdir(SIM_PROJECT_FOLDER):
+#                     file_path = os.path.join(SIM_PROJECT_FOLDER, file)
+#                     if file_path != zip_filepath:  # Keep latest ZIP, delete the rest
+#                         if os.path.isfile(file_path):
+#                             os.remove(file_path)
+#                             print(f"Deleted: {file_path}")
+#                         elif os.path.isdir(file_path):
+#                             shutil.rmtree(file_path)
+#                             print(f"Deleted directory: {file_path}")
+#                 print("Cleanup complete.")
+#             except Exception as e:
+#                 print(f"Error during cleanup: {e}")
+#             return response
+
+#         print(f"ZIP file {zip_filepath} is being sent.")  # Debugging output
+#         return response
+
+#     except Exception as e:
+#         print(f"Error serving ZIP file: {e}")
+#         flash("Failed to serve ZIP file.")
+#         return redirect(url_for('fit_distributions'))
 
 @app.route('/stream')
 def stream():
