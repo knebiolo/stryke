@@ -190,19 +190,19 @@ def download_output(filename):
 
 @app.route('/download_zip')
 def download_zip():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Generate timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_filename = f"simulation_results_{timestamp}.zip"
     zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
 
-    print(f"Creating ZIP file: {zip_filepath}")  # Debugging output
+    print(f"Creating ZIP file: {zip_filepath}")  # Debugging
 
-    # Create the ZIP archive more efficiently
     try:
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for file in os.listdir(SIM_PROJECT_FOLDER):
-                file_path = os.path.join(SIM_PROJECT_FOLDER, file)
-                if os.path.isfile(file_path):  # Ensure it's a file
+                if not file.endswith(".hdf"):  # Exclude HDF files
+                    file_path = os.path.join(SIM_PROJECT_FOLDER, file)
                     zipf.write(file_path, os.path.basename(file_path))
+                    print(f"Added to ZIP: {file}")
 
         print(f"ZIP file successfully created: {zip_filepath}")  # Debugging output
     except Exception as e:
@@ -212,25 +212,10 @@ def download_zip():
 
     # Serve the ZIP file for download
     if os.path.exists(zip_filepath):
-        response = send_file(zip_filepath, as_attachment=True)
-
-        # **After sending the file, delete all files in the simulation_project folder**
-        try:
-            for file in os.listdir(SIM_PROJECT_FOLDER):
-                file_path = os.path.join(SIM_PROJECT_FOLDER, file)
-                if os.path.isfile(file_path):
-                    os.remove(file_path)  # Delete individual files
-                elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)  # Delete folders if any
-            print("Simulation project folder cleaned successfully.")
-        except Exception as e:
-            print(f"Error cleaning up simulation project folder: {e}")
-
-        return response
+        return send_file(zip_filepath, as_attachment=True)
     else:
         flash("ZIP file not found.")
         return redirect(url_for('upload_simulation'))
-
 
 @app.route('/stream')
 def stream():
