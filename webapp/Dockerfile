@@ -1,5 +1,5 @@
-# Use a lightweight Python image
-FROM python:3.10-slim
+# Use Python 3.10 base image with Debian-based OS
+FROM python:3.10-bullseye
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
