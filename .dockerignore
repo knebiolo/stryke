@@ -1,1 +1,11 @@
 nixpacks.toml
+.git
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv
+venv
+env
+node_modules
+.DS_Store
