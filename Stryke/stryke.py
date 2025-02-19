@@ -33,6 +33,9 @@ the entrainment rate estimate which are in units of fish per million cubic feet.
 import numpy as np
 import pandas as pd
 import os
+import matplotlib
+matplotlib.use('Agg')
+
 from matplotlib import rcParams
 rcParams['font.size'] = 6
 rcParams['font.family'] = 'serif'
@@ -2324,7 +2327,11 @@ class epri():
               
     
             # import EPRI database
-            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), r'..\Data\epri1997.csv')
+            #data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), r'..\Data\epri1997.csv')
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Data', 'epri1997.csv')
+            data_dir = os.path.normpath(data_dir)  # Normalize path for OS compatibility
+            
+            
             self.epri = pd.read_csv(data_dir,  encoding= 'unicode_escape')
     
             ''' I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame'''
@@ -2440,6 +2447,7 @@ class epri():
             mean, variance, and standard deviation, offering insights into the
             entrainment rates' distribution characteristics within the selected dataset.
             """
+            print("Starting ParetoFit...", flush=True)
     
             # fit a pareto and write to the object
             self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values, floc = 0)
@@ -2448,6 +2456,7 @@ class epri():
                                                                                                           round(self.dist_pareto[2],4)))
             print ("--------------------------------------------------------------------------------------------")
     
+            print("Finished ParetoFit.", flush=True)
     
         def ExtremeFit(self):
             """
@@ -2477,14 +2486,18 @@ class epri():
             mean, variance, and standard deviation, offering insights into the
             entrainment rates' distribution characteristics within the selected dataset.
             """
-    
+            print("Starting WeibullMinFit...", flush=True)
+
+
             # fit a pareto and write to the object
             self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values, floc = 0)
             print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
                                                                                                           round(self.dist_weibull[1],4),
                                                                                                           round(self.dist_weibull[2],4)))
             print ("--------------------------------------------------------------------------------------------")
-    
+            # existing code
+            print("Finished WeibullMinFit.", flush=True)
+            
         def LogNormalFit(self):
             """
             Fits a Log Normal distribution to the filtered EPRI dataset to model entrainment
@@ -2495,13 +2508,15 @@ class epri():
             mean, variance, and standard deviation, offering insights into the
             entrainment rates' distribution characteristics within the selected dataset.
             """
-        
+            print("Starting LogNormalFit...", flush=True)
+       
             # fit a pareto and write to the object
             self.dist_lognorm = lognorm.fit(self.epri.FishPerMft3.values, floc = 0)
             print ("The Log Normal distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_lognorm[0],4),
                                                                                                           round(self.dist_lognorm[1],4),
                                                                                                           round(self.dist_lognorm[2],4)))
             print ("--------------------------------------------------------------------------------------------")
+            print("Finished LogNormalFit.", flush=True)
     
         def GumbelFit(self):
             """
@@ -2587,6 +2602,7 @@ class epri():
         
             # Fit the concatenated array to a lognormal distribution.
             self.len_dist = lognorm.fit(self.lengths)
+            #print(self.lengths)
             print("The log normal distribution has a shape parameter s: %s, location: %s and scale: %s" %
                   (round(self.len_dist[0], 4), round(self.len_dist[1], 4), round(self.len_dist[2], 4)))
 
@@ -2659,7 +2675,24 @@ class epri():
                 
         #     else:
         #         return print('Distribution no supported by stryke')
-
+        def plot_fish_lengths(lengths, output_folder="static"):
+            """Generates a histogram of fish lengths and saves it as an image file."""
+            plt.figure(figsize=(5, 3))
+            plt.hist(lengths, bins=30, edgecolor='black', alpha=0.7)
+            plt.xlabel("Fish Length (cm)")
+            plt.ylabel("Frequency")
+            plt.title("Distribution of Fish Lengths")
+        
+            # Ensure output directory exists
+            os.makedirs(output_folder, exist_ok=True)
+        
+            # Save plot
+            plot_path = os.path.join(output_folder, "fish_lengths.png")
+            plt.savefig(plot_path)
+            plt.close()
+            
+            return "fish_lengths.png"  # Return filename
+        
         def plot(self):
             """
             Generates a 2x2 subplot figure showing histograms (with natural log-transformed data)
@@ -2729,7 +2762,9 @@ class epri():
             axs[1, 1].set_title('Weibull p = %s' % (self.weibull_t))
             axs[1, 1].set_xlabel('org per Mft3')
             
-            plt.show()
+            
+            return fig
+            #plt.show()
             
 
         def summary_output(self, output_dir, dist='Log Normal'):
@@ -2753,12 +2788,12 @@ class epri():
             sample_size = self.sample_size if hasattr(self, 'sample_size') else "N/A"
             
             # Fish length distribution stats (if available)
-            if hasattr(self, 'lengths') and self.lengths.size > 0:
-                mean_length = round(np.mean(self.lengths), 4)
-                std_length = round(np.std(self.lengths), 4)
+            if hasattr(self, 'len_dist'):
+                dist_lognorm_shape = round(self.len_dist[0], 4)
+                dist_lognorm_loc = round(self.len_dist[1], 4)
+                dist_lognorm_scale = round(self.len_dist[2], 4)
             else:
-                mean_length = "N/A"
-                std_length = "N/A"
+                dist_lognorm_shape = dist_lognorm_loc = dist_lognorm_scale = "N/A"
             
             # For Pareto:
             if hasattr(self, 'dist_pareto'):
@@ -2804,8 +2839,10 @@ class epri():
             lines.append(f"   Maximum Entrainment Rate: {max_ent_rate}")
             lines.append("")
             lines.append("Fish Length Distribution:")
-            lines.append(f"   Mean Length: {mean_length}")
-            lines.append(f"   Standard Deviation: {std_length}")
+            lines.append(f"   Shape: {dist_lognorm_shape}")
+            lines.append(f"   Location: {dist_lognorm_loc}")
+            lines.append(f"   Scale: {dist_lognorm_scale}")
+#            lines.append(f"   Lengths:{self.lengths}")
             lines.append("")
             lines.append("Pareto Distribution:")
             lines.append(f"   Shape: {pareto_shape}")
