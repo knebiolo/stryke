@@ -16,6 +16,8 @@ from flask import Flask, render_template, request, redirect, url_for, flash, sen
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from datetime import datetime
+import zipfile
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -113,11 +115,19 @@ def run_simulation_in_background(ws, wks, output_name):
         simulation_instance = stryke.simulation(ws, wks, output_name=output_name)
         simulation_instance.run()
         simulation_instance.summary()
+
+        # Debugging: Check if file exists
+        output_file = os.path.join(SIM_PROJECT_FOLDER, f"{output_name}.h5")
+        if os.path.exists(output_file):
+            print(f"Simulation output created: {output_file}")
+        else:
+            print("Error: Simulation output file was not created!")
     except Exception as e:
         print("Error during simulation:", e)
     finally:
         sys.stdout = old_stdout
         LOG_QUEUE.put("[Simulation Complete]")
+
 
 @app.route('/')
 def index():
@@ -169,35 +179,44 @@ def upload_simulation():
 @app.route('/download/<filename>')
 def download_output(filename):
     output_path = os.path.join(SIM_PROJECT_FOLDER, filename)
+    print(f"Looking for file: {output_path}")  # Debugging output
     if os.path.exists(output_path):
+        print(f"File found: {output_path}")  # Debugging output
         return send_file(output_path, as_attachment=True)
     else:
+        print("Error: File not found!")  # Debugging output
         flash("Output file not found.")
         return redirect(url_for('upload_simulation'))
 
-@app.route('/download_zip')    
+
+@app.route('/download_zip')
 def download_zip():
-    zip_filename = f"simulation_results_{datetime.datetime.now().strftime('%Y-%m-%d_%H_%M_%S')}.zip"
-    zip_path = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Generate timestamp
+    zip_filename = f"simulation_results_{timestamp}.zip"
+    zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
 
-    if os.path.exists(zip_path):
-        os.remove(zip_path)
+    print(f"Creating ZIP file: {zip_filepath}")  # Debugging output
 
-    archive_name = zip_path.replace(".zip", "")
-    shutil.make_archive(archive_name, "zip", SIM_PROJECT_FOLDER)
+    # Create the ZIP archive
+    try:
+        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(SIM_PROJECT_FOLDER):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    zipf.write(file_path, os.path.relpath(file_path, SIM_PROJECT_FOLDER))
+        
+        print(f"ZIP file created: {zip_filepath}")  # Debugging output
+    except Exception as e:
+        print(f"Error creating ZIP file: {e}")
+        flash("Failed to create ZIP file.")
+        return redirect(url_for('upload_simulation'))
 
-    if not os.path.exists(zip_path):
-        return "Error: Zip file was not created successfully.", 500
-
-    @after_this_request
-    def remove_file(response):
-        try:
-            os.remove(zip_path)
-        except Exception as e:
-            app.logger.error(f"Error deleting zip file: {str(e)}")
-        return response
-
-    return send_file(zip_path, as_attachment=True)
+    # Serve the ZIP file for download
+    if os.path.exists(zip_filepath):
+        return send_file(zip_filepath, as_attachment=True)
+    else:
+        flash("ZIP file not found.")
+        return redirect(url_for('upload_simulation'))
 
 @app.route('/stream')
 def stream():
