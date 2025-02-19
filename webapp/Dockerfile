@@ -14,6 +14,9 @@ RUN apt-get update && apt-get install -y \
     proj-bin libproj-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Verify `proj` is installed correctly
+RUN proj
+
 # Create and activate virtual environment
 RUN python3 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
