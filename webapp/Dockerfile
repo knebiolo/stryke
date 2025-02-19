@@ -1,5 +1,5 @@
-# Use Python 3.10 with Debian Bullseye for stability
-FROM python:3.10-bullseye
+# Use a prebuilt Python image with essential scientific libraries
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.10
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -16,21 +16,21 @@ RUN apt-get update && apt-get install -y \
     proj-bin libproj-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Verify `proj` is installed correctly
-RUN echo "Checking PROJ version:" && proj
+# Verify PROJ is installed
+RUN proj
 
-# Create and activate virtual environment
+# Use virtual environment for isolation
 RUN python3 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 
 # Upgrade pip and setuptools
 RUN pip install --upgrade pip setuptools wheel
 
-# Copy requirements first to leverage caching
+# Copy only the requirements file to leverage Docker cache
 COPY requirements.txt /app/
 
-# Install `pyproj` separately to debug
-RUN pip install --no-cache-dir --no-binary pyproj pyproj
+# Install core dependencies first
+RUN pip install --no-cache-dir numpy pandas scipy
 
 # Install the rest of the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -44,7 +44,7 @@ COPY setup.py /app/
 # Debugging: Check copied files
 RUN ls -l /app && ls -l /app/Stryke && ls -l /app/webapp && ls -l /app/Data
 
-# Ensure Python path is set correctly
+# Set Python path correctly
 ENV PYTHONPATH="/app:/app/Stryke:/app/webapp"
 
 # Expose Flask port
