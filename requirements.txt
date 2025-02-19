@@ -17,8 +17,8 @@ Werkzeug
 
 # Database & APIs
 requests
-psycopg2-binary  # If using PostgreSQL
-sqlite3           # If using SQLite
+#psycopg2-binary  # If using PostgreSQL
+#sqlite3           # If using SQLite
 
 # Misc
 tzdata
