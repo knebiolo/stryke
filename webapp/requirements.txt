@@ -14,7 +14,7 @@ xlrd
 networkx
 hydrofunctions
 openpyxl
-pytables
+tables
 
 # Flask Web App
 Flask
