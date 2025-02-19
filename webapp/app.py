@@ -5,6 +5,7 @@ Created on Tue Feb  4 19:48:03 2025
 @author: Kevin.Nebiolo
 """
 import os
+import subprocess
 import sys
 import shutil
 import threading
@@ -21,6 +22,11 @@ os.environ["PROJ_DIR"] = "/usr"
 os.environ["PROJ_LIB"] = "/usr/share/proj"
 os.environ["PYPROJ_GLOBAL_CONTEXT"] = "ON"
 
+try:
+    import pyproj
+except ImportError:
+    subprocess.run(["pip", "install", "--no-cache-dir", "pyproj"])
+    import pyproj
 # Import Stryke components
 from Stryke import stryke
 from Stryke.stryke import epri
