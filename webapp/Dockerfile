@@ -7,6 +7,14 @@ ENV PYTHONUNBUFFERED=1
 # Set the working directory inside the container
 WORKDIR /app
 
+# Install system dependencies required for building some Python packages
+RUN apt-get update && apt-get install -y \
+    python3-distutils \
+    python3-setuptools \
+    python3-pip \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 # copy requirements first 
 COPY requirements.txt /app/
 
