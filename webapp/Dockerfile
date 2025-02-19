@@ -1,8 +1,10 @@
-# Use Python 3.10 with Debian-based image
+# Use Python 3.10 with Debian Bullseye for stability
 FROM python:3.10-bullseye
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
+ENV PROJ_DIR="/usr"
+ENV PROJ_LIB="/usr/share/proj"
 
 # Set working directory
 WORKDIR /app
@@ -15,7 +17,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Verify `proj` is installed correctly
-RUN proj
+RUN echo "Checking PROJ version:" && proj
 
 # Create and activate virtual environment
 RUN python3 -m venv /venv
@@ -24,8 +26,13 @@ ENV PATH="/venv/bin:$PATH"
 # Upgrade pip and setuptools
 RUN pip install --upgrade pip setuptools wheel
 
-# Copy and install dependencies
+# Copy requirements first to leverage caching
 COPY requirements.txt /app/
+
+# Install `pyproj` separately to debug
+RUN pip install --no-cache-dir --no-binary pyproj pyproj
+
+# Install the rest of the dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
@@ -45,4 +52,3 @@ EXPOSE 5000
 
 # Run the Flask app
 CMD ["python", "/app/webapp/app.py"]
- 
