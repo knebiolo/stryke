@@ -1,10 +1,12 @@
-[build]
-builder = "DOCKER"
+[service]
+name = "stryke-webapp"
+type = "DOCKER"
 
 [deploy]
 runtime = "V2"
 numReplicas = 1
+startCommand = "python /app/webapp/app.py"
 sleepApplication = false
-multiRegionConfig = {"us-west1":{"numReplicas":1}}
+multiRegionConfig = { "us-west1" = { "numReplicas" = 1 } }
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
