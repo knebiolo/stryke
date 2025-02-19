@@ -13,6 +13,7 @@ matplotlib
 xlrd
 networkx
 hydrofunctions
+openpyxl
 
 # Flask Web App
 Flask
