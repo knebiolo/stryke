@@ -189,7 +189,6 @@ def download_output(filename):
         flash("Output file not found.")
         return redirect(url_for('upload_simulation'))
 
-
 @app.route('/download_zip')
 def download_zip():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -199,14 +198,22 @@ def download_zip():
     print(f"Creating ZIP file: {zip_filepath}")  # Debugging output
 
     try:
-        # Create the ZIP archive
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for file in os.listdir(SIM_PROJECT_FOLDER):
                 file_path = os.path.join(SIM_PROJECT_FOLDER, file)
+                
+                # Debugging: Check if file is locked
+                try:
+                    with open(file_path, "rb") as f:
+                        pass  # If this fails, the file is locked
+                except Exception as e:
+                    print(f"Skipping locked file: {file_path} - Error: {e}")
+                    continue
+
                 if not (file.endswith(".hdf") or file.endswith(".h5")):
                     zipf.write(file_path, os.path.basename(file_path))
                     print(f"Added to ZIP: {file}")
-
+        
         print(f"ZIP file successfully created: {zip_filepath}")  # Debugging output
     except Exception as e:
         print(f"Error creating ZIP file: {e}")
@@ -215,30 +222,31 @@ def download_zip():
 
     # **Serve the ZIP file for download**
     if os.path.exists(zip_filepath):
-        response = send_file(zip_filepath, as_attachment=True)
+        @after_this_request
+        def cleanup(response):
+            """Delete all files except the latest ZIP after sending."""
+            try:
+                print("Cleaning up simulation_project folder...")
+                for file in os.listdir(SIM_PROJECT_FOLDER):
+                    file_path = os.path.join(SIM_PROJECT_FOLDER, file)
+                    if file_path != zip_filepath:  # Keep the latest ZIP, delete everything else
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)  # Delete files
+                            print(f"Deleted: {file_path}")
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)  # Delete directories
+                            print(f"Deleted directory: {file_path}")
+                print("Cleanup complete.")
+            except Exception as e:
+                print(f"Error during cleanup: {e}")
+            return response
 
-        # **Wait a moment to ensure the file has been sent before deletion**
-        time.sleep(2)
+        print(f"Preparing to send ZIP: {zip_filepath}")  # Debugging output
+        return send_file(zip_filepath, as_attachment=True)
 
-        # **Delete all files in simulation_project (EXCEPT the latest ZIP)**
-        try:
-            for file in os.listdir(SIM_PROJECT_FOLDER):
-                file_path = os.path.join(SIM_PROJECT_FOLDER, file)
-                if file_path != zip_filepath:  # Keep the latest ZIP file, delete the rest
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)  # Delete files
-                        print(f"Deleted: {file_path}")
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)  # Delete directories
-                        print(f"Deleted directory: {file_path}")
-        except Exception as e:
-            print(f"Error cleaning up simulation project folder: {e}")
-
-        return response
     else:
         flash("ZIP file not found.")
         return redirect(url_for('upload_simulation'))
-
 
 @app.route('/stream')
 def stream():
