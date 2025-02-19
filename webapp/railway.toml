@@ -1,0 +1,10 @@
+[build]
+builder = "DOCKER"
+
+[deploy]
+runtime = "V2"
+numReplicas = 1
+sleepApplication = false
+multiRegionConfig = {"us-west1":{"numReplicas":1}}
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
