@@ -27,6 +27,9 @@ try:
 except ImportError:
     subprocess.run(["pip", "install", "--no-cache-dir", "pyproj"])
     import pyproj
+    
+# Explicitly add the parent directory of Stryke to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 # Add the Stryke directory to Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../Stryke")))
