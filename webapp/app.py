@@ -16,6 +16,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+# Manually tell pyproj where PROJ is installed
+os.environ["PROJ_DIR"] = "/usr"
+os.environ["PROJ_LIB"] = "/usr/share/proj"
+os.environ["PYPROJ_GLOBAL_CONTEXT"] = "ON"
+
 # Import Stryke components
 from Stryke import stryke
 from Stryke.stryke import epri
@@ -36,6 +41,7 @@ class QueueStream:
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password here
+
 
 # ----------------- Password Protection -----------------
 @app.before_request
