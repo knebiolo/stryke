@@ -177,91 +177,141 @@ def upload_simulation():
 
 @app.route('/download_zip')
 def download_zip():
+
+    # 1) Remove any old zip files in SIM_PROJECT_FOLDER
+    for fname in os.listdir(SIM_PROJECT_FOLDER):
+        if fname.endswith(".zip"):
+            old_path = os.path.join(SIM_PROJECT_FOLDER, fname)
+            try:
+                os.remove(old_path)
+                print(f"Removed old ZIP: {old_path}")
+            except Exception as e:
+                print(f"Error removing old ZIP {old_path}: {e}")
+
+    # 2) Now create a brand-new ZIP file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_filename = f"simulation_results_{timestamp}.zip"
     zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
-
     print(f"Creating ZIP file: {zip_filepath}")
 
     try:
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Loop over each file in SIM_PROJECT_FOLDER
             for file_name in os.listdir(SIM_PROJECT_FOLDER):
-                file_path = os.path.join(SIM_PROJECT_FOLDER, file_name)
-
-                # Skip HDF/H5 files
+                # Skip HDF, H5, and .zip
                 if file_name.endswith((".hdf", ".h5", ".zip")):
                     continue
 
-                # Retry up to 5 times if file doesn't exist or is locked
-                max_tries = 5
-                wait_time = 0.5  # half a second
-                for attempt in range(max_tries):
-                    if not os.path.exists(file_path):
-                        print(f"[Attempt {attempt+1}] {file_path} doesn't exist. "
-                              f"Waiting {wait_time}s then retrying.")
-                        time.sleep(wait_time)
-                        continue
-                    else:
-                        # Check if we can open it in read-binary mode
-                        try:
-                            with open(file_path, "rb") as test_f:
-                                pass
-                            # If it opened successfully, break from retry loop
-                            break
-                        except Exception as e:
-                            print(f"[Attempt {attempt+1}] File locked: {file_path}, error: {e}. "
-                                  f"Waiting {wait_time}s then retrying.")
-                            time.sleep(wait_time)
-                else:
-                    # If we exhausted all tries, skip this file
-                    print(f"Skipping file after {max_tries} attempts: {file_path}")
-                    continue
-
-                # Finally, try adding to the ZIP
-                try:
-                    for fname in os.listdir(SIM_PROJECT_FOLDER):
-                        if fname.endswith(".zip"):
-                            os.remove(os.path.join(SIM_PROJECT_FOLDER, fname))
-
-                    zipf.write(file_path, arcname=file_name)
-                    print(f"Added to ZIP: {file_name}")
-                except Exception as e:
-                    print(f"Skipping file {file_name} => {e}")
+                file_path = os.path.join(SIM_PROJECT_FOLDER, file_name)
+                if os.path.isfile(file_path):
+                    # Try to add
+                    try:
+                        zipf.write(file_path, arcname=file_name)
+                        print(f"Added to ZIP: {file_name}")
+                    except Exception as e:
+                        print(f"Skipping file {file_name} => {e}")
 
         print(f"ZIP file successfully created: {zip_filepath}")
-
     except Exception as e:
         print(f"Error creating ZIP file: {e}")
         flash("Failed to create ZIP file.")
-        return redirect(url_for('fit_distributions'))  # or wherever you want to redirect
+        return redirect(url_for('fit_distributions'))
 
-    # Serve the ZIP file if it exists
+    # 3) Return the new ZIP
     if os.path.exists(zip_filepath):
-        # Optional: short wait so OS fully recognizes the new file
-        time.sleep(0.5)
-
-        response = send_file(zip_filepath, as_attachment=True)
-
-        @after_this_request
-        def cleanup(response):
-            try:
-                print("Cleaning up after sending ZIP...")
-                # Remove everything except this newly created ZIP
-                for f in os.listdir(SIM_PROJECT_FOLDER):
-                    f_path = os.path.join(SIM_PROJECT_FOLDER, f)
-                    if f_path != zip_filepath:
-                        if os.path.isfile(f_path):
-                            os.remove(f_path)
-                print("Cleanup complete.")
-            except Exception as exc:
-                print(f"Error during cleanup: {exc}")
-            return response
-
-        return response
+        return send_file(zip_filepath, as_attachment=True)
     else:
         flash("ZIP file not found.")
-        return redirect(url_for('fit_distributions'))  # or whichever page
+        return redirect(url_for('fit_distributions'))
+
+
+
+# @app.route('/download_zip')
+# def download_zip():
+#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#     zip_filename = f"simulation_results_{timestamp}.zip"
+#     zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
+
+#     print(f"Creating ZIP file: {zip_filepath}")
+
+#     try:
+#         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+#             # Loop over each file in SIM_PROJECT_FOLDER
+#             for file_name in os.listdir(SIM_PROJECT_FOLDER):
+#                 file_path = os.path.join(SIM_PROJECT_FOLDER, file_name)
+
+#                 # Skip HDF/H5 files
+#                 if file_name.endswith((".hdf", ".h5", ".zip")):
+#                     continue
+
+#                 # Retry up to 5 times if file doesn't exist or is locked
+#                 max_tries = 5
+#                 wait_time = 0.5  # half a second
+#                 for attempt in range(max_tries):
+#                     if not os.path.exists(file_path):
+#                         print(f"[Attempt {attempt+1}] {file_path} doesn't exist. "
+#                               f"Waiting {wait_time}s then retrying.")
+#                         time.sleep(wait_time)
+#                         continue
+#                     else:
+#                         # Check if we can open it in read-binary mode
+#                         try:
+#                             with open(file_path, "rb") as test_f:
+#                                 pass
+#                             # If it opened successfully, break from retry loop
+#                             break
+#                         except Exception as e:
+#                             print(f"[Attempt {attempt+1}] File locked: {file_path}, error: {e}. "
+#                                   f"Waiting {wait_time}s then retrying.")
+#                             time.sleep(wait_time)
+#                 else:
+#                     # If we exhausted all tries, skip this file
+#                     print(f"Skipping file after {max_tries} attempts: {file_path}")
+#                     continue
+
+#                 # Finally, try adding to the ZIP
+#                 try:
+#                     for fname in os.listdir(SIM_PROJECT_FOLDER):
+#                         if fname.endswith(".zip"):
+#                             os.remove(os.path.join(SIM_PROJECT_FOLDER, fname))
+
+#                     zipf.write(file_path, arcname=file_name)
+#                     print(f"Added to ZIP: {file_name}")
+#                 except Exception as e:
+#                     print(f"Skipping file {file_name} => {e}")
+
+#         print(f"ZIP file successfully created: {zip_filepath}")
+
+#     except Exception as e:
+#         print(f"Error creating ZIP file: {e}")
+#         flash("Failed to create ZIP file.")
+#         return redirect(url_for('fit_distributions'))  # or wherever you want to redirect
+
+#     # Serve the ZIP file if it exists
+#     if os.path.exists(zip_filepath):
+#         # Optional: short wait so OS fully recognizes the new file
+#         time.sleep(0.5)
+
+#         response = send_file(zip_filepath, as_attachment=True)
+
+#         @after_this_request
+#         def cleanup(response):
+#             try:
+#                 print("Cleaning up after sending ZIP...")
+#                 # Remove everything except this newly created ZIP
+#                 for f in os.listdir(SIM_PROJECT_FOLDER):
+#                     f_path = os.path.join(SIM_PROJECT_FOLDER, f)
+#                     if f_path != zip_filepath:
+#                         if os.path.isfile(f_path):
+#                             os.remove(f_path)
+#                 print("Cleanup complete.")
+#             except Exception as exc:
+#                 print(f"Error during cleanup: {exc}")
+#             return response
+
+#         return response
+#     else:
+#         flash("ZIP file not found.")
+#         return redirect(url_for('fit_distributions'))  # or whichever page
 
 
 
