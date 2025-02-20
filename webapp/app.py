@@ -81,12 +81,11 @@ def login():
 def logout():
     session.clear()
     # Optional: clear folders if desired
-    upload_folder = os.path.join(UPLOAD_FOLDER, "upload")
-    results_folder = os.path.join(SIM_PROJECT_FOLDER, "simulation_project")
-    clear_folder(upload_folder)
-    clear_folder(results_folder)
+    clear_folder(UPLOAD_FOLDER)
+    clear_folder(SIM_PROJECT_FOLDER)
     flash("Logged out successfully.")
     return redirect(url_for('login'))
+
 # -------------------------------------------------------
 
 # Define directories for uploads and simulation projects
@@ -221,6 +220,10 @@ def download_zip():
 
                 # Finally, try adding to the ZIP
                 try:
+                    for fname in os.listdir(SIM_PROJECT_FOLDER):
+                        if fname.endswith(".zip"):
+                            os.remove(os.path.join(SIM_PROJECT_FOLDER, fname))
+
                     zipf.write(file_path, arcname=file_name)
                     print(f"Added to ZIP: {file_name}")
                 except Exception as e:
