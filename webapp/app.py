@@ -191,7 +191,7 @@ def download_zip():
                 file_path = os.path.join(SIM_PROJECT_FOLDER, file_name)
 
                 # Skip HDF/H5 files
-                if file_name.endswith(".hdf") or file_name.endswith(".h5"):
+                if file_name.endswith((".hdf", ".h5", ".zip")):
                     continue
 
                 # Retry up to 5 times if file doesn't exist or is locked
