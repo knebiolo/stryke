@@ -51,7 +51,7 @@ import requests
 #import geopandas as gp
 import statsmodels.api as sm
 import math
-from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r, ks_2samp, norm
+from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r, ks_2samp, nbinom, norm
 import h5py
 #import tables
 from numpy.random import default_rng
@@ -73,6 +73,34 @@ def enable_matplotlib_inline():
     except ImportError:
         print("IPython is not available; inline plotting cannot be enabled.")
 
+def hurdle_bootstrap_daily(daily_counts, n_days=365, rng=None):
+    """
+    Single-year bootstrap:
+      - Probability of zero = fraction of zero in daily_counts
+      - If nonzero, pick a positive count from the empirical distribution
+    Returns array of length n_days with simulated daily entrainment.
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+
+    # Identify zero vs. positive
+    zero_mask = (daily_counts == 0)
+    p_zero = zero_mask.mean()
+    pos_counts = daily_counts[~zero_mask]  # only the positives
+
+    # If no positives, everything is zero
+    if len(pos_counts) == 0:
+        return np.zeros(n_days, dtype=int)
+
+    # Draw random uniform for each day
+    draws = rng.random(n_days)
+    sim = np.zeros(n_days, dtype=int)
+
+    # For days that are "nonzero", pick from pos_counts (with replacement)
+    is_pos = (draws > p_zero)
+    idx = rng.integers(0, len(pos_counts), size=n_days)
+    sim[is_pos] = pos_counts[idx[is_pos]]
+    return sim
 
 class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility
@@ -188,12 +216,20 @@ class simulation():
                                                    dtype = {'Date':str,'Discharge':float})
             
             # fetch units: if metric, convert
-            df = pd.read_excel(self.wks_dir, sheet_name='Hydrology')
-            self.output_units  = df.iat[2, 5]
-            metric_units = ["cms","CMS"]
+            df = pd.read_excel(self.wks_dir, sheet_name='Background and Metadata')
+            self.output_units  = df.iat[13, 1]
             
-            if self.output_units in metric_units:
+            # if units are metric, convert to imperial for entrainment rates and Franke equations
+            if self.output_units == 'metric':# in metric_units:
                 self.input_hydrograph_df["Discharge"] = self.input_hydrograph_df["Discharge"] * 35.31469989
+                self.unit_params['intake_vel'] = self.unit_params.intake_vel * 3.28084
+                self.unit_params['H'] = self.unit_params.H * 3.28084
+                self.unit_params['D'] = self.unit_params.D * 3.28084
+                self.unit_params['Qopt'] = self.unit_params.Qopt * 35.31469989
+                self.unit_params['Qcap'] = self.unit_params.Qcap * 35.31469989
+                self.unit_params['B'] = self.unit_params.B * 3.28084
+                self.unit_params['D1'] = self.unit_params.D1 * 3.28084
+                self.unit_params['D2'] = self.unit_params.D2 * 3.28084
 
             self.operating_scenarios_df = pd.read_excel(self.wks_dir,
                                                         sheet_name = 'Operating Scenarios', 
@@ -1986,59 +2022,287 @@ class simulation():
             self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
         except:
             pass
-        
-        # create yearly summary by summing on species, flow scenario, and iteration
-        
-        yearly_summary = self.daily_summary.groupby(by = ['species','scenario','iteration'])[['pop_size','num_survived','num_entrained']].sum()        
-        yearly_summary.reset_index(inplace = True)
 
-        cum_sum_dict = {'species':[],
-                        'scenario':[],
-                        'med_population':[],
-                        'med_entrained':[], 
-                        'med_survived':[],
-                        'mean_ent':[],
-                        'lcl_ent':[],
-                        'ucl_ent':[],
-                        'prob_gt_10_entrained':[],
-                        'prob_gt_100_entrained':[],
-                        'prob_gt_1000_entrained':[]}
-        # daily summary
+
+        # Step 0) group your daily_summary by year, as before:
+        yearly_summary = self.daily_summary.groupby(
+            ['species','scenario','iteration']
+        )[['pop_size','num_survived','num_entrained']].sum()
+        yearly_summary.reset_index(inplace=True)
+        
+        cum_sum_dict = {
+            'species': [],
+            'scenario': [],
+            'med_population': [],
+            'med_entrained': [],
+            'med_survived': [],
+            'mean_ent': [],
+            'lcl_ent': [],
+            'ucl_ent': [],
+            'prob_gt_10_entrained': [],
+            'prob_gt_100_entrained': [],
+            'prob_gt_1000_entrained': []
+        }
+        
+        # For each species & scenario combination:
         for fishy in yearly_summary.species.unique():
-            #iterate over scenarios
             for scen in yearly_summary.scenario.unique():
-                # get data
-                idat = yearly_summary[(yearly_summary.species == fishy) & (yearly_summary.scenario == scen)]
                 
-                # get cumulative sums and append to dictionary
+                # A) Basic "observed" year-level sums (like you did before)
+                idat = yearly_summary[
+                    (yearly_summary.species == fishy) &
+                    (yearly_summary.scenario == scen)
+                ]
+                
+                # median population, median entrained, median survived
                 cum_sum_dict['species'].append(fishy)
                 cum_sum_dict['scenario'].append(scen)
                 cum_sum_dict['med_population'].append(idat.pop_size.median())
                 cum_sum_dict['med_entrained'].append(idat.num_entrained.median())
                 cum_sum_dict['med_survived'].append(idat.num_survived.median())
-                
-                day_dat = self.daily_summary[(self.daily_summary.species == fishy) & 
-                                             (self.daily_summary.scenario == scen)]# &
-                                             #(self.daily_summary.num_entrained > 0)]
-                
-                # fit distribution to number entrained per day
-                dist = genpareto.fit(day_dat.num_entrained)
-                probs_ent = genpareto.sf([10,100,1000],dist[0],dist[1],dist[2])
-                
-                # fit distribution to number entrained per year
-                dist2 = norm.fit(idat.num_entrained)
-                mean = norm.mean(dist2[0],dist2[1])
-                lcl = norm.ppf(0.025,dist2[0],dist2[1])
-                ucl = norm.ppf(0.975,dist2[0],dist2[1])
-
-                cum_sum_dict['mean_ent'].append(mean)
+        
+                # B) We want daily data for this scenario & species
+                day_dat = self.daily_summary[
+                    (self.daily_summary.species == fishy) &
+                    (self.daily_summary.scenario == scen)
+                ]
+        
+                daily_counts = day_dat.num_entrained.values
+                n_actual_days = len(daily_counts)
+        
+                # If we have no daily data, everything is 0
+                if n_actual_days == 0:
+                    # No daily data => all probabilities 0, no annual variation
+                    cum_sum_dict['mean_ent'].append(0.)
+                    cum_sum_dict['lcl_ent'].append(0.)
+                    cum_sum_dict['ucl_ent'].append(0.)
+                    cum_sum_dict['prob_gt_10_entrained'].append(0.)
+                    cum_sum_dict['prob_gt_100_entrained'].append(0.)
+                    cum_sum_dict['prob_gt_1000_entrained'].append(0.)
+                    continue
+        
+                # ------------------------------------------------------------------
+                # 1) Estimate "daily" thresholds via big single-sample:
+                # ------------------------------------------------------------------
+                # We'll do a large synthetic "super-year" to get daily threshold rates
+                big_n_days = 100000
+                sim_big = hurdle_bootstrap_daily(daily_counts, n_days=big_n_days)
+                prob_gt_10 = np.mean(sim_big > 10)
+                prob_gt_100 = np.mean(sim_big > 100)
+                prob_gt_1000 = np.mean(sim_big > 1000)
+        
+                cum_sum_dict['prob_gt_10_entrained'].append(prob_gt_10)
+                cum_sum_dict['prob_gt_100_entrained'].append(prob_gt_100)
+                cum_sum_dict['prob_gt_1000_entrained'].append(prob_gt_1000)
+        
+                # ------------------------------------------------------------------
+                # 2) Estimate "yearly" distribution of total
+                # ------------------------------------------------------------------
+                # We'll do repeated "year" bootstraps. You can either:
+                #  a) Use the same # of days as your original data
+                #  b) Force 365 days
+                # for simplicity, let's assume "year" means 365
+                n_years = 2000
+                rng = np.random.default_rng(42)
+                year_sums = []
+                for _ in range(n_years):
+                    sim_year = hurdle_bootstrap_daily(daily_counts, n_days=365, rng=rng)
+                    year_sums.append(sim_year.sum())
+        
+                year_sums = np.array(year_sums)
+                mean_ent = year_sums.mean()
+                lcl = np.percentile(year_sums, 2.5)
+                ucl = np.percentile(year_sums, 97.5)
+        
+                cum_sum_dict['mean_ent'].append(mean_ent)
                 cum_sum_dict['lcl_ent'].append(lcl)
                 cum_sum_dict['ucl_ent'].append(ucl)
-                cum_sum_dict['prob_gt_10_entrained'].append(probs_ent[0])
-                cum_sum_dict['prob_gt_100_entrained'].append(probs_ent[1])
-                cum_sum_dict['prob_gt_1000_entrained'].append(probs_ent[2])
+        
+        print("Yearly summary complete.")
+        
+        # Convert to a DataFrame
+        self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict)
+        
+        # # Suppose you already have:
+        # #   self.daily_summary
+        # # as in your original code, with columns: 
+        # #   ['species','scenario','iteration','pop_size','num_entrained','num_survived', ...]
+        
+        # # First, group to get the sum by year/species/scenario/iteration:
+        # yearly_summary = self.daily_summary.groupby(
+        #     by=['species','scenario','iteration']
+        # )[['pop_size','num_survived','num_entrained']].sum()
+        # yearly_summary.reset_index(inplace=True)
+        
+        # cum_sum_dict = {
+        #     'species': [],
+        #     'scenario': [],
+        #     'med_population': [],
+        #     'med_entrained': [],
+        #     'med_survived': [],
+        #     'mean_ent': [],
+        #     'lcl_ent': [],
+        #     'ucl_ent': [],
+        #     'prob_gt_10_entrained': [],
+        #     'prob_gt_100_entrained': [],
+        #     'prob_gt_1000_entrained': []
+        # }
+        
+        # for fishy in yearly_summary.species.unique():
+        #     for scen in yearly_summary.scenario.unique():
+        #         # Pull the "yearly" data for this species/scenario
+        #         idat = yearly_summary[
+        #             (yearly_summary.species == fishy) &
+        #             (yearly_summary.scenario == scen)
+        #         ]
+        
+        #         # Summaries at the yearly level
+        #         cum_sum_dict['species'].append(fishy)
+        #         cum_sum_dict['scenario'].append(scen)
+        #         cum_sum_dict['med_population'].append(idat.pop_size.median())
+        #         cum_sum_dict['med_entrained'].append(idat.num_entrained.median())
+        #         cum_sum_dict['med_survived'].append(idat.num_survived.median())
+        
+        #         # ------------------------------------------------------------
+        #         # 1) Hurdle approach for DAILY entrained counts
+        #         # ------------------------------------------------------------
+        #         day_dat = self.daily_summary[
+        #             (self.daily_summary.species == fishy) &
+        #             (self.daily_summary.scenario == scen)
+        #         ]
+        #         daily_counts = day_dat.num_entrained.values
+        
+        #         if len(daily_counts) == 0:
+        #             # No daily data at all => fallback
+        #             prob_gt_10 = 0.0
+        #             prob_gt_100 = 0.0
+        #             prob_gt_1000 = 0.0
+        #         else:
+        #             # Probability of a zero day
+        #             num_zero = np.sum(daily_counts == 0)
+        #             total_days = len(daily_counts)
+        #             p_zero = num_zero / total_days
+        #             p_nonzero = 1.0 - p_zero
+        
+        #             # Positive counts only
+        #             pos_counts = daily_counts[daily_counts > 0]
+        
+        #             if len(pos_counts) < 2:
+        #                 # If there's almost no positive data, can't fit a distribution
+        #                 # fallback or set safe defaults
+        #                 prob_gt_10 = 0.0 if len(pos_counts) == 0 else float(pos_counts.max() > 10)
+        #                 prob_gt_100 = 0.0
+        #                 prob_gt_1000 = 0.0
+        #             else:
+        #                 # Negative Binomial, method-of-moments
+        #                 #   mean = mu
+        #                 #   var = mu + alpha * mu^2 => alpha = (var - mu)/mu^2
+        #                 mu_pos = np.mean(pos_counts)
+        #                 var_pos = np.var(pos_counts, ddof=1)
+        #                 if var_pos <= mu_pos:
+        #                     # If variance <= mean, fallback to Poisson or clamp alpha=0
+        #                     alpha = 0.0
+        #                 else:
+        #                     alpha = (var_pos - mu_pos) / (mu_pos**2)
+        
+        #                 # NB2 parameterization: r = 1/alpha, p = r/(r+mu)
+        #                 # (If alpha=0 => pure Poisson)
+        #                 if alpha < 1e-9:
+        #                     # effectively Poisson
+        #                     r = 1e9
+        #                     p = mu_pos / (mu_pos + r)
+        #                 else:
+        #                     r = 1.0 / alpha
+        #                     p = r / (r + mu_pos)
+        
+        #                 # Probability that daily count is > X
+        #                 #   = p_zero*(0) + p_nonzero * nbinom.sf(X, r, p)
+        #                 prob_gt_10 = p_zero + p_nonzero*nbinom.sf(10,  r, p)
+        #                 prob_gt_100 = p_zero + p_nonzero*nbinom.sf(100, r, p)
+        #                 prob_gt_1000 = p_zero + p_nonzero*nbinom.sf(1000, r, p)
+        
+        #         cum_sum_dict['prob_gt_10_entrained'].append(prob_gt_10)
+        #         cum_sum_dict['prob_gt_100_entrained'].append(prob_gt_100)
+        #         cum_sum_dict['prob_gt_1000_entrained'].append(prob_gt_1000)
+        
+        #         # ------------------------------------------------------------
+        #         # 2) Fit distribution to YEARLY sum of entrained
+        #         #    (keep your normal approach, or whatever you prefer)
+        #         # ------------------------------------------------------------
+        #         # For the yearly sums, idat.num_entrained:
+        #         if len(idat) > 1:
+        #             # Fit normal to the yearly sums
+        #             mu_year, std_year = norm.fit(idat.num_entrained)
+        #             mean_ent = mu_year
+        #             lcl = norm.ppf(0.025, mu_year, std_year)
+        #             ucl = norm.ppf(0.975, mu_year, std_year)
+        #         else:
+        #             # If there's only 0 or 1 data point for yearly sums, fallback
+        #             mean_ent = float(idat.num_entrained.mean()) if len(idat) > 0 else 0.0
+        #             lcl = mean_ent
+        #             ucl = mean_ent
+        
+        #         cum_sum_dict['mean_ent'].append(mean_ent)
+        #         cum_sum_dict['lcl_ent'].append(lcl)
+        #         cum_sum_dict['ucl_ent'].append(ucl)
+        
+        # print("Yearly summary complete.")
+        
+        # # Convert the dictionary to a DataFrame
+        # self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict, orient='columns')
+        
+        # # create yearly summary by summing on species, flow scenario, and iteration
+        
+        # yearly_summary = self.daily_summary.groupby(by = ['species','scenario','iteration'])[['pop_size','num_survived','num_entrained']].sum()        
+        # yearly_summary.reset_index(inplace = True)
+
+        # cum_sum_dict = {'species':[],
+        #                 'scenario':[],
+        #                 'med_population':[],
+        #                 'med_entrained':[], 
+        #                 'med_survived':[],
+        #                 'mean_ent':[],
+        #                 'lcl_ent':[],
+        #                 'ucl_ent':[],
+        #                 'prob_gt_10_entrained':[],
+        #                 'prob_gt_100_entrained':[],
+        #                 'prob_gt_1000_entrained':[]}
+        # # daily summary
+        # for fishy in yearly_summary.species.unique():
+        #     #iterate over scenarios
+        #     for scen in yearly_summary.scenario.unique():
+        #         # get data
+        #         idat = yearly_summary[(yearly_summary.species == fishy) & (yearly_summary.scenario == scen)]
                 
-        print ("Yearly summary complete")   
+        #         # get cumulative sums and append to dictionary
+        #         cum_sum_dict['species'].append(fishy)
+        #         cum_sum_dict['scenario'].append(scen)
+        #         cum_sum_dict['med_population'].append(idat.pop_size.median())
+        #         cum_sum_dict['med_entrained'].append(idat.num_entrained.median())
+        #         cum_sum_dict['med_survived'].append(idat.num_survived.median())
+                
+        #         day_dat = self.daily_summary[(self.daily_summary.species == fishy) & 
+        #                                      (self.daily_summary.scenario == scen)]# &
+        #                                      #(self.daily_summary.num_entrained > 0)]
+                
+        #         # fit distribution to number entrained per day
+        #         dist = genpareto.fit(day_dat.num_entrained)
+        #         probs_ent = genpareto.sf([10,100,1000],dist[0],dist[1],dist[2])
+                
+        #         # fit distribution to number entrained per year
+        #         dist2 = norm.fit(idat.num_entrained)
+        #         mean = norm.mean(dist2[0],dist2[1])
+        #         lcl = norm.ppf(0.025,dist2[0],dist2[1])
+        #         ucl = norm.ppf(0.975,dist2[0],dist2[1])
+
+        #         cum_sum_dict['mean_ent'].append(mean)
+        #         cum_sum_dict['lcl_ent'].append(lcl)
+        #         cum_sum_dict['ucl_ent'].append(ucl)
+        #         cum_sum_dict['prob_gt_10_entrained'].append(probs_ent[0])
+        #         cum_sum_dict['prob_gt_100_entrained'].append(probs_ent[1])
+        #         cum_sum_dict['prob_gt_1000_entrained'].append(probs_ent[2])
+                
+        # print ("Yearly summary complete")   
         
         self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict,orient = 'columns')        
         results = self.beta_df
