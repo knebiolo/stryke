@@ -1406,7 +1406,7 @@ class simulation():
         Mm3 = Mft3 * 35.31469989
         
         metric_units = ["cms","CMS"]
-        if self.output_units in metric_units:
+        if self.output_units == 'metric':
             daily_rate = Mm3
             ent_rate = ent_rate / 35.31469989
         else: 
@@ -1659,8 +1659,12 @@ class simulation():
                                     # create population of fish - IN CM!!!!!
                                     population = np.abs(lognorm.rvs(s, len_loc, len_scale, np.int32(n), random_state=rng))
                                     population = np.where(population > 150,150,population)
-                                    # convert lengths in cm to feet
-                                    population = population * 0.0328084
+                                    if self.output_units == 'metric':
+                                        # convert cm to m
+                                        population = population /100.
+                                    else:
+                                        # convert lengths in cm to feet
+                                        population = population * 0.0328084
                                 else:
                                     population = np.abs(np.random.normal(mean_len, sd_len, np.int32(n)))/12.0
     
