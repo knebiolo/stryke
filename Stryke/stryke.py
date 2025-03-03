@@ -1862,7 +1862,7 @@ class simulation():
                            
                         self.hdf.flush()
                     
-                    print ("Scenario %s Iteration %s for Species %s complete"%(scenario,i,species))
+                    print ("Scenario %s Iteration %s for Species %s complete"%(scenario,i,species), flush=True)
 
                         
                 # TODO - more of that state 2 survival 2 nonesense
@@ -1876,9 +1876,9 @@ class simulation():
                                                    'state_2':50},
                                   append = True)
             self.hdf.flush()
-            print ("Completed Scenario %s %s"%(species,scen))                            
+            print ("Completed Scenario %s %s"%(species,scen), flush=True)                            
             
-        print ("Completed Simulations - view results")
+        print ("Completed Simulations - view results", flush=True)
         self.hdf.flush()
         self.hdf.close()
 
@@ -2721,6 +2721,7 @@ class epri():
     
             # fit a pareto and write to the object
             self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values, floc = 0)
+            #self.dist_pareto = pareto.fit(self.epri.FishPerMft3.values, floc = 0)
             print ("The Pareto distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_pareto[0],4),
                                                                                                           round(self.dist_pareto[1],4),
                                                                                                           round(self.dist_pareto[2],4)))
@@ -2741,6 +2742,7 @@ class epri():
     
             # fit a pareto and write to the object
             self.dist_extreme = genextreme.fit(self.epri.FishPerMft3.values, floc = 0)
+            #self.dist_extreme = genextreme.fit(self.epri.FishPerMft3.values, floc = 0)
             print ("The Generic Extreme Value distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_extreme[0],4),
                                                                                                           round(self.dist_extreme[1],4),
                                                                                                           round(self.dist_extreme[2],4)))
@@ -2761,6 +2763,7 @@ class epri():
 
             # fit a pareto and write to the object
             self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values, floc = 0)
+            #self.dist_weibull = weibull_min.fit(self.epri.FishPerMft3.values, floc = 0)
             print ("The Weibull Max distribution has a shape parameter of c: %s,  location: %s and scale: %s"%(round(self.dist_weibull[0],4),
                                                                                                           round(self.dist_weibull[1],4),
                                                                                                           round(self.dist_weibull[2],4)))
@@ -2782,6 +2785,7 @@ class epri():
        
             # fit a pareto and write to the object
             self.dist_lognorm = lognorm.fit(self.epri.FishPerMft3.values, floc = 0)
+            #self.dist_lognorm = lognorm.fit(self.epri.FishPerMft3.values, floc = 0)
             print ("The Log Normal distribution has a shape parameter of b: %s,  location: %s and scale: %s"%(round(self.dist_lognorm[0],4),
                                                                                                           round(self.dist_lognorm[1],4),
                                                                                                           round(self.dist_lognorm[2],4)))
@@ -2800,7 +2804,8 @@ class epri():
             """
     
             # fit a pareto and write to the object
-            self.dist_gumbel = gumbel_r.fit(self.epri.FishPerMft3.values)
+            self.dist_gumbel = gumbel_r.fit(self.epri.FishPerMft3.values,floc = 0)
+            #self.dist_gumbel = gumbel_r.fit(self.epri.FishPerMft3.values)
             print ("The Gumbel distribution has a shape parameter of location: %s and scale: %s"%(round(self.dist_gumbel[0],4),
                                                                                                           round(self.dist_gumbel[1],4)))
             print ("--------------------------------------------------------------------------------------------")
