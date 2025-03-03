@@ -70,6 +70,13 @@
       max-height: 300px;
       overflow-y: scroll;
     }
+
+    /* Hide this container initially so the user doesn’t see the
+       Download Results button until the simulation is done. */
+    #download-container {
+      display: none; 
+      margin-top: 20px;
+    }
   </style>
 </head>
 <body>
@@ -78,7 +85,6 @@
     <a href="{{ url_for('index') }}">Home</a> |
     <a href="{{ url_for('upload_simulation') }}">Upload and Run </a> |
     <a href="{{ url_for('fit_distributions') }}">Fit Entrainment Rate Distributions</a> |
-
   </nav>
   
   <div class="container">
@@ -104,13 +110,18 @@
     
     <!-- Simulation Results Section -->
     {% if simulation_results %}
-    <div class="results">
-      <h2>Simulation Results</h2>
-      <p>{{ simulation_results }}</p>
-      <a href="{{ url_for('download_zip') }}" class="btn btn-primary">Download Results</a>
-      <h3>Live Log Output:</h3>
-      <div id="live-log"></div>
-    </div>
+      <div class="results">
+        <h2>Simulation Results</h2>
+        <p>{{ simulation_results }}</p>
+        <!-- We’ll keep the log the same. -->
+        <h3>Live Log Output:</h3>
+        <div id="live-log"></div>
+
+        <!-- This container is hidden by default, but will be revealed by SSE. -->
+        <div id="download-container">
+          <a href="{{ url_for('download_zip') }}" class="btn btn-primary">Download Results</a>
+        </div>
+      </div>
     {% endif %}
   </div>
   
@@ -123,6 +134,12 @@
           var liveLogDiv = document.getElementById("live-log");
           liveLogDiv.innerHTML += event.data + "\n";
           liveLogDiv.scrollTop = liveLogDiv.scrollHeight;
+
+          // If we receive the "[Simulation Complete]" message, reveal the download link
+          if (event.data === "[Simulation Complete]") {
+              // Show the hidden container
+              document.getElementById("download-container").style.display = 'block';
+          }
       };
       source.onerror = function(event) {
           console.error("SSE error:", event);
