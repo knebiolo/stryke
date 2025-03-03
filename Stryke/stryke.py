@@ -181,7 +181,7 @@ class simulation():
                                              sheet_name = 'Unit Params', 
                                              header = 0, 
                                              index_col = None,
-                                             usecols = "B:S",
+                                             usecols = "B:T",
                                              skiprows = 4)
             self.unit_params.set_index('Unit',inplace = True)
             
@@ -189,7 +189,7 @@ class simulation():
                                              sheet_name = 'Facilities', 
                                              header = 0, 
                                              index_col = None,
-                                             usecols = "B:H",
+                                             usecols = "B:I",
                                              skiprows = 3)
             self.facility_params.set_index('Facility', inplace = True)
             # self.facility_params['Min_Op_Flow'] = self.facility_params.Min_Op_Flow.fillna(0)
@@ -221,7 +221,7 @@ class simulation():
             self.output_units  = df.iat[13, 1]
             
             # if units are metric, convert to imperial for entrainment rates and Franke equations
-            if self.output_units == 'metric':# in metric_units:
+            if self.output_units == 'metric':#  make sure everything is converted from m3/s and meters to feet:
                 self.input_hydrograph_df["Discharge"] = self.input_hydrograph_df["Discharge"] * 35.31469989
                 self.unit_params['intake_vel'] = self.unit_params.intake_vel * 3.28084
                 self.unit_params['H'] = self.unit_params.H * 3.28084
@@ -231,6 +231,10 @@ class simulation():
                 self.unit_params['B'] = self.unit_params.B * 3.28084
                 self.unit_params['D1'] = self.unit_params.D1 * 3.28084
                 self.unit_params['D2'] = self.unit_params.D2 * 3.28084
+                self.facility_params['Exc_Rack_Spacing'] = self.facility.params['Exc_Rack_Spacing']*0.0328084
+            else:
+                self.facility_params['Exc_Rack_Spacing'] = self.facility.params['Exc_Rack_Spacing']/12.
+
 
             self.operating_scenarios_df = pd.read_excel(self.wks_dir,
                                                         sheet_name = 'Operating Scenarios', 
@@ -642,7 +646,7 @@ class simulation():
                     print ('Problem with a priori survival function')
     
             else:
-                #TODO add impingement logic, bring in tail aspect
+                #TODO add impingement logic, bring 
                 
                 #TODO add in barotrauma logic
                 
@@ -1671,12 +1675,12 @@ class simulation():
                                     population = np.abs(np.random.normal(mean_len, sd_len, np.int32(n)))/12.0
     
                                 # calculate sustained swim speed (ft/s)
-                                if math.isnan(spc_dat.caudal_AR.values[0]) == False:
+                                if math.isnan(spc_dat.U_crit.values[0]) == False:
                                     AR = spc_dat.caudal_AR
                                     v_speed = np.vectorize(self.speed,excluded = [1,2])
                                     swim_speed = v_speed(population,AR,0)
                                 else:
-                                    swim_speed = np.zeros(len(population))
+                                    swim_speed = np.repeat(spc_dat.iat[0,'U_crit'])#len(population))
     
     
                                 #print ("created population for %s iteration:%s day: %s"%(species,i,day))
