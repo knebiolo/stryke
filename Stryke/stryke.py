@@ -231,9 +231,9 @@ class simulation():
                 self.unit_params['B'] = self.unit_params.B * 3.28084
                 self.unit_params['D1'] = self.unit_params.D1 * 3.28084
                 self.unit_params['D2'] = self.unit_params.D2 * 3.28084
-                self.facility_params['Exc_Rack_Spacing'] = self.facility.params['Exc_Rack_Spacing']*0.0328084
+                self.facility_params['Exc_Rack_Spacing'] = self.facility_params.Exc_Rack_Spacing*0.0328084
             else:
-                self.facility_params['Exc_Rack_Spacing'] = self.facility.params['Exc_Rack_Spacing']/12.
+                self.facility_params['Exc_Rack_Spacing'] = self.facility_params.Exc_Rack_Spacing/12.
 
 
             self.operating_scenarios_df = pd.read_excel(self.wks_dir,
