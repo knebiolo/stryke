@@ -1676,9 +1676,9 @@ class simulation():
     
                                 # calculate sustained swim speed (ft/s)
                                 if math.isnan(spc_dat.U_crit.values[0]) == False:
-                                    swim_speed = np.repeat(spc_dat.iat[0,spc_dat.columns.get_loc('U_crit')])
+                                    swim_speed = np.repeat(spc_dat.iat[0,spc_dat.columns.get_loc('U_crit')],len(population))
                                 else:
-                                    swim_speed = np.repeat(spc_dat.iat[0,spc_dat.columns.get_loc('U_crit')])#len(population))
+                                    swim_speed = np.repeat(spc_dat.iat[0,spc_dat.columns.get_loc('U_crit')],len(population))
     
     
                                 #print ("created population for %s iteration:%s day: %s"%(species,i,day))
