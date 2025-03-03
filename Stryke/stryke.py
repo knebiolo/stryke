@@ -1676,9 +1676,7 @@ class simulation():
     
                                 # calculate sustained swim speed (ft/s)
                                 if math.isnan(spc_dat.U_crit.values[0]) == False:
-                                    AR = spc_dat.caudal_AR
-                                    v_speed = np.vectorize(self.speed,excluded = [1,2])
-                                    swim_speed = v_speed(population,AR,0)
+                                    swim_speed = np.repeat(spc_dat.iat[0,'U_crit'])#len(population))
                                 else:
                                     swim_speed = np.repeat(spc_dat.iat[0,'U_crit'])#len(population))
     
