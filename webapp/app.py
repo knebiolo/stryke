@@ -62,7 +62,8 @@ app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password he
 # ----------------- Password Protection -----------------
 @app.before_request
 def require_login():
-    if not session.get('logged_in') and request.endpoint not in ['login', 'static']:
+
+    if not session.get('logged_in') and request.endpoint not in ['login', 'static','health']:
         return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -95,7 +96,9 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SIM_PROJECT_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-\
+@app.route("/health")
+def health():
+    return "OK", 200
 
 def run_simulation(ws, wks, output_name):
     old_stdout = sys.stdout
