@@ -60,11 +60,11 @@ app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password he
 
 
 # ----------------- Password Protection -----------------
-@app.before_request
-def require_login():
+# @app.before_request
+# def require_login():
 
-    if not session.get('logged_in') and request.endpoint not in ['login', 'static','health']:
-        return redirect(url_for('login'))
+#     if not session.get('logged_in') and request.endpoint not in ['login', 'static','health']:
+#         return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
