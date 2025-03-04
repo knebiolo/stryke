@@ -2,5 +2,5 @@
 builder = "DOCKER"
 
 [deploy]
-startCommand = "gunicorn --bind=0.0.0.0:$PORT --workers=2 --threads=2 app:app"
+startCommand = "gunicorn --bind=0.0.0.0:$PORT --workers=2 --threads=2 webapp.app:app"
 healthcheckPath = "/health"
