@@ -52,4 +52,4 @@ EXPOSE 5000
 
 # Run the Flask app
 # CMD ["python", "/app/webapp/app.py"]
-CMD gunicorn --bind 0.0.0.0:$PORT --workers=2 --threads=2 app.webapp:app
+CMD gunicorn --bind 0.0.0.0:$PORT --workers=2 --threads=2 webapp.app:app
