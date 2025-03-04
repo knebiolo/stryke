@@ -95,9 +95,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SIM_PROJECT_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-@app.route('/')
-def index():
-    return "Hello from Gunicorn in production!"
+\
 
 def run_simulation(ws, wks, output_name):
     old_stdout = sys.stdout
@@ -131,7 +129,6 @@ def run_simulation_in_background(ws, wks, output_name):
     finally:
         sys.stdout = old_stdout
         LOG_QUEUE.put("[Simulation Complete]")
-
 
 @app.route('/')
 def index():
