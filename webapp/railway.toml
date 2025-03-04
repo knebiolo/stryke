@@ -1,5 +1,5 @@
 [build]
-builder = "NIXPACKS"
+builder = "DOCKER"
 
 [deploy]
 runtime = "V2"
