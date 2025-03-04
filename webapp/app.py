@@ -95,6 +95,10 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SIM_PROJECT_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+@app.route('/')
+def index():
+    return "Hello from Gunicorn in production!"
+
 def run_simulation(ws, wks, output_name):
     old_stdout = sys.stdout
     sys.stdout = QueueStream(LOG_QUEUE)
