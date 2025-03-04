@@ -577,5 +577,5 @@ def clear_folder(folder_path):
             except Exception as e:
                 print(f"Failed to delete {file_path}: {e}")
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
