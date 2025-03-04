@@ -1,5 +1,6 @@
 [build]
-builder = "DOCKER"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 runtime = "V2"
