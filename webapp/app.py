@@ -12,13 +12,14 @@ import threading
 import queue
 #import datetime
 import io
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, after_this_request, send_from_directory, session, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, after_this_request, send_from_directory, session, Response, g
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime
 import zipfile
 import time
+import uuid
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -60,11 +61,31 @@ app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password he
 
 
 # ----------------- Password Protection -----------------
-# @app.before_request
-# def require_login():
 
-#     if not session.get('logged_in') and request.endpoint not in ['login', 'static','health']:
-#         return redirect(url_for('login'))
+
+@app.before_request
+def require_login_and_setup():
+    # First, enforce login for protected endpoints.
+    if not session.get('logged_in') and request.endpoint not in ['login', 'static', 'health']:
+        return redirect(url_for('login'))
+    
+    # Only set up session directories if the user is logged in.
+    if session.get('logged_in'):
+        # Generate a unique directory identifier if one doesn't exist.
+        if 'user_dir' not in session:
+            session['user_dir'] = uuid.uuid4().hex
+
+        # Create a session-specific upload directory.
+        user_upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], session['user_dir'])
+        os.makedirs(user_upload_dir, exist_ok=True)
+
+        # Create a session-specific simulation project directory.
+        user_sim_folder = os.path.join(SIM_PROJECT_FOLDER, session['user_dir'])
+        os.makedirs(user_sim_folder, exist_ok=True)
+
+        # Store these directories in Flask's global context for easy access.
+        g.user_upload_dir = user_upload_dir
+        g.user_sim_folder = user_sim_folder
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -78,12 +99,28 @@ def login():
             error = 'Invalid password. Please try again.'
     return render_template('login.html', error=error)
 
+# @app.route('/logout')
+# def logout():
+#     session.clear()
+#     # Optional: clear folders if desired
+#     clear_folder(UPLOAD_FOLDER)
+#     clear_folder(SIM_PROJECT_FOLDER)
+#     flash("Logged out successfully.")
+#     return redirect(url_for('login'))
+
 @app.route('/logout')
 def logout():
+    # Retrieve the user's unique directory from the session
+    user_dir = session.get('user_dir')
+    if user_dir:
+        # Build the session-specific paths
+        user_upload_dir = os.path.join(UPLOAD_FOLDER, user_dir)
+        user_sim_folder = os.path.join(SIM_PROJECT_FOLDER, user_dir)
+        # Clear the session-specific folders
+        clear_folder(user_upload_dir)
+        clear_folder(user_sim_folder)
+    
     session.clear()
-    # Optional: clear folders if desired
-    clear_folder(UPLOAD_FOLDER)
-    clear_folder(SIM_PROJECT_FOLDER)
     flash("Logged out successfully.")
     return redirect(url_for('login'))
 
@@ -152,14 +189,16 @@ def upload_simulation():
             flash('No file selected')
             return render_template('upload_simulation.html')
         
-        up_file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        # Save the file in the session-specific upload directory
+        up_file_path = os.path.join(g.user_upload_dir, file.filename)
         file.save(up_file_path)
         flash(f'File successfully uploaded: {file.filename}')
         
-        simulation_file_path = os.path.join(SIM_PROJECT_FOLDER, file.filename)
+        # Copy file to session-specific simulation directory
+        simulation_file_path = os.path.join(g.user_sim_folder, file.filename)
         shutil.copy(up_file_path, simulation_file_path)
         
-        ws = SIM_PROJECT_FOLDER
+        ws = g.user_sim_folder
         wks = file.filename
         output_name = 'Simulation_Output'
         
@@ -180,35 +219,126 @@ def upload_simulation():
                            simulation_results=simulation_results,
                            output_filename=output_filename)
 
+# @app.route('/upload', methods=['GET', 'POST'])
+# def upload_simulation():
+#     simulation_results = None
+#     output_filename = None
+#     if request.method == 'POST':
+#         if 'excel_file' not in request.files:
+#             flash('No file part in the request')
+#             return render_template('upload_simulation.html')
+        
+#         file = request.files['excel_file']
+#         if file.filename == '':
+#             flash('No file selected')
+#             return render_template('upload_simulation.html')
+        
+#         up_file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+#         file.save(up_file_path)
+#         flash(f'File successfully uploaded: {file.filename}')
+        
+#         simulation_file_path = os.path.join(SIM_PROJECT_FOLDER, file.filename)
+#         shutil.copy(up_file_path, simulation_file_path)
+        
+#         ws = SIM_PROJECT_FOLDER
+#         wks = file.filename
+#         output_name = 'Simulation_Output'
+        
+#         try:
+#             simulation_thread = threading.Thread(
+#                 target=run_simulation_in_background,
+#                 args=(ws, wks, output_name)
+#             )
+#             simulation_thread.start()
+#             flash("Simulation started. Live log will appear below.")
+#             simulation_results = "Simulation is running..."
+#             output_filename = f"{output_name}.h5"
+#         except Exception as e:
+#             flash(f"Error starting simulation: {e}")
+#             return render_template('upload_simulation.html')
+    
+#     return render_template('upload_simulation.html',
+#                            simulation_results=simulation_results,
+#                            output_filename=output_filename)
+
+# @app.route('/download_zip')
+# def download_zip():
+
+#     # 1) Remove any old zip files in SIM_PROJECT_FOLDER
+#     for fname in os.listdir(SIM_PROJECT_FOLDER):
+#         if fname.endswith(".zip"):
+#             old_path = os.path.join(SIM_PROJECT_FOLDER, fname)
+#             try:
+#                 os.remove(old_path)
+#                 print(f"Removed old ZIP: {old_path}")
+#             except Exception as e:
+#                 print(f"Error removing old ZIP {old_path}: {e}")
+
+#     # 2) Now create a brand-new ZIP file
+#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#     zip_filename = f"simulation_results_{timestamp}.zip"
+#     zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
+#     print(f"Creating ZIP file: {zip_filepath}")
+
+#     try:
+#         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+#             for file_name in os.listdir(SIM_PROJECT_FOLDER):
+#                 # Skip HDF, H5, and .zip
+#                 if file_name.endswith((".hdf", ".h5", ".zip")):
+#                     continue
+
+#                 file_path = os.path.join(SIM_PROJECT_FOLDER, file_name)
+#                 if os.path.isfile(file_path):
+#                     # Try to add
+#                     try:
+#                         zipf.write(file_path, arcname=file_name)
+#                         print(f"Added to ZIP: {file_name}")
+#                     except Exception as e:
+#                         print(f"Skipping file {file_name} => {e}")
+
+#         print(f"ZIP file successfully created: {zip_filepath}")
+#     except Exception as e:
+#         print(f"Error creating ZIP file: {e}")
+#         flash("Failed to create ZIP file.")
+#         return redirect(url_for('fit_distributions'))
+
+#     # 3) Return the new ZIP
+#     if os.path.exists(zip_filepath):
+#         return send_file(zip_filepath, as_attachment=True)
+#     else:
+#         flash("ZIP file not found.")
+#         return redirect(url_for('fit_distributions'))
+
 @app.route('/download_zip')
 def download_zip():
+    # Use the session-specific simulation folder; fallback to global if not set
+    user_sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
 
-    # 1) Remove any old zip files in SIM_PROJECT_FOLDER
-    for fname in os.listdir(SIM_PROJECT_FOLDER):
+    # 1) Remove any old zip files in the user's simulation folder
+    for fname in os.listdir(user_sim_folder):
         if fname.endswith(".zip"):
-            old_path = os.path.join(SIM_PROJECT_FOLDER, fname)
+            old_path = os.path.join(user_sim_folder, fname)
             try:
                 os.remove(old_path)
                 print(f"Removed old ZIP: {old_path}")
             except Exception as e:
                 print(f"Error removing old ZIP {old_path}: {e}")
 
-    # 2) Now create a brand-new ZIP file
+    # 2) Create a brand-new ZIP file in the user's simulation folder
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_filename = f"simulation_results_{timestamp}.zip"
-    zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
+    zip_filepath = os.path.join(user_sim_folder, zip_filename)
     print(f"Creating ZIP file: {zip_filepath}")
 
     try:
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for file_name in os.listdir(SIM_PROJECT_FOLDER):
-                # Skip HDF, H5, and .zip
+            for file_name in os.listdir(user_sim_folder):
+                # Skip HDF, H5, and .zip files
                 if file_name.endswith((".hdf", ".h5", ".zip")):
                     continue
 
-                file_path = os.path.join(SIM_PROJECT_FOLDER, file_name)
+                file_path = os.path.join(user_sim_folder, file_name)
                 if os.path.isfile(file_path):
-                    # Try to add
                     try:
                         zipf.write(file_path, arcname=file_name)
                         print(f"Added to ZIP: {file_name}")
@@ -221,175 +351,12 @@ def download_zip():
         flash("Failed to create ZIP file.")
         return redirect(url_for('fit_distributions'))
 
-    # 3) Return the new ZIP
+    # 3) Return the new ZIP file
     if os.path.exists(zip_filepath):
         return send_file(zip_filepath, as_attachment=True)
     else:
         flash("ZIP file not found.")
         return redirect(url_for('fit_distributions'))
-
-
-
-# @app.route('/download_zip')
-# def download_zip():
-#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-#     zip_filename = f"simulation_results_{timestamp}.zip"
-#     zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
-
-#     print(f"Creating ZIP file: {zip_filepath}")
-
-#     try:
-#         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-#             # Loop over each file in SIM_PROJECT_FOLDER
-#             for file_name in os.listdir(SIM_PROJECT_FOLDER):
-#                 file_path = os.path.join(SIM_PROJECT_FOLDER, file_name)
-
-#                 # Skip HDF/H5 files
-#                 if file_name.endswith((".hdf", ".h5", ".zip")):
-#                     continue
-
-#                 # Retry up to 5 times if file doesn't exist or is locked
-#                 max_tries = 5
-#                 wait_time = 0.5  # half a second
-#                 for attempt in range(max_tries):
-#                     if not os.path.exists(file_path):
-#                         print(f"[Attempt {attempt+1}] {file_path} doesn't exist. "
-#                               f"Waiting {wait_time}s then retrying.")
-#                         time.sleep(wait_time)
-#                         continue
-#                     else:
-#                         # Check if we can open it in read-binary mode
-#                         try:
-#                             with open(file_path, "rb") as test_f:
-#                                 pass
-#                             # If it opened successfully, break from retry loop
-#                             break
-#                         except Exception as e:
-#                             print(f"[Attempt {attempt+1}] File locked: {file_path}, error: {e}. "
-#                                   f"Waiting {wait_time}s then retrying.")
-#                             time.sleep(wait_time)
-#                 else:
-#                     # If we exhausted all tries, skip this file
-#                     print(f"Skipping file after {max_tries} attempts: {file_path}")
-#                     continue
-
-#                 # Finally, try adding to the ZIP
-#                 try:
-#                     for fname in os.listdir(SIM_PROJECT_FOLDER):
-#                         if fname.endswith(".zip"):
-#                             os.remove(os.path.join(SIM_PROJECT_FOLDER, fname))
-
-#                     zipf.write(file_path, arcname=file_name)
-#                     print(f"Added to ZIP: {file_name}")
-#                 except Exception as e:
-#                     print(f"Skipping file {file_name} => {e}")
-
-#         print(f"ZIP file successfully created: {zip_filepath}")
-
-#     except Exception as e:
-#         print(f"Error creating ZIP file: {e}")
-#         flash("Failed to create ZIP file.")
-#         return redirect(url_for('fit_distributions'))  # or wherever you want to redirect
-
-#     # Serve the ZIP file if it exists
-#     if os.path.exists(zip_filepath):
-#         # Optional: short wait so OS fully recognizes the new file
-#         time.sleep(0.5)
-
-#         response = send_file(zip_filepath, as_attachment=True)
-
-#         @after_this_request
-#         def cleanup(response):
-#             try:
-#                 print("Cleaning up after sending ZIP...")
-#                 # Remove everything except this newly created ZIP
-#                 for f in os.listdir(SIM_PROJECT_FOLDER):
-#                     f_path = os.path.join(SIM_PROJECT_FOLDER, f)
-#                     if f_path != zip_filepath:
-#                         if os.path.isfile(f_path):
-#                             os.remove(f_path)
-#                 print("Cleanup complete.")
-#             except Exception as exc:
-#                 print(f"Error during cleanup: {exc}")
-#             return response
-
-#         return response
-#     else:
-#         flash("ZIP file not found.")
-#         return redirect(url_for('fit_distributions'))  # or whichever page
-
-
-
-# # Added download route for output file
-# @app.route('/download/<filename>')
-# def download_output(filename):
-#     output_path = os.path.join(SIM_PROJECT_FOLDER, filename)
-#     print(f"Looking for file: {output_path}")  # Debugging output
-#     if os.path.exists(output_path):
-#         print(f"File found: {output_path}")  # Debugging output
-#         return send_file(output_path, as_attachment=True)
-#     else:
-#         print("Error: File not found!")  # Debugging output
-#         flash("Output file not found.")
-#         return redirect(url_for('upload_simulation'))
-
-# @app.route('/download_distribution_zip')
-# def download_distribution_zip():
-#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-#     zip_filename = f"distribution_fitting_results_{timestamp}.zip"
-#     zip_filepath = os.path.join(SIM_PROJECT_FOLDER, zip_filename)
-
-#     print(f"Creating Distribution ZIP file: {zip_filepath}")  # Debugging
-
-#     try:
-#         # Ensure file isn't still being written
-#         if not os.path.exists(zip_filepath):
-#             print(f"Error: ZIP file {zip_filepath} not found.")
-#             flash("Distribution ZIP file not found.")
-#             return redirect(url_for('fit_distributions'))
-
-#         # Debugging: Check for locked files inside the ZIP
-#         for file in os.listdir(SIM_PROJECT_FOLDER):
-#             file_path = os.path.join(SIM_PROJECT_FOLDER, file)
-#             if os.path.isfile(file_path):
-#                 try:
-#                     with open(file_path, "rb") as f:
-#                         pass  # If this fails, the file is locked
-#                 except Exception as e:
-#                     print(f"Skipping locked file: {file_path} - Error: {e}")
-
-#         # Small delay to ensure file write is completed
-#         time.sleep(1)  
-
-#         print(f"ZIP file {zip_filepath} exists. Preparing to send.")
-#         response = send_file(zip_filepath, as_attachment=True)
-
-#         @after_this_request
-#         def cleanup(response):
-#             """Delete all distribution fitting files after sending the ZIP."""
-#             try:
-#                 print("Cleaning up distribution fitting results folder...")
-#                 for file in os.listdir(SIM_PROJECT_FOLDER):
-#                     file_path = os.path.join(SIM_PROJECT_FOLDER, file)
-#                     if file_path != zip_filepath:  # Keep latest ZIP, delete the rest
-#                         if os.path.isfile(file_path):
-#                             os.remove(file_path)
-#                             print(f"Deleted: {file_path}")
-#                         elif os.path.isdir(file_path):
-#                             shutil.rmtree(file_path)
-#                             print(f"Deleted directory: {file_path}")
-#                 print("Cleanup complete.")
-#             except Exception as e:
-#                 print(f"Error during cleanup: {e}")
-#             return response
-
-#         print(f"ZIP file {zip_filepath} is being sent.")  # Debugging output
-#         return response
-
-#     except Exception as e:
-#         print(f"Error serving ZIP file: {e}")
-#         flash("Failed to serve ZIP file.")
-#         return redirect(url_for('fit_distributions'))
 
 @app.route('/stream')
 def stream():
