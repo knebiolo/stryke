@@ -98,6 +98,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 @app.route("/health")
 def health():
+    print("Health endpoint accessed")
     return "OK", 200
 
 def run_simulation(ws, wks, output_name):
