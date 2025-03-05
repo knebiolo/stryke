@@ -383,6 +383,9 @@ def fit_distributions():
     log_text = ""
     plot_filename = ""
     
+    # Use the session-specific simulation folder if available; otherwise, fallback to the global folder.
+    sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
+    
     if request.method == 'POST':
         try:
             print("LOG: Received POST request for fitting.")
@@ -471,23 +474,24 @@ def fit_distributions():
                 captured_output = mystdout.getvalue()
                 sys.stdout = old_stdout
     
+            # Generate and save the first plot.
             plt.clf()
             fish.plot()
             plot_filename = 'fitting_results.png'
-            plot_path = os.path.join(SIM_PROJECT_FOLDER, plot_filename)
+            plot_path = os.path.join(sim_folder, plot_filename)
             plt.savefig(plot_path)
             plt.close()
             
+            # Generate and save the histogram.
             plt.clf()
             plt.figure(figsize=(5, 3))
             plt.hist(fish.lengths.tolist(), bins=30, edgecolor='black', alpha=0.7)
             plt.xlabel("Fish Length (cm)")
             plt.ylabel("Frequency")
             plt.title("Distribution of Fish Lengths")
-        
             other_filename = 'fish_lengths.png'
-            plot_path = os.path.join(SIM_PROJECT_FOLDER, other_filename)
-            plt.savefig(plot_path)
+            other_plot_path = os.path.join(sim_folder, other_filename)
+            plt.savefig(other_plot_path)
             plt.close()
             
             summary_text = (
@@ -499,14 +503,15 @@ def fit_distributions():
             )
             
             try:
-                report_text = fish.summary_output(SIM_PROJECT_FOLDER, dist='Log Normal')
+                # Write the summary output to a file in the session folder.
+                report_text = fish.summary_output(sim_folder, dist='Log Normal')
             except Exception as e:
                 report_text = f"Error generating detailed summary report: {e}"
             
             log_text = report_text
             
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_filename_full = os.path.join(SIM_PROJECT_FOLDER, "fitting_results_log.txt")
+            log_filename_full = os.path.join(sim_folder, "fitting_results_log.txt")
             with open(log_filename_full, "a") as log_file:
                 log_file.write(f"{timestamp} - Query: {summary_text}\n")
                 log_file.write(f"{timestamp} - Report: {report_text}\n")
@@ -515,21 +520,24 @@ def fit_distributions():
             return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
 
         except Exception as e:
-             sys.stdout = old_stdout
-             error_message = f"ERROR: {e}"
-             print(error_message)
-             return render_template('fit_distributions.html', summary=error_message)
+            sys.stdout = old_stdout
+            error_message = f"ERROR: {e}"
+            print(error_message)
+            return render_template('fit_distributions.html', summary=error_message)
              
     else:
         return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
 
 @app.route('/plot/<filename>')
 def serve_plot(filename):
-    file_path = os.path.join(SIM_PROJECT_FOLDER, filename)
+    # Use the session-specific simulation folder if available.
+    sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
+    file_path = os.path.join(sim_folder, filename)
     if os.path.exists(file_path):
         return send_file(file_path, mimetype='image/png')
     else:
         return "Plot not found", 404
+
     
 @app.route("/plot_lengths")
 def plot_lengths():
