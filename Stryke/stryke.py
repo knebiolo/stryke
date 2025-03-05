@@ -2316,7 +2316,7 @@ class simulation():
         results = self.beta_df
         day_sum = self.daily_summary
         year_sum = self.cum_sum
-        length = self.length_summ
+        #length = self.length_summ
         
         # summarize over iterations by Species and Flow Scenario
         
