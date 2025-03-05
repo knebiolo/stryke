@@ -46,8 +46,8 @@ warnings.filterwarnings("ignore")
 from scipy.stats import beta
 import xlrd
 import networkx as nx
-#from Stryke.hydrofunctions import hydrofunctions as hf
-import hydrofunctions as hf
+from Stryke.hydrofunctions import hydrofunctions as hf
+#import hydrofunctions as hf
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
@@ -1937,12 +1937,12 @@ class simulation():
         print ("iterate through species and scenarios and summarize")
         # now loop over dem species, scenarios, iterations and days then calculate them stats
         for i in species:
-            # create empty dataframe to hold all lengths for this particular species
-            spc_length = self.hdf['Length']
+            # # create empty dataframe to hold all lengths for this particular species
+            # spc_length = self.hdf['Length']
             
-            # calculate length stats for this species
-            self.length_summ = spc_length.groupby(['season','state_2','survival_2']).population.describe()
-            print ("summarized length by season, state, and survival")
+            # # calculate length stats for this species
+            # self.length_summ = spc_length.groupby(['season','state_2','survival_2']).population.describe()
+            # print ("summarized length by season, state, and survival")
 
             for j in scens:
                 # get daily data for this species/scenario
