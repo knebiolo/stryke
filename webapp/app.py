@@ -135,7 +135,7 @@ def run_simulation_in_background(ws, wks, output_name):
 
 @app.route('/')
 def index():
-    return "Hello World" #render_template('index.html')
+    return render_template('index.html')
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_simulation():
