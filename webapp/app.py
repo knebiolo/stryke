@@ -155,7 +155,7 @@ def run_simulation_in_background(ws, wks, output_name):
     old_stdout = sys.stdout
     sys.stdout = QueueStream(LOG_QUEUE)
     try:
-        with stryke.simulation(ws,wks, output_name = 'new_sheet_alpha') as sim:
+        with stryke.simulation(ws,wks, output_name = output_name) as sim:
             sim.run()
             sim.summary()
             sim.close()
