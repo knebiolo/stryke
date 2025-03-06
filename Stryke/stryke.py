@@ -1394,17 +1394,15 @@ class simulation():
         # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
         max_ent_rate = spc_df.max_ent_rate.values[0]
 
-        if np.log10(ent_rate[0]) > np.log10(max_ent_rate):
-
-            # how many orders of magnitude larger is the simulated entrainment rate than the largest entrainment rate on record?
-            magnitudes = np.ceil(np.log10(ent_rate[0])) - np.ceil(np.log10(max_ent_rate)) + 0.5
-
-            if magnitudes < 1.:
-                magnitudes = 1.
-
-            # reduce by at least 1 order of magnitude
+        # Check if the simulated rate is at least 10 times the maximum observed rate.
+        if ent_rate[0] > 10 * max_ent_rate:
+            # Compute the exact orders-of-magnitude difference.
+            magnitude_diff = np.log10(ent_rate[0] / max_ent_rate)
+            # Optionally, round up to the next whole number if you want to reduce more aggressively.
+            magnitudes = np.ceil(magnitude_diff)
+            # Reduce by the factor computed.
             ent_rate = np.abs(ent_rate / 10**magnitudes)
-            #print ("New entrainment rate of %s"%(round(ent_rate[0],4)))
+            # print("New entrainment rate of %s" % (round(ent_rate[0], 4)))
 
         # flow per day in relation to million cubic FEET
         Mft3 = (60 * 60 * 24 * curr_Q)/1000000
