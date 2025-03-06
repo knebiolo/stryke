@@ -151,21 +151,16 @@ def run_simulation(ws, wks, output_name):
         sys.stdout = old_stdout
         LOG_QUEUE.put(None)
         
-def run_simulation_in_background(ws, wks, output_name):
+def run_simulation_in_background(ws, wks, output_name, user_sim_folder):
     old_stdout = sys.stdout
     sys.stdout = QueueStream(LOG_QUEUE)
     try:
-        # Use the user-specific simulation folder from Flask's global context.
-        user_sim_folder = g.user_sim_folder
-        
-        # Pass the correct project directory to your simulation.
-        with stryke.simulation(user_sim_folder, wks, output_name=output_name) as sim:
+        with stryke.simulation(ws, wks, output_name=output_name) as sim:
             sim.run()
             sim.summary()
             # sim.close() is handled by __exit__
         
-        # Now, check for the output file in the user-specific folder.
-        output_file = os.path.join(user_sim_folder, f"{output_name}.h5")
+        output_file = os.path.join(ws, f"{output_name}.h5")
         if os.path.exists(output_file):
             print(f"Simulation output created: {output_file}")
         else:
@@ -175,7 +170,6 @@ def run_simulation_in_background(ws, wks, output_name):
     finally:
         sys.stdout = old_stdout
         LOG_QUEUE.put("[Simulation Complete]")
-
 
 @app.route('/')
 def index():
