@@ -150,16 +150,16 @@ def run_simulation(ws, wks, output_name):
     finally:
         sys.stdout = old_stdout
         LOG_QUEUE.put(None)
-        
-def run_simulation_in_background(ws, wks, output_name, user_sim_folder):
+
+def run_simulation_in_background(ws, wks, output_name):
     old_stdout = sys.stdout
     sys.stdout = QueueStream(LOG_QUEUE)
     try:
         with stryke.simulation(ws, wks, output_name=output_name) as sim:
             sim.run()
             sim.summary()
-            # sim.close() is handled by __exit__
-        
+            # sim.close() is automatically handled by __exit__
+
         output_file = os.path.join(ws, f"{output_name}.h5")
         if os.path.exists(output_file):
             print(f"Simulation output created: {output_file}")
@@ -170,6 +170,7 @@ def run_simulation_in_background(ws, wks, output_name, user_sim_folder):
     finally:
         sys.stdout = old_stdout
         LOG_QUEUE.put("[Simulation Complete]")
+
 
 @app.route('/')
 def index():
