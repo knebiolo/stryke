@@ -1784,9 +1784,10 @@ class simulation():
                                 # Ensure they are in the correct order
                                 state_columns.sort()
                                 survival_columns.sort()
-
-                                # Convert state columns to a numpy array of strings.
-                                state_vals = fishes[state_columns].astype(str).values  # shape (n, m)
+                                
+                                # Convert state columns to a NumPy array of fixed-width Unicode strings.
+                                state_vals = fishes[state_columns].to_numpy(dtype='U50')  # shape (n, m)
+                                
                                 # Create a boolean mask: True where the state starts with 'U'
                                 mask = np.char.startswith(state_vals, 'U')
                                 
@@ -1794,10 +1795,9 @@ class simulation():
                                 entrained = mask.any(axis=1)
                                 
                                 # For entrained rows, find the index of the first occurrence of a "U".
-                                # np.argmax returns the index of the first True along the axis.
                                 first_U_index = np.where(entrained, mask.argmax(axis=1), -1)
                                 
-                                # Convert the survival columns to a numpy array.
+                                # Convert the survival columns to a NumPy array.
                                 survival_vals = fishes[survival_columns].values
                                 
                                 # Pre-allocate a boolean array for survival.
@@ -1816,7 +1816,7 @@ class simulation():
                                 total_survived_entrained = survived.sum()
                                 daily_row_dict['num_entrained'] = total_entrained
                                 daily_row_dict['num_survived'] = total_survived_entrained
-
+                                
                                 # extract population and iteration
                                 # TODO - we are exporting survival 2 again and using it for powerhouse survival - need to code around this for more complex simulations
                                 length_dat = fishes[['population','flow_scenario','season','iteration','day','state_2','survival_2']]
