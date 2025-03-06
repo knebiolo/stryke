@@ -155,9 +155,10 @@ def run_simulation_in_background(ws, wks, output_name):
     old_stdout = sys.stdout
     sys.stdout = QueueStream(LOG_QUEUE)
     try:
-        simulation_instance = stryke.simulation(ws, wks, output_name=output_name)
-        simulation_instance.run()
-        simulation_instance.summary()
+        with stryke.simulation(ws,wks, output_name = 'new_sheet_alpha') as sim:
+            sim.run()
+            sim.summary()
+            sim.close()
 
         # Debugging: Check if file exists
         output_file = os.path.join(SIM_PROJECT_FOLDER, f"{output_name}.h5")
