@@ -670,8 +670,10 @@ class simulation():
                 elif surv_fun == 'Pump':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
                     prob = self.Pump(length, param_dict)
-    
-            return np.float32(prob)
+            try:
+                return np.float32(prob)
+            except:
+                print ('check')
     
     # create function that builds networkx graph object from nodes and edges in project database
     def create_route(self,wks_dir):
@@ -974,11 +976,11 @@ class simulation():
 
             del nbors, locs, probs
             
-            # filter out those fish that can escape intake velocity
-            if np.sum(swim_speed) > 0:
-                if 'U' in new_loc:
-                    if swim_speed > intake_vel_dict[new_loc]:
-                        new_loc = 'spill'
+            # # filter out those fish that can escape intake velocity
+            # if np.sum(swim_speed) > 0:
+            #     if 'U' in new_loc:
+            #         if swim_speed > intake_vel_dict[new_loc]:
+            #             new_loc = 'spill'
        
         # if the fish is dead, it can't move
         else:
@@ -1244,7 +1246,7 @@ class simulation():
                             elif hours < 0:
                                 hours = 0.
                             hours_dict[i] = hours
-                            flow_dict[i] = fac_units.at[i,'Q_cap'] * hours * 3600.    
+                            flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.    
                             
                     elif operations == 'dependent':
                         # if this is the first unit to be operated
@@ -1263,7 +1265,7 @@ class simulation():
                                 elif hours < 0:
                                     hours = 0.
                                 hours_dict[i] = hours
-                                flow_dict[i] = fac_units.at[i,'Q_cap'] * hours * 3600.
+                                flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.
     
                         # if it is any other unit        
                         else:
@@ -1288,7 +1290,7 @@ class simulation():
                                         elif hours < 0:
                                             hours = 0.
                                         hours_dict[i] = hours                        
-                                        flow_dict[i] = fac_units.at[i,'Q_cap'] * hours * 3600.
+                                        flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.
                                 else:
                                     hours_dict[i] = 0.
                                     flow_dict[i] = 0.                            
@@ -1608,7 +1610,8 @@ class simulation():
                         day = flow_row[1]['datetimeUTC']
                         
                         # create a Q dictionary - which is used for the movement function
-                        Q_dict = {'curr_Q': curr_Q}
+                        Q_dict = {}
+                        Q_dict['curr_Q'] = curr_Q
                         min_Q_dict = {}
                         env_Q_dict = {}
                         bypass_Q_dict = {}
