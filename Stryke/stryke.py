@@ -1785,30 +1785,38 @@ class simulation():
                                 state_columns.sort()
                                 survival_columns.sort()
 
-                                # Define function to check entrainment and survival in each row
-                                def check_entrainment(row):
-                                    entrained = False
-                                    survived = False
-                                    for state_col, survival_col in zip(state_columns, survival_columns):
-                                        state_value = row[state_col]
-                                        if isinstance(state_value, str) and state_value.startswith('U'):
-                                            # Fish is entrained at this state
-                                            entrained = True
-                                            if row[survival_col] == 1:
-                                                survived = True
-                                            break  # Stop after the first "U" state for unique entrainment
-                                    return pd.Series([entrained, survived])
+                                # Convert state columns to a numpy array of strings.
+                                state_vals = fishes[state_columns].astype(str).values  # shape (n, m)
+                                # Create a boolean mask: True where the state starts with 'U'
+                                mask = np.char.startswith(state_vals, 'U')
                                 
-                                # Apply function to each row and add result columns
-                                fishes[['is_entrained', 'survived_entrainment']] = fishes.apply(check_entrainment, axis=1)
+                                # Identify rows where any state column indicates entrainment.
+                                entrained = mask.any(axis=1)
                                 
-                                # Count the unique fish entrained and survived by checking where `is_entrained` and `is_survived_entrained` are True
-                                total_entrained = fishes['is_entrained'].sum()
+                                # For entrained rows, find the index of the first occurrence of a "U".
+                                # np.argmax returns the index of the first True along the axis.
+                                first_U_index = np.where(entrained, mask.argmax(axis=1), -1)
                                 
-                                total_survived_entrained = fishes['survived_entrainment'].sum()
+                                # Convert the survival columns to a numpy array.
+                                survival_vals = fishes[survival_columns].values
+                                
+                                # Pre-allocate a boolean array for survival.
+                                survived = np.zeros(len(fishes), dtype=bool)
+                                
+                                # For rows that are entrained, check the survival value corresponding to the first "U" state.
+                                rows = np.arange(len(fishes))
+                                survived[entrained] = (survival_vals[rows[entrained], first_U_index[entrained]] == 1)
+                                
+                                # Add the computed columns back to the DataFrame.
+                                fishes['is_entrained'] = entrained
+                                fishes['survived_entrainment'] = survived
+                                
+                                # Count totals.
+                                total_entrained = entrained.sum()
+                                total_survived_entrained = survived.sum()
                                 daily_row_dict['num_entrained'] = total_entrained
                                 daily_row_dict['num_survived'] = total_survived_entrained
-                                
+
                                 # extract population and iteration
                                 # TODO - we are exporting survival 2 again and using it for powerhouse survival - need to code around this for more complex simulations
                                 length_dat = fishes[['population','flow_scenario','season','iteration','day','state_2','survival_2']]
