@@ -46,8 +46,8 @@ warnings.filterwarnings("ignore")
 from scipy.stats import beta
 import xlrd
 import networkx as nx
-#from Stryke.hydrofunctions import hydrofunctions as hf
-import hydrofunctions as hf
+from Stryke.hydrofunctions import hydrofunctions as hf
+#import hydrofunctions as hf
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
@@ -166,15 +166,16 @@ class simulation():
             self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
             self.surv_fun_dict = self.surv_fun_df.to_dict('index')
 
-            # get last river node
-            max_river_node = 0
-            for i in self.nodes.Location.values:
-                i_split = i.split("_")
-                if len(i_split) > 1:
-                    river_node = int(i_split[2])
-                    if river_node > max_river_node:
-                        max_river_node = river_node
-            self.max_river_node = max_river_node
+            if len(self.nodes) > 1:
+                # get last river node
+                max_river_node = 0
+                for i in self.nodes.Location.values:
+                    i_split = i.split("_")
+                    if len(i_split) > 1:
+                        river_node = int(i_split[2])
+                        if river_node > max_river_node:
+                            max_river_node = river_node
+                self.max_river_node = max_river_node
 
             # import unit parameters
             self.unit_params = pd.read_excel(self.wks_dir,
@@ -723,28 +724,31 @@ class simulation():
         # add nodes to route - nodes.loc.values
         route.add_nodes_from(nodes.Location.values)
     
-        # create edges - iterate over edge rows to create edges
-        weights = []
-        for i in edges.iterrows():
-            _from = i[1]['_from']
-            _to = i[1]['_to']
-            weight = i[1]['weight']
-            route.add_edge(_from,_to,weight = weight)
-            weights.append(weight)
+        if len(nodes) > 1:
+            # create edges - iterate over edge rows to create edges
+            weights = []
+            for i in edges.iterrows():
+                _from = i[1]['_from']
+                _to = i[1]['_to']
+                weight = i[1]['weight']
+                route.add_edge(_from,_to,weight = weight)
+                weights.append(weight)
+                
+            # identify the number of moves that a fish can make
+            path_list = nx.all_shortest_paths(route,'river_node_0','river_node_%s'%(self.max_river_node))
+
+            max_len = 0
+            for i in path_list:
+                path_len = len(i)
+                if path_len > max_len:
+                    max_len = path_len
+            self.moves = np.arange(0,max_len + 1,1)
+        else:
+            self.moves = np.zeros(1, dtype = np.int32)
     
         # return finished product and enjoy functionality of networkx
         self.graph = route
-
-        # identify the number of moves that a fish can make
-        path_list = nx.all_shortest_paths(route,'river_node_0','river_node_%s'%(self.max_river_node))
-
-        max_len = 0
-        for i in path_list:
-            path_len = len(i)
-            if path_len > max_len:
-                max_len = path_len
-        self.moves = np.arange(0,max_len + 1,1)
-    
+  
     def movement (self,
                   location,
                   status, 
@@ -1458,8 +1462,12 @@ class simulation():
         
         str_size = dict()
         str_size['species'] = 30
-        for i in self.moves:
-            str_size['state_%s'%(i)] = 30
+        try:
+            for i in self.moves:
+                str_size['state_%s'%(i)] = 30
+        except:
+            str_size['state_0'] = 30
+
             
         # create empty holders for some dictionaries
         u_param_dict = {}
@@ -1684,16 +1692,27 @@ class simulation():
     
                                 #print ("created population for %s iteration:%s day: %s"%(species,i,day))
                                 # create a dataframe that tracks each fish
-                                fishes = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int32(n)),
-                                                          'species':np.repeat(species,np.int32(n)),
-                                                          'flow_scenario':np.repeat(scenario,np.int32(n)),
-                                                          'season':np.repeat(season,np.int32(n)),
-                                                          'iteration':np.repeat(i,np.int32(n)),
-                                                          'day':np.repeat(day,np.int32(n)),
-                                                          'flow':np.repeat(curr_Q,np.int32(n)),
-                                                          'population':np.float32(population),
-                                                          'state_0':np.repeat('river_node_0',np.int32(n))})
-                                
+                                if len(self.nodes) > 1:
+                                    fishes = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int32(n)),
+                                                              'species':np.repeat(species,np.int32(n)),
+                                                              'flow_scenario':np.repeat(scenario,np.int32(n)),
+                                                              'season':np.repeat(season,np.int32(n)),
+                                                              'iteration':np.repeat(i,np.int32(n)),
+                                                              'day':np.repeat(day,np.int32(n)),
+                                                              'flow':np.repeat(curr_Q,np.int32(n)),
+                                                              'population':np.float32(population),
+                                                              'state_0':np.repeat('river_node_0',np.int32(n))})
+                                else:
+                                    fishes = pd.DataFrame({'scenario_num':np.repeat(scen_num,np.int32(n)),
+                                                              'species':np.repeat(species,np.int32(n)),
+                                                              'flow_scenario':np.repeat(scenario,np.int32(n)),
+                                                              'season':np.repeat(season,np.int32(n)),
+                                                              'iteration':np.repeat(i,np.int32(n)),
+                                                              'day':np.repeat(day,np.int32(n)),
+                                                              'flow':np.repeat(curr_Q,np.int32(n)),
+                                                              'population':np.float32(population),
+                                                              'state_0':np.repeat(self.nodes.at[0,'Location'],np.int32(n))})
+                                    
     
                                 for k in self.moves:
                                     if k == 0:
