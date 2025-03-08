@@ -74,35 +74,35 @@ def enable_matplotlib_inline():
     except ImportError:
         print("IPython is not available; inline plotting cannot be enabled.")
 
-def hurdle_bootstrap_daily(daily_counts, n_days=365, rng=None):
+# Function to compute mean and credible interval
+def summarize_ci(series):
+    mean = series.mean()
+    lower_bound = np.percentile(series, 2.5)  # 2.5th percentile
+    upper_bound = np.percentile(series, 97.5)  # 97.5th percentile
+    return pd.Series({"mean": mean, "lower_95_CI": lower_bound, "upper_95_CI": upper_bound})
+            
+            
+def bootstrap_mean_ci(data, n_bootstrap=10000, ci=95):
     """
-    Single-year bootstrap:
-      - Probability of zero = fraction of zero in daily_counts
-      - If nonzero, pick a positive count from the empirical distribution
-    Returns array of length n_days with simulated daily entrainment.
+    Calculate the mean and a bootstrap-based credible interval for the given data.
+    
+    Parameters:
+        data (array-like): The data to sample.
+        n_bootstrap (int): Number of bootstrap samples.
+        ci (float): The credible interval percentage (default: 95).
+    
+    Returns:
+        tuple: (mean, lower bound, upper bound)
     """
-    if rng is None:
-        rng = np.random.default_rng()
-
-    # Identify zero vs. positive
-    zero_mask = (daily_counts == 0)
-    p_zero = zero_mask.mean()
-    pos_counts = daily_counts[~zero_mask]  # only the positives
-
-    # If no positives, everything is zero
-    if len(pos_counts) == 0:
-        return np.zeros(n_days, dtype=int)
-
-    # Draw random uniform for each day
-    draws = rng.random(n_days)
-    sim = np.zeros(n_days, dtype=int)
-
-    # For days that are "nonzero", pick from pos_counts (with replacement)
-    is_pos = (draws > p_zero)
-    idx = rng.integers(0, len(pos_counts), size=n_days)
-    sim[is_pos] = pos_counts[idx[is_pos]]
-    return sim
-
+    means = []
+    data = np.array(data)
+    for _ in range(n_bootstrap):
+        sample = np.random.choice(data, size=len(data), replace=True)
+        means.append(np.mean(sample))
+    lower = np.percentile(means, (100 - ci) / 2)
+    upper = np.percentile(means, 100 - (100 - ci) / 2)
+    return np.mean(data), lower, upper
+            
 class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility
     specific simulation'''
@@ -2050,15 +2050,19 @@ class simulation():
         cum_sum_dict = {
             'species': [],
             'scenario': [],
-            'med_population': [],
-            'med_entrained': [],
-            'med_survived': [],
-            'mean_ent': [],
-            'lcl_ent': [],
-            'ucl_ent': [],
-            'prob_gt_10_entrained': [],
-            'prob_gt_100_entrained': [],
-            'prob_gt_1000_entrained': []
+            'mean_yearly_ent': [],
+            'lcl_yearly_ent': [],
+            'ucl_yearly_ent': [],
+            '1_in_10_day_entrainment': [],
+            '1_in_100_day_entrainment': [],
+            '1_in_1000_day_entrainment': [],
+            'mean_yearly_mort': [],
+            'lcl_yearly_mort': [],
+            'ucl_yearly_mort': [],
+            '1_in_10_day_mortality':[],
+            '1_in_100_day_mortality':[],
+            '1_in_1000_day_mortality':[],
+
         }
         
         # For each species & scenario combination:
@@ -2074,9 +2078,6 @@ class simulation():
                 # median population, median entrained, median survived
                 cum_sum_dict['species'].append(fishy)
                 cum_sum_dict['scenario'].append(scen)
-                cum_sum_dict['med_population'].append(idat.pop_size.median())
-                cum_sum_dict['med_entrained'].append(idat.num_entrained.median())
-                cum_sum_dict['med_survived'].append(idat.num_survived.median())
         
                 # B) We want daily data for this scenario & species
                 day_dat = self.daily_summary[
@@ -2085,56 +2086,86 @@ class simulation():
                 ]
         
                 daily_counts = day_dat.num_entrained.values
+                daily_mort = day_dat.pop_size - day_dat.num_survived
                 n_actual_days = len(daily_counts)
         
                 # If we have no daily data, everything is 0
                 if n_actual_days == 0:
                     # No daily data => all probabilities 0, no annual variation
-                    cum_sum_dict['mean_ent'].append(0.)
-                    cum_sum_dict['lcl_ent'].append(0.)
-                    cum_sum_dict['ucl_ent'].append(0.)
-                    cum_sum_dict['prob_gt_10_entrained'].append(0.)
-                    cum_sum_dict['prob_gt_100_entrained'].append(0.)
-                    cum_sum_dict['prob_gt_1000_entrained'].append(0.)
+                    cum_sum_dict['mean_yearly_ent'].append(0.)
+                    cum_sum_dict['lcl_yearly_ent'].append(0.)
+                    cum_sum_dict['ucl_yearly_ent'].append(0.)
+                    cum_sum_dict['1_in_10_day_entrainment'].append(0.)
+                    cum_sum_dict['1_in_100_day_entrainment'].append(0.)
+                    cum_sum_dict['1_in_100_day_entrainment'].append(0.)
+                    cum_sum_dict['mean_yearly_mort'].append(0.)
+                    cum_sum_dict['lcl_yearly_mort'].append(0.)
+                    cum_sum_dict['ucl_yearly_mort'].append(0.)
+                    cum_sum_dict['1_in_10_day_mortality'].append(0.)
+                    cum_sum_dict['1_in_100_day_mortality'].append(0.)
+                    cum_sum_dict['1_in_1000_day_mortality'].append(0.)
                     continue
+
+            # Assume df is your DataFrame with columns: 'day', 'iteration', 'num_entrained', 'num_survived'
+            # If you don't have a "number_killed" column, create it:
+            df = day_dat[['day','iteration','num_entrained','num_survived']]
+            if 'num_mortalities' not in df.columns:
+                df['num_mortalities'] = df['num_entrained'] - df['num_survived']
+
+    
+            # Calculate the average and 95% credible interval for entrained events
+            entrained_mean, entrained_lower, entrained_upper = bootstrap_mean_ci(df['num_entrained'])
+            print("Entrained Events: Mean = {:.3f}, 95% CI = ({:.3f}, {:.3f})".format(
+                entrained_mean, entrained_lower, entrained_upper))
+            
+            # Calculate the average and 95% credible interval for mortality (killed) events
+            killed_mean, killed_lower, killed_upper = bootstrap_mean_ci(df['num_mortalities'])
+            print("Mortality Events: Mean = {:.3f}, 95% CI = ({:.3f}, {:.3f})".format(
+                killed_mean, killed_lower, killed_upper))
+            
+            # Define the return periods and compute corresponding quantile levels
+            return_periods = [10, 100, 1000]
+            quantile_levels = {T: 1 - 1/T for T in return_periods}
+            
+            # Calculate extreme event thresholds (quantiles) for entrained events
+            extreme_entrained = {T: df['num_entrained'].quantile(q) for T, q in quantile_levels.items()}
+            
+            # Calculate extreme event thresholds (quantiles) for mortality events
+            extreme_killed = {T: df['num_mortalities'].quantile(q) for T, q in quantile_levels.items()}
+            
+            print("\nExtreme Entrained Event Thresholds:")
+            for T, value in extreme_entrained.items():
+                print("1 in {} day event (quantile {:.3f}): {:.3f}".format(T, quantile_levels[T], value))
+            
+            print("\nExtreme Mortality (Killed) Event Thresholds:")
+            for T, value in extreme_killed.items():
+                print("1 in {} day event (quantile {:.3f}): {:.3f}".format(T, quantile_levels[T], value))
         
-                # ------------------------------------------------------------------
-                # 1) Estimate "daily" thresholds via big single-sample:
-                # ------------------------------------------------------------------
-                # We'll do a large synthetic "super-year" to get daily threshold rates
-                big_n_days = 100000
-                sim_big = hurdle_bootstrap_daily(daily_counts, n_days=big_n_days)
-                prob_gt_10 = np.mean(sim_big > 10)
-                prob_gt_100 = np.mean(sim_big > 100)
-                prob_gt_1000 = np.mean(sim_big > 1000)
-        
-                cum_sum_dict['prob_gt_10_entrained'].append(prob_gt_10)
-                cum_sum_dict['prob_gt_100_entrained'].append(prob_gt_100)
-                cum_sum_dict['prob_gt_1000_entrained'].append(prob_gt_1000)
-        
-                # ------------------------------------------------------------------
-                # 2) Estimate "yearly" distribution of total
-                # ------------------------------------------------------------------
-                # We'll do repeated "year" bootstraps. You can either:
-                #  a) Use the same # of days as your original data
-                #  b) Force 365 days
-                # for simplicity, let's assume "year" means 365
-                n_years = 2000
-                rng = np.random.default_rng(42)
-                year_sums = []
-                for _ in range(n_years):
-                    sim_year = hurdle_bootstrap_daily(daily_counts, n_days=365, rng=rng)
-                    year_sums.append(sim_year.sum())
-        
-                year_sums = np.array(year_sums)
-                mean_ent = year_sums.mean()
-                lcl = np.percentile(year_sums, 2.5)
-                ucl = np.percentile(year_sums, 97.5)
-        
-                cum_sum_dict['mean_ent'].append(mean_ent)
-                cum_sum_dict['lcl_ent'].append(lcl)
-                cum_sum_dict['ucl_ent'].append(ucl)
-        
+            # now calculate your yearly averages
+            year_tots = df.groupby(['iteration'])[['num_entrained','num_mortalities']].sum()
+            
+            # Apply to each column
+            summary = year_tots.apply(summarize_ci)
+            
+            for column in year_tots.columns:
+                mean, lower_95_CI, upper_95_CI = summarize_ci(year_tots[column])
+                print(f"{column}:")
+                print(f"  Mean: {mean:.2f}")
+                print(f"  95% Credible Interval: [{lower_95_CI:.2f}, {upper_95_CI:.2f}]\n")
+                        
+            cum_sum_dict['mean_yearly_ent'] = summary.at['mean','num_entrained']
+            cum_sum_dict['lcl_yearly_ent'] = summary.at['lower_95_CI','num_entrained']
+            cum_sum_dict['ucl_yearly_ent'] = summary.at['upper_95_CI','num_entrained']
+            cum_sum_dict['1_in_10_day_entrainment'] = extreme_entrained[10]
+            cum_sum_dict['1_in_100_day_entrainment'] = extreme_entrained[100]
+            cum_sum_dict['1_in_1000_day_entrainment'] = extreme_entrained[1000]
+            cum_sum_dict['mean_yearly_mort'] = summary.at['mean','num_mortalities']
+            cum_sum_dict['lcl_yearly_mort'] = summary.at['lower_95_CI','num_mortalities']
+            cum_sum_dict['ucl_yearly_mort'] = summary.at['upper_95_CI','num_mortalities']
+            cum_sum_dict['1_in_10_day_mortality'] = extreme_killed[10]
+            cum_sum_dict['1_in_100_day_mortality'] = extreme_killed[100]
+            cum_sum_dict['1_in_1000_day_mortality'] = extreme_killed[1000]
+
         print("Yearly summary complete.")
         
         # Convert to a DataFrame
