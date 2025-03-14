@@ -1956,16 +1956,20 @@ def download_report():
 #     except Exception as e:
 #         flash(f"Error generating report: {e}")
 #         return redirect(url_for("simulation_logs"))
-from weasyprint import HTML
+# from weasyprint import HTML
 
-@app.route('/report_pdf')
-def report_pdf():
-    report_html = report()  # Get the report HTML string
-    pdf = HTML(string=report_html).write_pdf()
-    response = Response(pdf, mimetype='application/pdf')
-    response.headers['Download Report PDF'] = 'attachment; filename=simulation_report.pdf'
-    return response
+# @app.route('/report_pdf')
+# def report_pdf():
+#     # Generate the full HTML report (using your existing report() function)
+#     report_html = report()
+#     try:
+#         pdf = HTML(string=report_html).write_pdf()
+#     except Exception as e:
+#         return f"<p>Error converting report to PDF: {e}</p>", 500
 
+#     response = Response(pdf, mimetype='application/pdf')
+#     response.headers['Content-Disposition'] = 'attachment; filename=simulation_report.pdf'
+#     return response
 
 # Un Comment to Test Locally
 if __name__ == "__main__":
