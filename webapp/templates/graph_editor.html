@@ -109,7 +109,7 @@
   <script>
     // Fetch unit parameters from the server and populate the dropdown.
     function loadUnitParameters() {
-      fetch("{{ url_for('get_unit_parameters') }}")
+      fetch("/get_unit_parameters")
         .then(response => response.json())
         .then(data => {
           var dropdown = document.getElementById('modalUnitDropdown');
@@ -265,7 +265,7 @@
 
     function saveGraph() {
       var graphData = cy.json();
-      fetch("{{ url_for('save_graph') }}", {
+      fetch("/save_graph", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(graphData)
@@ -315,7 +315,7 @@
 
   <div class="action-buttons">
     <button onclick="saveGraph()">Save Graph</button>
-    <a href="{{ url_for('population') }}">Next Page</a>
+    <a href="/population">Next Page</a>
   </div>
 </body>
 </html>
