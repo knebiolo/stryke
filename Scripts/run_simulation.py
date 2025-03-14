@@ -9,19 +9,19 @@ Create an Upper Barker Model to test out Stryke
 # Import Dependencies
 import sys
 sys.path.append(r"C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Stryke")
-import stryke
+from stryke import simulation
 import os
 import pandas as pd
 
 # read scenario worksheet
 ws = r'C:\Users\knebiolo\OneDrive - Kleinschmidt Associates, Inc\Software\stryke\Spreadsheet Interface'
-wks = 'Input_Spreadsheet_v250211.xlsx'
+wks = 'Input_Spreadsheet_v250304.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-simulation = stryke.simulation(ws,wks, output_name = 'new_sheet_alpha')
-
-simulation.run()
-simulation.summary()
+with simulation(ws,wks, output_name = 'new_sheet_alpha') as sim:
+    sim.run()
+    sim.summary()
+    sim.close()
 
 
