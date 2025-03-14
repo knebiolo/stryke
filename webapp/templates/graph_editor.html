@@ -2,6 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <!-- Add the viewport meta for mobile compatibility -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive Graph Editor</title>
   <!-- Include Cytoscape.js via CDN -->
   <script src="https://unpkg.com/cytoscape@3.19.0/dist/cytoscape.min.js"></script>
@@ -86,11 +88,13 @@
   <div id="unitModal">
     <div id="unitModalContent">
       <h3>Select Unit</h3>
-      <select id="modalUnitDropdown">
+      <!-- Add aria-label for accessibility -->
+      <select id="modalUnitDropdown" aria-label="Select a Unit">
         <option value="">--Select Unit--</option>
       </select>
       <h3>Select Survival Function</h3>
-      <select id="modalSurvFunDropdown">
+      <!-- Add aria-label for accessibility -->
+      <select id="modalSurvFunDropdown" aria-label="Select a Survival Function">
         <option value="">--Select Survival Function--</option>
         <option value="Francis">Francis</option>
         <option value="Kaplan">Kaplan</option>
