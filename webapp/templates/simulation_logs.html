@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Simulation Live Logs</title>
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      var downloadButton = document.getElementById("downloadResultsButton");
+      // Hide the button initially.
+      downloadButton.style.display = "none";
+      
+      var source = new EventSource("/stream");
+      source.onmessage = function(event) {
+        var logDiv = document.getElementById("log");
+        logDiv.innerHTML += event.data + "<br>";
+        logDiv.scrollTop = logDiv.scrollHeight; // Auto-scroll to bottom
+        // Show the button when simulation is complete.
+        if (event.data.trim() === "[Simulation Complete]") {
+          downloadButton.style.display = "block";
+        }
+      };
+    });
+  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    header {
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    nav a {
+      margin-right: 15px;
+      text-decoration: none;
+      color: #007bff;
+    }
+    #log {
+      background: #f4f4f4;
+      padding: 10px;
+      border: 1px solid #ccc;
+      height: 400px;
+      overflow-y: scroll;
+      font-family: monospace;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Welcome to the Simulation Portal</h1>
+    <nav>
+      <a href="{{ url_for('index') }}">Home</a>
+    </nav>
+    <p>
+      This page displays live updates as your simulation runs. Once the simulation has completed,
+      a button will appear to view the full, detailed report in a separate page. Monitor the progress below:
+    </p>
+  </header>
+  
+  <main>
+    <h2>Simulation Live Logs</h2>
+    <div id="log">Waiting for logs...</div>
+    <br>
+    <!-- Change the link from the previous download route to the new report route -->
+    <a href="{{ url_for('report') }}" id="downloadResultsButton">
+      <button>View Report</button>
+    </a>
+  </main>
+</body>
+</html>

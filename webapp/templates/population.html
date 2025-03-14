@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Population Parameters</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .nav-link {
+      margin-bottom: 15px;
+      display: inline-block;
+    }
+    h1 {
+      color: #0056b3;
+    }
+    .flex-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+    }
+    .flex-row > div {
+      flex: 1;
+    }
+    label {
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0 15px 0;
+      box-sizing: border-box;
+    }
+    .tooltip {
+      font-size: 12px;
+      color: #007BFF;
+      cursor: help;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .hidden {
+      display: none;
+    }
+    hr {
+      margin: 20px 0;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 10px 15px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    fieldset {
+      border: 2px dashed #ccc;
+      padding: 10px;
+      margin: 10px 0;
+    }
+    fieldset legend {
+      font-weight: bold;
+    }
+    .callout {
+      background-color: #f8f8d0; /* Light yellow */
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+  </style>
+  <script>
+    function toggleSimulateChoice() {
+      var choice = document.getElementById("simulateChoice").value;
+    
+      if(choice === "starting population") {
+        document.getElementById("startingPopulationDiv").style.display = "block";
+        document.getElementById("starting_population").required = true;
+    
+        document.getElementById("entrainmentEventDiv").style.display = "none";
+        document.getElementById("entrainmentChoice").required = false;
+      } else if(choice === "entrainment event") {
+        document.getElementById("startingPopulationDiv").style.display = "none";
+        document.getElementById("starting_population").required = false;
+    
+        document.getElementById("entrainmentEventDiv").style.display = "block";
+        document.getElementById("entrainmentChoice").required = true;
+      } else {
+        document.getElementById("startingPopulationDiv").style.display = "none";
+        document.getElementById("starting_population").required = false;
+    
+        document.getElementById("entrainmentEventDiv").style.display = "none";
+        document.getElementById("entrainmentChoice").required = false;
+      }
+    }
+
+  
+    function toggleEntrainmentChoice() {
+      var eChoice = document.getElementById("entrainmentChoice").value;
+    
+      var modeledDiv = document.getElementById("modeledDiv");
+      var empiricalDistDiv = document.getElementById("empiricalDistDiv");
+      var shapeParamsDiv = document.getElementById("shapeParamsDiv");
+      var maxAndOccurDiv = document.getElementById("maxAndOccurDiv");
+    
+      // Fields inside divs
+      var modeledSpecies = document.getElementById("modeledSpecies");
+      var empiricalDist = document.getElementById("empiricalDist");
+      var empiricalShape = document.getElementById("empiricalShape");
+      var empiricalLocation = document.getElementById("empiricalLocation");
+      var empiricalScale = document.getElementById("empiricalScale");
+      var maxEntrainmentRate = document.getElementById("max_entrainment_rate");
+      var occurrenceProbability = document.getElementById("occurrence_probability");
+    
+      if(eChoice === "modeled") {
+        // show modeled div
+        modeledDiv.style.display = "block";
+        modeledSpecies.required = true;
+    
+        // hide empirical divs
+        empiricalDistDiv.style.display = "none";
+        empiricalDist.required = false;
+        
+        shapeParamsDiv.style.display = "none";
+        empiricalShape.required = false;
+        empiricalLocation.required = false;
+        empiricalScale.required = false;
+    
+        maxAndOccurDiv.style.display = "none";
+        maxEntrainmentRate.required = false;
+        occurrenceProbability.required = false;
+    
+      } else if(eChoice === "empirical") {
+        // hide modeled div
+        modeledDiv.style.display = "none";
+        modeledSpecies.required = false;
+    
+        // show empirical divs
+        empiricalDistDiv.style.display = "block";
+        empiricalDist.required = true;
+        
+        shapeParamsDiv.style.display = "flex";
+        empiricalShape.required = true;
+        empiricalLocation.required = true;
+        empiricalScale.required = true;
+    
+        maxAndOccurDiv.style.display = "flex";
+        max_entrainment_rate.required = true;
+        occurrence_probability.required = true;
+    
+      } else {
+        // hide all divs if no valid choice is made
+        modeledDiv.style.display = "none";
+        modeledSpecies.required = false;
+    
+        empiricalDistDiv.style.display = "none";
+        empiricalDist.required = false;
+        
+        shapeParamsDiv.style.display = "none";
+        empiricalShape.required = false;
+        empiricalLocation.required = false;
+        empiricalScale.required = false;
+    
+        maxAndOccurDiv.style.display = "none";
+        max_entrainment_rate.required = false;
+        occurrence_probability.required = false;
+      }
+    }
+
+
+    
+    // This function auto-fills modeled defaults for the chosen species.
+    function fillModeledFields() {
+      var speciesChoice = document.getElementById("modeledSpecies").value;
+      if(speciesChoice === "Mid Atlantic Micropterus in Spring") {
+        document.getElementById("empiricalDist").value = "Log Normal";
+        document.getElementById("empiricalShape").value = "0.99";
+        document.getElementById("empiricalLocation").value = "0";
+        document.getElementById("empiricalScale").value = "0.0013";
+        document.getElementById("max_entrainment_rate").value = "0.0413";
+        document.getElementById("occurrence_probability").value = "0.4118";
+      } else {
+        document.getElementById("empiricalDist").value = "";
+        document.getElementById("empiricalShape").value = "";
+        document.getElementById("empiricalLocation").value = "";
+        document.getElementById("empiricalScale").value = "";
+        document.getElementById("max_entrainment_rate").value = "";
+        document.getElementById("occurrence_probability").value = "";
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+    <h1>Population Parameters</h1>
+    <p class="instructions">
+        On this page, you’ll set up the fish population for your model. If you 
+        already know how many fish are in the river, choose “Starting Population.” 
+        If you’d rather model an “Entrainment Event,” select that option. Advanced
+        users can enter in their own "Empirical" entrainment rates, however most 
+        users are advised to choose "Modeled" entraiment rates and to find their 
+        species of concern. If you need help with any input (like “Ucrit”), 
+        just hover over the info icons for more details. After saving, you’ll see 
+        these population details in your final results.
+    </p>
+    <form method="post" action="{{ url_for('population') }}">
+      <!-- Row for Species Name and Common Name -->
+      <div class="flex-row">
+        <div>
+          <label for="species_name">Species Name 
+            <span class="tooltip" title="Scientific name (max 50 characters)">[?]</span>
+          </label>
+          <input type="text" id="species_name" name="species_name" maxlength="50" required>
+        </div>
+        <div>
+          <label for="common_name">Common Name 
+            <span class="tooltip" title="Common name (max 50 characters)">[?]</span>
+          </label>
+          <input type="text" id="common_name" name="common_name" maxlength="50" required>
+        </div>
+      </div>
+      
+      <!-- Flex Row for Scenario (read-only) and Iterations -->
+      <div class="flex-row">
+        <div>
+          <label for="scenario">Scenario 
+            <span class="tooltip" title="Auto-filled from Flow Scenarios page">[?]</span>
+          </label>
+          <input type="text" id="scenario" name="scenario" value="{{ session.scenario_name }}" readonly>
+        </div>
+        <div>
+          <label for="iterations">Iterations 
+            <span class="tooltip" title="Number of simulation iterations">[?]</span>
+          </label>
+          <input type="number" id="iterations" name="iterations" min="1" step="1" placeholder="Enter iterations" required>
+        </div>
+      </div>
+      
+      <hr>
+      
+      <!-- Simulation Choice -->
+      <div class="section">
+        <label for="simulateChoice">Choose which to simulate 
+          <span class="tooltip" title="Would you like a set starting population or would you like to simulate an entrainment event">[?]</span>
+        </label>
+        <select id="simulateChoice" name="simulateChoice" onchange="toggleSimulateChoice()" required>
+          <option value="">--Select Option--</option>
+          <option value="entrainment event">Entrainment Event</option>
+          <option value="starting population">Starting Population</option>
+        </select>
+      </div>
+      
+      <!-- Starting Population Input -->
+      <div class="section hidden" id="startingPopulationDiv">
+        <label for="starting_population">Starting Population 
+          <span class="tooltip" title="Enter the initial number of fish">[?]</span>
+        </label>
+        <input type="number" id="starting_population" name="starting_population" min="0" placeholder="e.g., 10000">
+      </div>
+      
+      <!-- Entrainment Event Options -->
+      <div class="section hidden" id="entrainmentEventDiv">
+        <label for="entrainmentChoice">Entrainment Rates 
+          <span class="tooltip" title="Would you like to use your own custom empirical entrainment rates or choose a pre fit (modeled) rate from a list? ">[?]</span>
+        </label>
+        <select id="entrainmentChoice" name="entrainmentChoice" onchange="toggleEntrainmentChoice()" required>
+          <option value="">--Select Option--</option>
+          <option value="modeled">Modeled</option>
+          <option value="empirical">Empirical</option>
+        </select>
+        
+        <!-- Modeled: Dropdown for Species -->
+        <div id="modeledDiv" class="hidden">
+          <label for="modeledSpecies">Select Species for Modeled Rates 
+            <span class="tooltip" title="Choose a species from the list">[?]</span>
+          </label>
+          <select id="modeledSpecies" name="modeledSpecies" onchange="fillModeledFields()">
+            <option value="">--Select Species--</option>
+            <option value="Mid Atlantic Micropterus in Spring">Mid Atlantic Micropterus in Spring</option>
+            {% if session.species_list is defined %}
+              {% for sp in session.species_list %}
+                <option value="{{ sp }}">{{ sp }}</option>
+              {% endfor %}
+            {% endif %}
+          </select>
+        </div>
+        
+        <!-- Empirical: Distribution and Parameter Inputs -->
+        <div id="empiricalDistDiv" class="hidden">
+          <label for="empiricalDist">Distribution 
+            <span class="tooltip" title="Please choose the distribution">[?]</span>
+          </label>
+          <select id="empiricalDist" name="empiricalDist">
+            <option value="">--Select Distribution--</option>
+            <option value="Log Normal">Log Normal</option>
+            <option value="Weibull">Weibull</option>
+            <option value="Pareto">Pareto</option>
+          </select>
+        </div>
+        
+        <!-- Shape, Location, Scale for Empirical Distribution -->
+        <div id="shapeParamsDiv" class="hidden" style="display:none; margin-bottom:15px;">
+          <div class="flex-row">
+            <div>
+              <label for="empiricalShape">Shape 
+                <span class="tooltip" title="Shape parameter for distribution fit">[?]</span>
+              </label>
+              <input type="number" step="any" id="empiricalShape" name="empiricalShape" placeholder="Enter shape">
+            </div>
+            <div>
+              <label for="empiricalLocation">Location 
+                <span class="tooltip" title="Location parameter for distribution fit">[?]</span>
+              </label>
+              <input type="number" step="any" id="empiricalLocation" name="empiricalLocation" placeholder="Enter location">
+            </div>
+            <div>
+              <label for="empiricalScale">Scale 
+                <span class="tooltip" title="Scale parameter for distribution fit">[?]</span>
+              </label>
+              <input type="number" step="any" id="empiricalScale" name="empiricalScale" placeholder="Enter scale">
+            </div>
+          </div>
+        </div>
+        
+        <!-- Maximum Entrainment Rate and Occurrence Probability -->
+        <div id="maxAndOccurDiv" class="hidden" style="display:none;">
+          <div class="flex-row">
+            <div>
+              <label for="max_entrainment_rate">Maximum Entrainment Rate 
+                <span class="tooltip" title="{% if session.units=='imperial' %}Fish per million cubic feet{% else %}Fish per million cubic meters{% endif %}">[?]</span>
+              </label>
+              <input type="number" step="any" id="max_entrainment_rate" name="max_entrainment_rate" placeholder="Enter maximum entrainment rate">
+            </div>
+            <div>
+              <label for="occurrence_probability">Occurrence Probability 
+                <span class="tooltip" title="Probability that fish are present">[?]</span>
+              </label>
+              <input type="number" step="any" id="occurrence_probability" name="occurrence_probability" placeholder="Enter probability">
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <hr>
+      
+      <!-- Fish Length & Swimming Parameters Section -->
+      <div class="section">
+        <h2>Fish Length &amp; Swimming Parameters</h2>
+        <div class="flex-row">
+          <!-- Fieldset to highlight the length override fields -->
+          <fieldset style="flex: 1;">
+            <legend>Length Overrides</legend>
+            <div class="callout">
+              <strong>Note:</strong> Entering these values will override the default EPRI length data.
+            </div>
+            <div class="callout">
+              <strong>Required for Empirical:</strong> If using an empirical scenario, please populate these fields.
+            </div>
+            <label for="length_mean">Total Length (Mean) 
+              <span class="tooltip" title="{% if session.units=='imperial' %}Mean total length in inches{% else %}Mean total length in mm{% endif %}">[?]</span>
+            </label>
+            <input type="number" step="any" id="length_mean" name="length_mean" placeholder="Enter mean total length">
+            
+            <label for="length_sd">Total Length (Std Dev) 
+              <span class="tooltip" title="{% if session.units=='imperial' %}Standard deviation in inches{% else %}Standard deviation in mm{% endif %}">[?]</span>
+            </label>
+            <input type="number" step="any" id="length_sd" name="length_sd" placeholder="Enter total length standard deviation">
+          </fieldset>
+          
+          <div style="flex: 1;">
+            <label for="Ucrit">U_crit 
+              <span class="tooltip" title="{% if session.units=='imperial' %}Critical swim speed in feet per second{% else %}Critical swim speed in meters per second{% endif %}">[?]</span>
+            </label>
+            <input type="number" step="any" id="Ucrit" name="Ucrit" placeholder="Enter U_crit">
+            
+            <!-- Hidden fields for length_shape, length_location, and length_scale -->
+            <input type="hidden" id="length_shape" name="length_shape">
+            <input type="hidden" id="length_location" name="length_location">
+            <input type="hidden" id="length_scale" name="length_scale">
+          </div>
+        </div>
+      </div>
+      
+      <!-- Optional Hidden Fields for Defaults (if needed) -->
+      <!-- e.g. <input type="hidden" name="default_length_mean" value="..."> -->
+      
+      <button type="submit">Save Population Parameters</button>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          toggleSimulateChoice(); 
+          toggleEntrainmentChoice();
+        
+          // Additional clear explicit event listeners
+          document.getElementById("simulateChoice").addEventListener("change", toggleSimulateChoice);
+          document.getElementById("entrainmentChoice").addEventListener("change", toggleEntrainmentChoice);
+        });
+        </script>
+
+
+    </form>
+  </div>
+</body>
+</html>

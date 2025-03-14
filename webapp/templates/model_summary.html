@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Model Setup Summary</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 20px;
+    }<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Model Setup Summary</title>
+  <style> 
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 20px;
+    }
+    .container {
+      max-width: 95%; /* wider layout to accommodate large tables */
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #0056b3;
+    }
+    .accordion {
+      background-color: #e0e0e0;
+      color: #333;
+      cursor: pointer;
+      padding: 15px;
+      width: 100%;
+      text-align: left;
+      border: none;
+      outline: none;
+      font-size: 16px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+    .accordion.active, .accordion:hover {
+      background-color: #ccc;
+    }
+    .panel {
+      padding: 0 15px;
+      display: none;
+      background-color: #fff;
+      overflow: hidden;
+      border: 1px solid #ccc;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      margin-bottom: 10px;
+    }
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      overflow-x: auto; /* allow horizontal scrolling */
+      display: block; /* ensures overflow-x works correctly */
+    }
+    .summary-table th, .summary-table td {
+      padding: 8px;
+      border: 1px solid #ddd;
+      text-align: left;
+      font-size: 14px;
+      white-space: nowrap; /* prevents wrapping in table cells */
+    }
+    .summary-table th {
+      background-color: #f2f2f2;
+    }
+    .edit-link {
+      float: right;
+      font-size: 14px;
+      text-decoration: none;
+      color: #007BFF;
+    }
+    .edit-link:hover {
+      text-decoration: underline;
+    }
+    .big-red-button {
+      background: #d32f2f;
+      color: white;
+      padding: 20px 40px;
+      font-size: 1.4em;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 30px;
+    }
+    .big-red-button:hover {
+      background: #b71c1c;
+    }
+  </style>
+  </style>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      var acc = document.getElementsByClassName("accordion");
+      for (var i = 0; i < acc.length; i++) {
+        acc[i].addEventListener("click", function() {
+          this.classList.toggle("active");
+          var panel = this.nextElementSibling;
+          panel.style.display = panel.style.display === "block" ? "none" : "block";
+        });
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>Model Setup Summary</h1>
+    <p class="instructions">
+        Below is a summary of everything you’ve entered so far—facilities, turbine 
+        units, operating scenarios, flow data, and your fish population settings. 
+        Look over the tables to make sure the details match what you intended. 
+        If you spot something incorrect, use the “Edit” links to jump back and 
+        make changes. Once everything looks good, click “Run Simulation” to let
+        the model do its work.
+    </p>    
+    <!-- Facilities Summary -->
+    <button class="accordion">Facilities <a class="edit-link" href="{{ url_for('facilities') }}">Edit</a></button>
+    <div class="panel">
+      {% if session.facilities_data %}
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Facility</th>
+            <th>Units</th>
+            <th>Min Op Flow</th>
+            <th>Env Flow</th>
+            <th>Bypass Flow</th>
+            <th>Spillway</th>
+            <th>Operations</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fac in session.facilities_data %}
+          <tr>
+            <td>{{ fac.Facility }}</td>
+            <td>{{ fac.Units }}</td>
+            <td>{{ fac["Min Op Flow"] }}</td>
+            <td>{{ fac["Env Flow"] }}</td>
+            <td>{{ fac["Bypass Flow"] }}</td>
+            <td>{{ fac.Spillway }}</td>
+            <td>{{ fac.Operations }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>No facilities data available.</p>
+      {% endif %}
+    </div>
+    
+    <!-- Unit Parameters Summary -->
+    <button class="accordion">Unit Parameters <a class="edit-link" href="{{ url_for('unit_parameters') }}">Edit</a></button>
+    <div class="panel">
+        {% if unit_parameters %}
+          <table class="summary-table">
+            <thead>
+              <tr>
+                {% for col in unit_columns %}
+                  <th>{{ col }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in unit_parameters %}
+                <tr>
+                  {% for value in row.values() %}
+                    <td>{{ value }}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p>No unit parameters data available.</p>
+        {% endif %}
+
+    </div>
+    
+    <!-- Operating Scenarios Summary -->
+    <button class="accordion">Operating Scenarios <a class="edit-link" href="{{ url_for('operating_scenarios') }}">Edit</a></button>
+    <div class="panel">
+      {% if operating_scenarios %}
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Facility</th>
+            <th>Unit</th>
+            <th>Hours</th>
+            <th>Prob Not Operating</th>
+            <th>Shape</th>
+            <th>Location</th>
+            <th>Scale</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in operating_scenarios %}
+          <tr>
+            <td>{{ row['Scenario'] }}</td>
+            <td>{{ row['Facility'] }}</td>
+            <td>{{ row['Unit'] }}</td>
+            <td>{{ row['Hours'] }}</td>
+            <td>{{ row['Prob Not Operating'] }}</td>
+            <td>{{ row['Shape'] }}</td>
+            <td>{{ row['Location'] }}</td>
+            <td>{{ row['Scale'] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p>No operating scenarios data available.</p>
+      {% endif %}
+    </div>
+
+    
+    <!-- Population Parameters Summary - Corrected and explicitly fixed -->
+    <!-- Population Parameters Summary -->
+    <button class="accordion">Population Parameters <a class="edit-link" href="{{ url_for('population') }}">Edit</a></button>
+    <div class="panel">
+      {% if population_parameters %}
+      <div class="summary-table-container">
+        <table class="summary-table">
+          <thead>
+            <tr>
+              {% for col in population_parameters[0].keys() %}
+                <th>{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in population_parameters %}
+              <tr>
+                {% for value in row.values() %}
+                  <td>{{ value }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p>No population parameters available.</p>
+      {% endif %}
+    </div>
+
+        
+    <!-- Flow Scenarios Summary -->
+    <button class="accordion">Flow Scenarios <a class="edit-link" href="{{ url_for('flow_scenarios') }}">Edit</a></button>
+    <div class="panel">
+      {% if flow_scenarios %}
+      <table class="summary-table">
+        <thead>
+          <tr>
+            {% for col in flow_scenarios[0].keys() %}
+              <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for scenario in flow_scenarios %}
+            <tr>
+              {% for value in scenario.values() %}
+                <td>{{ value }}</td>
+              {% endfor %}
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p>No Flow Scenarios provided.</p>
+    {% endif %}
+
+    </div>
+    
+    <!-- Graph Data Summary -->
+    <button class="accordion">Graph Data <a class="edit-link" href="{{ url_for('graph_editor') }}">Edit</a></button>
+    <div class="panel">
+      {% if graph_nodes %}
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th>Nodes</th>
+            <th>Edges</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><pre>{{ graph_nodes | tojson(indent=2) }}</pre></td>
+            <td><pre>{{ graph_edges | tojson(indent=2) }}</pre></td>
+          </tr>
+        </tbody>
+      </table>
+      {% else %}
+      <p>No graph data available.</p>
+      {% endif %}
+    </div>
+
+    
+    <!-- Big Red Run Simulation Button -->
+    <form method="post" action="{{ url_for('run_simulation') }}">
+      <button type="submit" class="big-red-button">Run Simulation</button>
+    </form>
+    
+    <p style="text-align: center; margin-top: 20px;"><a href="{{ url_for('population') }}">Back to Population Setup</a></p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Facility Information</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f7f7f7;
+            margin: 20px;
+        }
+        .container {
+            max-width: 1024px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .nav-link {
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        h1 {
+            color: #0056b3;
+        }
+        .form-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .form-row > div {
+            flex: 1;
+            min-width: 220px;
+            padding: 5px;
+        }
+        label {
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 15px;
+            background: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .tooltip {
+            color: #007BFF;
+            cursor: pointer;
+            margin-left: 5px;
+            font-weight: bold;
+            text-decoration: underline;
+        }
+        .tooltip-text {
+            display: none;
+            position: absolute;
+            background: #333;
+            color: #fff;
+            padding: 5px;
+            border-radius: 4px;
+            font-size: 12px;
+            width: 250px;
+        }
+        .tooltip:hover .tooltip-text {
+            display: inline-block;
+        }
+        hr {
+            border: 1px solid #ccc;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+        <h1>Facility Information</h1>
+        <p class="instructions">
+            On this page, you’ll define the generating station(s) in your model. 
+            For each facility, you’ll provide its name, minimum required flow for 
+            operation, the number of turbine units you will be simulating, and 
+            any additional flow needed for the environment releases or downstream 
+            bypass devices. You can also specify whether the facility has a 
+            spillway. This information helps us understand each station’s 
+            operational constraints and capacity. When finished, click
+             “Save Facilities” to move on to setting up unit-specific parameters.
+             
+            If your intent is to model survival and/or entrainment at a single,
+            specific unit, then you will enter 0 for minimum operating flow, 
+            environmental flow, and bypass flow. The model assumes the hydrograph
+            you provide is representative of the amount of discharge that passed
+            through the specific unit.   
+        </p>
+        <form method="post" id="facilities_form">
+            <label for="num_facilities">
+                Number of Facilities:
+                <span class="tooltip">?
+                    <span class="tooltip-text">Enter the number of facilities in this project.</span>
+                </span>
+            </label>
+            <input type="number" id="num_facilities" name="num_facilities" min="1" value="1" 
+                onchange="generateFacilityForms()" 
+                {% if sim_mode in ["single_unit_survival_only", "single_unit_simulated_entrainment", "single_powerhouse_simulated_entrainment_routing"] %}readonly{% endif %}>
+            
+            <div id="facilities_container"></div>
+            <button type="submit">Save Facilities</button>
+        </form>
+    </div>
+
+    <script>
+        function generateFacilityForms() {
+            var simMode = "{{ sim_mode }}";  
+            var units = "{{ units }}";  
+            var numFacilities = (simMode === "multiple_powerhouses_simulated_entrainment_routing") ? document.getElementById("num_facilities").value : 1;
+            var container = document.getElementById("facilities_container");
+            container.innerHTML = "";  
+
+            let unitText = units === "metric" ? "m³/s" : "ft³/s";
+
+            for (let i = 0; i < numFacilities; i++) {
+                let facilityDiv = document.createElement("div");
+                facilityDiv.classList.add("facility-container");
+
+                facilityDiv.innerHTML = `
+                    <h3>Facility ${i + 1}</h3>
+
+                    <div class="form-row">
+                        <div>
+                            <label for="facility_name_${i}">Facility Name:</label>
+                            <input type="text" name="facility_name_${i}" id="facility_name_${i}" maxlength="50" required>
+                        </div>
+
+                        <div>
+                            <label for="num_units_${i}">
+                                Number of Units:
+                                <span class="tooltip">?
+                                    <span class="tooltip-text">Enter the number of units at this facility.</span>
+                                </span>
+                            </label>
+                            <input type="number" name="num_units_${i}" id="num_units_${i}" min="1" value="1"
+                                {% if sim_mode in ["single_unit_survival_only", "single_unit_simulated_entrainment"] %}readonly{% endif %}>
+                        </div>
+                    </div>
+
+                    <!-- New Facility Type Row -->
+                    <div class="form-row">
+                        <div>
+                            <label for="operations_${i}">Facility Type:</label>
+                            <select name="operations_${i}" id="operations_${i}" required>
+                                <option value="run-of-river" selected>run-of-river</option>
+                                <option value="pumped storage">pumped storage</option>
+                                <option value="peaking">peaking</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div>
+                            <label for="min_op_flow_${i}">
+                                Min Operating Flow:
+                                <span class="tooltip">?
+                                    <span class="tooltip-text">Minimum discharge required to operate units (${unitText}).</span>
+                                </span>
+                            </label>
+                            <input type="number" name="min_op_flow_${i}" id="min_op_flow_${i}" step="any" value="0">
+                        </div>
+
+                        <div>
+                            <label for="env_flow_${i}">
+                                Environmental Flow:
+                                <span class="tooltip">?
+                                    <span class="tooltip-text">Minimum discharge required for instream flow releases (${unitText}).</span>
+                                </span>
+                            </label>
+                            <input type="number" name="env_flow_${i}" id="env_flow_${i}" step="any" value="0">
+                        </div>
+
+                        <div>
+                            <label for="bypass_flow_${i}">
+                                Bypass Flow:
+                                <span class="tooltip">?
+                                    <span class="tooltip-text">Discharge required for downstream bypass (${unitText}).</span>
+                                </span>
+                            </label>
+                            <input type="number" name="bypass_flow_${i}" id="bypass_flow_${i}" step="any" value="0">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="spillway_${i}">
+                            Spillway:
+                            <span class="tooltip">?
+                                <span class="tooltip-text">If a spillway is present, enter the associated dam name (Max 50 characters).</span>
+                            </span>
+                        </label>
+                        <input type="text" name="spillway_${i}" id="spillway_${i}" maxlength="50" value="none">
+                    </div>
+
+                    <hr>
+                `;
+
+                container.appendChild(facilityDiv);
+            }
+        }
+
+        function checkUniqueFacilityName(input) {
+            let name = input.value.trim();
+            if (name && usedFacilityNames.has(name)) {
+                alert("Facility names must be unique.");
+                input.value = "";
+            } else {
+                usedFacilityNames.add(name);
+            }
+        }
+
+        generateFacilityForms();
+    </script>
+</body>
+</html>

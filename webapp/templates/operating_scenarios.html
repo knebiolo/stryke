@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Operating Scenarios</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 20px;
+    }
+    .container {
+      max-width: 1100px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .nav-link {
+      margin-bottom: 15px;
+      display: inline-block;
+    }
+    h1, h2 {
+      color: #0056b3;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background: #e0e0e0;
+    }
+    .tooltip {
+      margin-left: 5px;
+      font-weight: bold;
+      cursor: help;
+      text-decoration: underline;
+    }
+    .tooltip-text {
+      display: none;
+      position: absolute;
+      background: #333;
+      color: #fff;
+      padding: 5px;
+      border-radius: 4px;
+      font-size: 12px;
+      width: 300px;
+      z-index: 1000;
+    }
+    .tooltip:hover .tooltip-text {
+      display: inline-block;
+    }
+    input {
+      width: 100%;
+      padding: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 15px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+    <h1>Operating Scenarios</h1>
+    <p class="instructions">
+        On this page, you’ll describe how each turbine unit operates over time. 
+        For a run-of-river facility, you might run at a steady rate all day 
+        (24 hours); for a peaking or pumped-storage facility, you might operate 
+        only during certain hours. You’ll see fields like “Hours” or “Prob Not 
+        Operating,” plus shape parameters (Shape, Location, Scale) for more 
+        complex distributions. If you are modeling pumped storage or peaking and 
+        you don't want hours to vary, simply enter in the number of hours the 
+        units are expected to run per day during scenario season. If you’re unsure 
+        about any field (like “Hours” or “Prob Not Operating”), hover over the 
+        small info icons for more details. When you’re done, click “Save Operating 
+        Scenarios” to move on. 
+    </p>
+    {% set ror_facilities = session.facilities_data | selectattr("Operations", "equalto", "run-of-river") | list %}
+    {% set ps_facilities = session.facilities_data | selectattr("Operations", "equalto", "pumped storage") | list %}
+    {% set peaking_facilities = session.facilities_data | selectattr("Operations", "equalto", "peaking") | list %}
+    {% set pumped_facilities = ps_facilities + peaking_facilities %}
+    <form method="post" id="operating_scenarios_form">
+      {# ----- Run-of-River Facilities Table ----- #}
+      {% if ror_facilities|length > 0 %}
+      <h2>Run-of-River Facilities</h2>
+      <table id="ror_table">
+        <thead>
+          <tr>
+            <th>
+              Scenario
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Scenario<br>
+                  Data Type: String<br>
+                  Default: Auto-filled from Flow Scenarios page
+                </span>
+              </span>
+            </th>
+            <th>
+              Facility
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Facility Name<br>
+                  Data Type: String<br>
+                  Default: Auto-filled from Facilities page
+                </span>
+              </span>
+            </th>
+            <th>
+              Unit
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Unit Number<br>
+                  Data Type: Integer<br>
+                  Default: Sequential number
+                </span>
+              </span>
+            </th>
+            <th>
+              Hours
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Operating Hours<br>
+                  Data Type: Float<br>
+                  Default: 0
+                </span>
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for facility in ror_facilities %}
+            {% set outer_index = loop.index0 %}
+            {% set num_units = session.facility_units[facility.Facility] %}
+            {% for i in range(1, num_units + 1) %}
+            <tr>
+              <td>
+                <input type="text" name="scenario_ror_{{ outer_index }}_{{ i }}" value="{{ session.scenario_name }}" readonly>
+              </td>
+              <td>
+                <input type="text" name="facility_ror_{{ outer_index }}_{{ i }}" value="{{ facility.Facility }}" readonly>
+              </td>
+              <td>
+                <input type="number" name="unit_ror_{{ outer_index }}_{{ i }}" value="{{ i }}" readonly>
+              </td>
+              <td>
+                <input type="number" step="any" name="hours_ror_{{ outer_index }}_{{ i }}" placeholder="Enter hours" value="0">
+              </td>
+            </tr>
+            {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      
+      {# ----- Pumped Storage / Peaking Facilities Table ----- #}
+      {% if pumped_facilities|length > 0 %}
+      <h2>Pumped Storage / Peaking Facilities</h2>
+      <table id="pumped_table">
+        <thead>
+          <tr>
+            <th>
+              Scenario
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Scenario<br>
+                  Data Type: String<br>
+                  Default: Auto-filled from Flow Scenarios page
+                </span>
+              </span>
+            </th>
+            <th>
+              Facility
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Facility Name<br>
+                  Data Type: String<br>
+                  Default: Auto-filled from Facilities page
+                </span>
+              </span>
+            </th>
+            <th>
+              Unit
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Unit Number<br>
+                  Data Type: Integer<br>
+                  Default: Sequential number
+                </span>
+              </span>
+            </th>
+            <th>
+              Hours
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Operating Hours<br>
+                  Data Type: Float<br>
+                  Default: 0
+                </span>
+              </span>
+            </th>
+            <th>
+              Prob Not Operating
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Probability Not Operating<br>
+                  Data Type: Float<br>
+                  Default: (none)<br>
+                  (Represents binomial probability)
+                </span>
+              </span>
+            </th>
+            <th>
+              Shape
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Shape Parameter<br>
+                  Data Type: Float<br>
+                  Default: (none)<br>
+                  See <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.lognorm.html" target="_blank">SciPy lognorm</a>
+                </span>
+              </span>
+            </th>
+            <th>
+              Location
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Location Parameter<br>
+                  Data Type: Float<br>
+                  Default: (none)<br>
+                  See <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.lognorm.html" target="_blank">SciPy lognorm</a>
+                </span>
+              </span>
+            </th>
+            <th>
+              Scale
+              <span class="tooltip">?
+                <span class="tooltip-text">
+                  Parameter: Scale Parameter<br>
+                  Data Type: Float<br>
+                  Default: (none)<br>
+                  See <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.lognorm.html" target="_blank">SciPy lognorm</a>
+                </span>
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for facility in pumped_facilities %}
+            {% set outer_index = loop.index0 %}
+            {% set num_units = session.facility_units[facility.Facility] %}
+            {% for i in range(1, num_units + 1) %}
+            <tr>
+              <td>
+                <input type="text" name="scenario_ps_{{ outer_index }}_{{ i }}" value="{{ session.scenario_name }}" readonly>
+              </td>
+              <td>
+                <input type="text" name="facility_ps_{{ outer_index }}_{{ i }}" value="{{ facility.Facility }}" readonly>
+              </td>
+              <td>
+                <input type="number" name="unit_ps_{{ outer_index }}_{{ i }}" value="{{ i }}" readonly>
+              </td>
+              <td>
+                <input type="number" step="any" name="hours_ps_{{ outer_index }}_{{ i }}" placeholder="Enter hours" value="0">
+              </td>
+              <td>
+                <input type="number" step="any" name="prob_not_operating_{{ outer_index }}_{{ i }}" placeholder="Enter probability" value="">
+              </td>
+              <td>
+                <input type="number" step="any" name="shape_{{ outer_index }}_{{ i }}" placeholder="Shape" value="">
+              </td>
+              <td>
+                <input type="number" step="any" name="location_{{ outer_index }}_{{ i }}" placeholder="Location" value="">
+              </td>
+              <td>
+                <input type="number" step="any" name="scale_{{ outer_index }}_{{ i }}" placeholder="Scale" value="">
+              </td>
+            </tr>
+            {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      <button type="submit">Save Operating Scenarios</button>
+    </form>
+  </div>
+</body>
+</html>

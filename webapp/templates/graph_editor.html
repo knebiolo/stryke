@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Interactive Graph Editor</title>
+  <!-- Include Cytoscape.js via CDN -->
+  <script src="https://unpkg.com/cytoscape@3.19.0/dist/cytoscape.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f7f7f7;
+    }
+    .toolbar {
+      margin-bottom: 10px;
+    }
+    #cy {
+      width: 1200px;
+      height: 800px;
+      border: 1px solid #ccc;
+    }
+    /* Modal styles */
+    #unitModal {
+      display: none;
+      position: fixed;
+      z-index: 2000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0,0,0,0.4);
+    }
+    #unitModalContent {
+      background-color: #fefefe;
+      margin: 15% auto;
+      padding: 20px;
+      border: 1px solid #888;
+      width: 300px;
+      text-align: center;
+    }
+    .action-buttons {
+      margin-top: 10px;
+    }
+    .action-buttons button, .action-buttons a {
+      padding: 10px 15px;
+      background: #007BFF;
+      color: white;
+      text-decoration: none;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    .action-buttons button:hover, .action-buttons a:hover {
+      background: #0056b3;
+    }
+    /* Dropdown style in modal */
+    #modalUnitDropdown, #modalSurvFunDropdown {
+      width: 100%;
+      padding: 6px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Migratory Route Creation</h1>
+  <p class="instructions">
+    On this page, you’ll lay out a simple “map” (or network) showing how fish 
+    migrate through your facility. For a single-unit model, you will only need a 
+    single location — representing the turbine. If you’re modeling more complex setups, 
+    you can add extra nodes (like “Spillway” or “Bypass” or other units) and connect them 
+    with edges to show the paths fish might take. Each node has an associated survival rate 
+    or function. When you’re finished, click “Save Graph” to confirm these connections.
+  </p>
+  <div class="toolbar">
+    <button onclick="addNode('start')">Add Start Node</button>
+    <button onclick="addNode('interior')">Add Interior Node</button>
+    <button onclick="showUnitModal()">Add Unit Node</button>
+    <button onclick="addNode('end')">Add End Node</button>
+    <button onclick="initiateEdge()">Add Edge</button>
+  </div>
+  <div id="cy"></div>
+
+  <!-- Modal for Unit Node Selection -->
+  <div id="unitModal">
+    <div id="unitModalContent">
+      <h3>Select Unit</h3>
+      <select id="modalUnitDropdown">
+        <option value="">--Select Unit--</option>
+      </select>
+      <h3>Select Survival Function</h3>
+      <select id="modalSurvFunDropdown">
+        <option value="">--Select Survival Function--</option>
+        <option value="Francis">Francis</option>
+        <option value="Kaplan">Kaplan</option>
+        <option value="Propeller">Propeller</option>
+      </select>
+      <br><br>
+      <button onclick="confirmUnitNode()">Confirm</button>
+      <button onclick="closeUnitModal()">Cancel</button>
+    </div>
+  </div>
+
+  <script>
+    // Fetch unit parameters from the server and populate the dropdown.
+    function loadUnitParameters() {
+      fetch("{{ url_for('get_unit_parameters') }}")
+        .then(response => response.json())
+        .then(data => {
+          var dropdown = document.getElementById('modalUnitDropdown');
+          dropdown.innerHTML = '<option value="">--Select Unit--</option>';
+          data.forEach(function(row) {
+            var option = document.createElement('option');
+            option.value = row.Facility + " - Unit " + row.Unit;
+            option.text = row.Facility + " - Unit " + row.Unit;
+            dropdown.appendChild(option);
+          });
+        })
+        .catch(err => console.error("Error loading unit parameters:", err));
+    }
+    document.addEventListener("DOMContentLoaded", loadUnitParameters);
+
+    // Initialize Cytoscape with custom styles
+    var cy = cytoscape({
+      container: document.getElementById('cy'),
+      elements: [],
+      style: [
+        {
+          selector: 'node[type="start"]',
+          style: {
+            'background-color': 'green',
+            'label': 'data(label)',
+            'shape': 'circle',
+            'width': 40,
+            'height': 40
+          }
+        },
+        {
+          selector: 'node[type="end"]',
+          style: {
+            'background-color': 'red',
+            'label': 'data(label)',
+            'shape': 'octagon',
+            'width': 40,
+            'height': 40
+          }
+        },
+        {
+          selector: 'node[type="unit"]',
+          style: {
+            'background-color': '#FF9900',
+            'label': 'data(label)',
+            'shape': 'rectangle',
+            'width': 40,
+            'height': 40
+          }
+        },
+        {
+          selector: 'node[type="interior"]',
+          style: {
+            'background-color': '#EDA1ED',
+            'label': 'data(label)',
+            'shape': 'ellipse',
+            'width': 40,
+            'height': 40
+          }
+        },
+        {
+          selector: 'edge',
+          style: {
+            'width': 3,
+            'line-color': '#ccc',
+            'target-arrow-color': '#ccc',
+            'target-arrow-shape': 'triangle'
+          }
+        }
+      ],
+      layout: { name: 'grid', rows: 1 }
+    });
+
+    // Delete key removes selected nodes or edges.
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Delete') {
+        cy.$(':selected').remove();
+      }
+    });
+
+    // When adding a node, we set its id equal to its label.
+    function addNode(type, labelOverride, survFunOverride) {
+      var label = "";
+      var survFun = "";
+      var survRate = "";
+      
+      if (type === 'start') {
+        label = "river_node_0";
+        survFun = "a priori";
+        survRate = "1.0";
+      } else if (type === 'end') {
+        label = "river_node_1";
+        survFun = "a priori";
+        survRate = "1.0";
+      } else if (type === 'interior') {
+        label = prompt("Enter label for the interior node:", "interior");
+        if (!label || !label.trim()) {
+          label = "interior";
+        }
+        survFun = "a priori";
+        survRate = prompt("Enter Survival Rate for node " + label + " (as a decimal):", "1.0") || "1.0";
+      } else if (type === 'unit') {
+        label = labelOverride || prompt("Enter label for the unit node:", "unit");
+        if (!label || !label.trim()) {
+          label = "unit";
+        }
+        survFun = survFunOverride || prompt("Enter Survival Function for unit node " + label + " (Francis, Kaplan, Propeller):", "Francis");
+        survRate = prompt("Enter Survival Rate for unit node " + label + " (as a decimal):", "1.0") || "1.0";
+      } else {
+        label = prompt("Enter label for the " + type + " node:", type);
+        if (!label || !label.trim()) {
+          label = type;
+        }
+        survFun = "default";
+        survRate = "1.0";
+      }
+      
+      // Set the node id equal to the label.
+      var newNode = {
+        group: 'nodes',
+        data: { 
+          id: label, 
+          label: label, 
+          type: type,
+          surv_fun: survFun,
+          survival_rate: survRate
+        },
+        position: { x: 100 + Math.random() * 400, y: 100 + Math.random() * 400 }
+      };
+      cy.add(newNode);
+      cy.nodes().grabify();
+      cy.center(newNode);
+    }
+
+    function showUnitModal() {
+      document.getElementById('unitModal').style.display = "block";
+    }
+
+    function closeUnitModal() {
+      document.getElementById('unitModal').style.display = "none";
+    }
+
+    function confirmUnitNode() {
+      var unitDropdown = document.getElementById('modalUnitDropdown');
+      var survFunDropdown = document.getElementById('modalSurvFunDropdown');
+      if (unitDropdown.value !== "" && survFunDropdown.value !== "") {
+        addNode('unit', unitDropdown.value, survFunDropdown.value);
+      } else {
+        alert("Please select both a unit and a survival function from the dropdowns.");
+      }
+      closeUnitModal();
+    }
+
+    function saveGraph() {
+      var graphData = cy.json();
+      fetch("{{ url_for('save_graph') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(graphData)
+      })
+      .then(response => {
+        if (response.ok) {
+          alert("Graph saved successfully!");
+        } else {
+          alert("Error saving graph.");
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Error saving graph.");
+      });
+    }
+
+    var edgeSource = null;
+    function initiateEdge() {
+      alert("Click a source node, then a target node to create an edge.");
+      edgeSource = null;
+      cy.one('tap', 'node', function(evt) {
+        edgeSource = evt.target;
+        cy.one('tap', 'node', function(evt) {
+          var target = evt.target;
+          if (edgeSource.id() === target.id()){
+            alert("Cannot connect a node to itself.");
+            return;
+          }
+          var edgeWeight = prompt("Enter weight for the edge from " + edgeSource.id() + " to " + target.id() + ":", "1.0");
+          if (!edgeWeight || !edgeWeight.trim()) {
+            edgeWeight = "1.0";
+          }
+          cy.add({
+            group: 'edges',
+            data: { 
+              id: 'e' + edgeSource.id() + "_" + target.id(),
+              source: edgeSource.id(),
+              target: target.id(),
+              weight: edgeWeight
+            }
+          });
+        });
+      });
+    }
+  </script>
+
+  <div class="action-buttons">
+    <button onclick="saveGraph()">Save Graph</button>
+    <a href="{{ url_for('population') }}">Next Page</a>
+  </div>
+</body>
+</html>

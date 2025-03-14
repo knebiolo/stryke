@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flow Scenarios</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f7f7f7;
+            margin: 20px;
+        }
+        .container {
+            max-width: 700px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .nav-link {
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        h1 {
+            color: #0056b3;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 15px;
+            background: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .tooltip {
+            color: #007BFF;
+            cursor: pointer;
+            margin-left: 5px;
+            font-weight: bold;
+            text-decoration: underline;
+        }
+        .tooltip-text {
+            display: none;
+            position: absolute;
+            background: #333;
+            color: #fff;
+            padding: 5px;
+            border-radius: 4px;
+            font-size: 12px;
+            width: 250px;
+        }
+        .tooltip:hover .tooltip-text {
+            display: inline-block;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+        <h1>Flow Scenarios</h1>
+        <p class="instructions">
+            On this page, you’ll define a “flow scenario” for your project. 
+            A flow scenario can represent a single, steady flow rate (a static scenario),
+            or a set of daily/monthly flows you paste in from a spreadsheet or text 
+            file (a hydrograph). Give each scenario a descriptive name, pick the time 
+            of year (season/months) it covers, and specify whether you want a constant
+            discharge or to upload a hydrograph. If you choose a hydrograph, simply 
+            paste your data without headers into the indicated box, and we’ll use 
+            that varying flow throughout the model runs. Once you’re done, click 
+            “Save Scenario” to move on.
+        </p>
+        <form method="post">
+            <label for="scenario_type">Scenario Type:</label>
+            <select name="scenario_type" id="scenario_type" onchange="toggleFields()">
+                <option value="static">Static</option>
+                <option value="hydrograph">Hydrograph</option>
+            </select>
+
+            <label for="scenario_name">
+                Scenario Name:
+                <span class="tooltip">?
+                    <span class="tooltip-text">Scenario Name, Maximum 50 Characters. e.g. "Spring 90% Exceedance"</span>
+                </span>
+            </label>
+            <input type="text" name="scenario_name" id="scenario_name" maxlength="50" required>
+
+            <label for="scenario_number">
+                Scenario Number:
+                <span class="tooltip">?
+                    <span class="tooltip-text">An integer that counts each scenarios.  Web app limited to 1 scenario</span>
+                </span>
+            </label>
+            <input type="number" name="scenario_number" id="scenario_number" required>
+
+            <label for="season">
+                Season:
+                <span class="tooltip">?
+                    <span class="tooltip-text">A 50-character text describing the season, e.g., "Spring".</span>
+                </span>
+            </label>
+            <input type="text" name="season" id="season" maxlength="50" required>
+
+            <label for="months">
+                Months (single integer or comma-separated list):
+                <span class="tooltip">?
+                    <span class="tooltip-text">Enter a single month (e.g., 3 for March) or a list (e.g., 3,4,5).</span>
+                </span>
+            </label>
+            <input type="text" name="months" id="months" required>
+
+            <div id="static_fields">
+                <label for="discharge">
+                    Static Discharge Measurement:
+                    <span class="tooltip">?
+                        <span id="discharge_tooltip" class="tooltip-text"></span>
+                    </span>
+                </label>
+                <input type="number" step="any" name="discharge" id="discharge">
+            </div>
+
+            <div id="hydrograph_fields" class="hidden">
+                <label for="hydrograph_data">
+                    Paste Hydrograph Data (Date & Flow, tab-separated):
+                    <span class="tooltip">?
+                        <span class="tooltip-text">Copy and paste hydrograph data with two columns: Date (YYYY-MM-DD) and Flow.</span>
+                    </span>
+                </label>
+                <textarea name="hydrograph_data" id="hydrograph_data" placeholder="YYYY-MM-DD<TAB>Flow"></textarea>
+            </div>
+
+            <button type="submit">Save Flow Scenario</button>
+        </form>
+    </div>
+
+    <script>
+        function toggleFields() {
+            var scenarioType = document.getElementById("scenario_type").value;
+            document.getElementById("static_fields").style.display = (scenarioType === "static") ? "block" : "none";
+            document.getElementById("hydrograph_fields").style.display = (scenarioType === "hydrograph") ? "block" : "none";
+        }
+    
+        // Run this function on page load
+        toggleFields();
+    
+        // Set the unit-sensitive message for discharge
+        var units = "{{ units | default('metric') }}";  // Default to "metric" if undefined
+        var tooltipText = units === "metric" 
+            ? "Static Discharge Measurement in Cubic Meters Per Second" 
+            : "Static Discharge Measurement in Cubic Feet Per Second";
+        
+        document.addEventListener("DOMContentLoaded", function() {
+            document.getElementById("discharge_tooltip").textContent = tooltipText;
+        });
+    </script>
+
+</body>
+</html>

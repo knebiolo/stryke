@@ -35,11 +35,25 @@
             font-size: 16px;
             line-height: 1.5;
         }
+        .btn {
+            display: inline-block;
+            padding: 10px 15px;
+            background: #007BFF;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 15px;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
     </style>
 </head>
 <body>
     <nav>
         <a href="{{ url_for('index') }}">Home</a> |
+        <a href="{{ url_for('create_project') }}">Create New Project</a> |
         <a href="{{ url_for('upload_simulation') }}">Upload and Run </a> |
         <a href="{{ url_for('fit_distributions') }}">Fit Entrainment Rate Distributions</a> |
     </nav>
@@ -58,6 +72,12 @@
             For more detailed information and documentation, visit the 
             <a href="https://github.com/knebiolo/stryke" target="_blank">Stryke Project Website</a>.        
         </p>
+
+        <!-- New Button for Creating a Project -->
+        <p>
+            <a href="{{ url_for('create_project') }}" class="btn">Create New Project</a>
+        </p>
+
         <p>
             Please log out when you are done 
             <a href="{{ url_for('logout') }}" class="btn btn-danger">Logout</a>
