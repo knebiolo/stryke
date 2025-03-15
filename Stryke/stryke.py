@@ -500,9 +500,11 @@ class simulation():
         # 9. Unit Conversion (if needed)
         if data_dict.get("units", "imperial") == "metric":
             # Example conversion: if "Discharge" is in hydrograph data, convert to imperial
-            if hasattr(self, "input_hydrograph_df") and self.input_hydrograph_df is not None and "Discharge" in self.input_hydrograph_df.columns:
-                self.input_hydrograph_df["Discharge"] *= 35.3147
-    
+            if hasattr(self, "input_hydrograph_df") and self.input_hydrograph_df is not None and "DAvgFlow_prorate" in self.input_hydrograph_df.columns:
+                self.input_hydrograph_df["DAvgFlow_prorate"] *= 35.3147
+                
+        print("DEBUG: Using proj_dir:", self.proj_dir)
+
         # 10. Create HDF5 file and store DataFrames
         if os.path.exists(hdf_path):
             print(f"DEBUG: File {hdf_path} exists; removing it.")
