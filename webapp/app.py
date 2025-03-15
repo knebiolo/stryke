@@ -1338,6 +1338,7 @@ from flask import current_app  # Import at module level if desired
 def run_simulation():
     from Stryke import stryke
     from flask import current_app
+    print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
 
     # Build input dictionary from session
     data_dict = {

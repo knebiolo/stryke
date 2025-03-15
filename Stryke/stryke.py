@@ -360,7 +360,11 @@ class simulation():
         self.output_name = output_name
         self.output_units = data_dict.get('units_system')
         self.sim_mode = data_dict.get('simulation_mode')
+        #self.proj_dir = data_dict.get("proj_dir", os.getcwd())
         self.proj_dir = data_dict.get("proj_dir", os.getcwd())
+        print("DEBUG: Using proj_dir:", self.proj_dir)
+        hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
+        print("DEBUG: HDF path:", hdf_path)
     
         # Convert graph summary data to DataFrames
         graph_summary = data_dict.get('graph_summary', {})
@@ -500,7 +504,11 @@ class simulation():
                 self.input_hydrograph_df["Discharge"] *= 35.3147
     
         # 10. Create HDF5 file and store DataFrames
+        if os.path.exists(hdf_path):
+            print(f"DEBUG: File {hdf_path} exists; removing it.")
+            os.remove(hdf_path)
         hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
+        print(f"Creating HDF5 file at: {hdf_path}")
         self.hdf = pd.HDFStore(hdf_path, mode='w')
         for key, df in [("Flow Scenarios", getattr(self, "flow_scenarios_df", None)),
                         ("Operating Scenarios", getattr(self, "operating_scenarios_df", None)),
@@ -509,12 +517,12 @@ class simulation():
                         ("Edges", self.edges),
                         ("Unit_Parameters", getattr(self, "unit_params", None)),
                         ("Facilities", getattr(self, "facility_params", None)),
-                        ("Hydrograph", getattr(self, "input_hydrograph_df"))]:
+                        ("Hydrograph", getattr(self, "input_hydrograph_df", None))]:
             if df is not None:
                 self.hdf[key] = df
         self.hdf.flush()
         self.hdf.close()
-    
+
         # Set additional attributes, for example, compute flow capacity if possible.
         if hasattr(self, "unit_params") and self.unit_params is not None:
             if "Qcap" in self.unit_params.columns and "Facility" in self.unit_params.columns:
