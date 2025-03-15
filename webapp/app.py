@@ -741,6 +741,10 @@ def facilities():
         flash(f"{num_facilities} facility(ies) saved successfully!")
         return redirect(url_for('unit_parameters'))  # Adjust for next page as needed.
 
+    # Debug print the flow scenario DataFrame.
+    print("DEBUG: Facilities DataFrame:")
+    print(facilities_data, flush=True)
+
     units = session.get('units', 'metric')
     scenario = session.get('scenario_name', 'Unknown Scenario')
     sim_mode = session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing')
@@ -837,6 +841,10 @@ def unit_parameters():
         #session['unit_parameters_dataframe'] = df_units.to_json(orient='records')
         #session['unit_parameters'] = df_units.to_dict(orient='records')
         
+        # Debug print the flow scenario DataFrame.
+        print("DEBUG: Unit Parameters DataFrame:")
+        print(df_units, flush=True)
+        
         flash("Unit parameters saved successfully!")
         return redirect(url_for('operating_scenarios'))
     return render_template('unit_parameters.html')
@@ -923,6 +931,9 @@ def operating_scenarios():
         session['op_scen_file'] = op_scen_path        
         flash("Operating scenarios saved successfully!")
         return redirect(url_for('graph_editor'))  # Replace with your next route as needed.
+    
+    print("DEBUG: Operating Scenarios DataFrame:")
+    print(df_os, flush=True)
         
     return render_template('operating_scenarios.html')
 
@@ -1011,8 +1022,8 @@ def save_graph():
     session['nodes_data'] = summary_nodes
     session['edges_data'] = summary_edges
 
-    print("Saved Nodes:", list(G.nodes))
-    print("Saved Edges:", list(G.edges))
+    print("Saved Nodes:", list(G.nodes), flush = True)
+    print("Saved Edges:", list(G.edges), flush = True)
 
     return jsonify(success=True, summary=session['graph_summary'])
 
@@ -1232,6 +1243,9 @@ def population():
 
         flash("Population parameters saved successfully!")
         return redirect(url_for('model_setup_summary'))
+    
+    print("DEBUG: Population Parameters DataFrame:")
+    print(df_population, flush=True)
 
     # GET request
     return render_template('population.html', species_defaults=species_defaults)
@@ -1330,7 +1344,7 @@ def model_setup_summary():
         facilities_data=facilities_data,
         population_parameters=population_parameters
     )
-
+    print ('model setup summary complete', flush = True)
 from flask import current_app  # Import at module level if desired
 
 
@@ -1357,6 +1371,7 @@ def run_simulation():
 
     # Setup simulation
     user_sim_folder = g.user_sim_folder
+    print (f'setting up simulation in {user_sim_folder}')
     sim = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
     sim.webapp_import(data_dict, output_name="WebAppModel")
 
