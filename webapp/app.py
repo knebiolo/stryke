@@ -1350,7 +1350,8 @@ def run_simulation():
         "graph_data": session.get("simulation_graph"),
         "graph_summary": session.get("graph_summary"),
         "units_system": session.get("units", "imperial"),
-        "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing")
+        "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
+        "proj_dir": session.get("proj_dir")  # add this line!
     }
 
     # Setup simulation
