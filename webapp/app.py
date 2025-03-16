@@ -30,6 +30,9 @@ from datetime import timedelta
 import numpy as np
 from contextlib import redirect_stdout
 import json
+import multiprocessing
+import traceback
+
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -52,10 +55,23 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../Stry
 from Stryke import stryke
 from Stryke.stryke import epri
 
-# Create a global log queue
-LOG_QUEUE = queue.Queue()
+# # Create a global log queue
+# LOG_QUEUE = queue.Queue()
 
 # A custom stream object that writes messages to the queue
+# class QueueStream:
+#     def __init__(self, q):
+#         self.q = q
+#     def write(self, message):
+#         if message.strip():
+#             self.q.put(message)
+#     def flush(self):
+#         pass
+    
+# Create a multiprocessing queue for log messages.
+LOG_QUEUE = multiprocessing.Queue()
+
+# Define a custom stream that writes messages to the multiprocessing queue.
 class QueueStream:
     def __init__(self, q):
         self.q = q
@@ -273,17 +289,17 @@ def download_zip():
         return redirect(url_for('some_error_page'))
 
 
-@app.route('/stream')
-def stream():
-    def event_stream():
-        while True:
-            message = LOG_QUEUE.get()
-            if message is None:
-                continue
-            yield f"data: {message}\n\n"
-            if message == "[Simulation Complete]":
-                break
-    return Response(event_stream(), mimetype="text/event-stream")
+# @app.route('/stream')
+# def stream():
+#     def event_stream():
+#         while True:
+#             message = LOG_QUEUE.get()
+#             if message is None:
+#                 continue
+#             yield f"data: {message}\n\n"
+#             if message == "[Simulation Complete]":
+#                 break
+#     return Response(event_stream(), mimetype="text/event-stream")
 
 @app.route('/results')
 def results():
@@ -1347,14 +1363,50 @@ def model_setup_summary():
     print ('model setup summary complete', flush = True)
 from flask import current_app  # Import at module level if desired
 
-import multiprocessing
+
+
+def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict, log_queue):
+    try:
+        # Redirect stdout to our multiprocessing-safe queue.
+        sys.stdout = QueueStream(log_queue)
+        print("DEBUG: Starting simulation process", flush=True)
+        
+        # Run the simulation import, run, and summary sequentially.
+        print("DEBUG: Calling sim.webapp_import()", flush=True)
+        sim_instance.webapp_import(data_dict, output_name="WebAppModel")
+        print("DEBUG: Calling sim.run()", flush=True)
+        sim_instance.run()
+        print("DEBUG: sim.run() returned; calling sim.summary()", flush=True)
+        sim_instance.summary()
+        print("DEBUG: Simulation process complete", flush=True)
+        
+        # Generate the simulation report.
+        report_html = generate_report(sim_instance)  # Assumes generate_report() is defined
+        report_path = os.path.join(user_sim_folder, "simulation_report.html")
+        with open(report_path, "w", encoding="utf-8") as f:
+            print(f"DEBUG: Writing simulation report to {report_path}", flush=True)
+            f.write(report_html)
+        # Write a flag file to signal that the report is ready.
+        flag_path = os.path.join(user_sim_folder, "report_ready.txt")
+        with open(flag_path, "w") as f:
+            f.write("ready")
+        print("DEBUG: Report flag written", flush=True)
+        
+        # Signal completion via the log queue.
+        log_queue.put("[Simulation Complete]")
+    except Exception as e:
+        print("Error during simulation:", e, flush=True)
+        traceback.print_exc()
+    finally:
+        # Optionally, reset sys.stdout if needed.
+        pass
 
 @app.route('/run_simulation', methods=['POST'])
-def run_simulation():
-    from Stryke import stryke
+def run_simulation_route():
+    from Stryke import stryke  # Ensure your simulation library is imported here
     print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
     
-    # Build input dictionary from session
+    # Build input dictionary from session data.
     data_dict = {
         "facilities": session.get("facilities_data"),
         "unit_parameters_file": session.get("unit_params_file"),
@@ -1377,7 +1429,7 @@ def run_simulation():
         # Create and start a new process for the simulation.
         p = multiprocessing.Process(
             target=run_simulation_in_background_custom,
-            args=(sim, user_sim_folder, data_dict)
+            args=(sim, user_sim_folder, data_dict, LOG_QUEUE)
         )
         p.start()
         flash("Simulation started! Check logs for progress.")
@@ -1387,23 +1439,18 @@ def run_simulation():
     
     return redirect(url_for("simulation_logs"))
 
-import traceback
-
-def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict):
-    import sys
-    try:
-        print("DEBUG: Starting simulation process", flush=True)
-        print("DEBUG: Calling sim.webapp_import()", flush=True)
-        sim_instance.webapp_import(data_dict, output_name="WebAppModel")
-        print("DEBUG: Calling sim.run()", flush=True)
-        sim_instance.run()
-        print("DEBUG: sim.run() returned; calling sim.summary()", flush=True)
-        sim_instance.summary()
-        print("DEBUG: Simulation process complete", flush=True)
-    except Exception as e:
-        print("Error during simulation:", e, flush=True)
-        traceback.print_exc()
-
+@app.route('/stream')
+def stream():
+    # This endpoint streams log messages from the shared multiprocessing queue.
+    def event_stream():
+        while True:
+            message = LOG_QUEUE.get()
+            if message is None:
+                continue
+            yield f"data: {message}\n\n"
+            if message == "[Simulation Complete]":
+                break
+    return Response(event_stream(), mimetype="text/event-stream")
 
 
 @app.route('/simulation_logs')
