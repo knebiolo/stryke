@@ -490,7 +490,7 @@ class simulation():
                 print(self.input_hydrograph_df, flush=True)
         
         # 9. Unit Conversion.
-        if data_dict.get("units", "imperial") == "metric":
+        if data_dict.get("units_system", "imperial") == "metric":
             if hasattr(self, "input_hydrograph_df") and self.input_hydrograph_df is not None and "DAvgFlow_prorate" in self.input_hydrograph_df.columns:
                 self.input_hydrograph_df["DAvgFlow_prorate"] *= 35.3147
         
