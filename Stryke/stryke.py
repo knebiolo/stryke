@@ -1683,6 +1683,7 @@ class simulation():
         trace parameter values and workflow progress.
         """
         # Create route and associated data.
+        print ('Create migratory rout')
         self.create_route()
         print('Starting simulation', flush=True)
         

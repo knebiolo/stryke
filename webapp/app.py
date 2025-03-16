@@ -741,9 +741,9 @@ def facilities():
         flash(f"{num_facilities} facility(ies) saved successfully!")
         return redirect(url_for('unit_parameters'))  # Adjust for next page as needed.
 
-    # Debug print the flow scenario DataFrame.
-    print("DEBUG: Facilities DataFrame:")
-    print(facilities_data, flush=True)
+        # Debug print the flow scenario DataFrame.
+        print("DEBUG: Facilities DataFrame:")
+        print(facilities_data, flush=True)
 
     units = session.get('units', 'metric')
     scenario = session.get('scenario_name', 'Unknown Scenario')
@@ -932,8 +932,8 @@ def operating_scenarios():
         flash("Operating scenarios saved successfully!")
         return redirect(url_for('graph_editor'))  # Replace with your next route as needed.
     
-    print("DEBUG: Operating Scenarios DataFrame:")
-    print(df_os, flush=True)
+        print("DEBUG: Operating Scenarios DataFrame:")
+        print(df_os, flush=True)
         
     return render_template('operating_scenarios.html')
 
@@ -1244,8 +1244,8 @@ def population():
         flash("Population parameters saved successfully!")
         return redirect(url_for('model_setup_summary'))
     
-    print("DEBUG: Population Parameters DataFrame:")
-    print(df_population, flush=True)
+        print("DEBUG: Population Parameters DataFrame:")
+        print(df_population, flush=True)
 
     # GET request
     return render_template('population.html', species_defaults=species_defaults)
@@ -1366,54 +1366,59 @@ def run_simulation():
         "graph_summary": session.get("graph_summary"),
         "units_system": session.get("units", "imperial"),
         "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
-        "proj_dir": session.get("proj_dir")  # add this line!
+        "proj_dir": session.get("proj_dir")
     }
 
     # Setup simulation
     user_sim_folder = g.user_sim_folder
-    print (f'setting up simulation in {user_sim_folder}')
+    print(f"DEBUG: Setting up simulation in {user_sim_folder}")
     sim = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
+    print("DEBUG: Calling sim.webapp_import()")
     sim.webapp_import(data_dict, output_name="WebAppModel")
-
     # Push app context into background thread
     app_obj = current_app._get_current_object()
-    simulation_thread = threading.Thread(
-        target=run_simulation_in_background_custom,
-        args=(sim, user_sim_folder, app_obj)
-    )
-    simulation_thread.start()
-
-    flash("Simulation started! Check logs for progress.")
+    try:
+        simulation_thread = threading.Thread(
+            target=run_simulation_in_background_custom,
+            args=(sim, user_sim_folder, app_obj, data_dict),
+            daemon=True  # makes sure the thread won't prevent the app from exiting
+        )
+        simulation_thread.start()
+        flash("Simulation started! Check logs for progress.")
+    except Exception as e:
+        print("Error starting simulation thread:", e)
+        flash("Failed to start simulation. Check logs for details.")
     return redirect(url_for("simulation_logs"))
 
-
-def run_simulation_in_background_custom(sim_instance, user_sim_folder, app_obj):
+def run_simulation_in_background_custom(sim_instance, user_sim_folder, app_obj, data_dict):
     import sys
-    from contextlib import redirect_stdout
-
     with app_obj.app_context():
         old_stdout = sys.stdout
         sys.stdout = QueueStream(LOG_QUEUE)
         try:
-            sim_instance.run()
-            sim_instance.summary()
+            print("DEBUG: Starting background simulation run", flush = True)
+            # Use the simulation object as a context manager if supported
+            with sim_instance as sim:
+
+                print("DEBUG: Calling sim.run()", flush = True)
+                sim.run()
+                print("DEBUG: Calling sim.summary()", flush = True)
+                sim.summary()
+            print("DEBUG: Exited simulation context manager; simulation complete", flush = True)
             LOG_QUEUE.put("[Simulation Complete]")
 
-            # Generate the report
+            print("DEBUG: Generating simulation report")
             report_html = generate_report(sim_instance)
             report_path = os.path.join(user_sim_folder, "simulation_report.html")
             with open(report_path, "w", encoding="utf-8") as f:
+                print(f"DEBUG: Writing simulation report to {report_path}")
                 f.write(report_html)
-
-            # Save path in a known location for retrieval in /report
             with open(os.path.join(user_sim_folder, "report_path.txt"), "w") as f:
                 f.write(report_path)
-
         except Exception as e:
             print("Error during simulation:", e)
         finally:
             sys.stdout = old_stdout
-
 
 @app.route('/simulation_logs')
 def simulation_logs():
@@ -1990,4 +1995,4 @@ def download_report():
 
 # Un Comment to Test Locally
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded = True, use_reloader=False)
