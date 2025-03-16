@@ -1364,18 +1364,14 @@ def model_setup_summary():
 from flask import current_app  # Import at module level if desired
 
 def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict, log_queue):
-    import sys, traceback, os
     try:
+        # Redirect stdout so that print messages are sent to the shared log queue.
         sys.stdout = QueueStream(log_queue)
         print("DEBUG: Starting simulation process", flush=True)
-        
-        print("DEBUG: Preparing to call sim.webapp_import()", flush=True)
-        # Optionally, print a summary of data_dict (if safe) to ensure data is correct:
+        print("DEBUG: Calling sim.webapp_import()", flush=True)
         print("DEBUG: data_dict keys:", list(data_dict.keys()), flush=True)
-        
         sim_instance.webapp_import(data_dict, output_name="WebAppModel")
         print("DEBUG: sim.webapp_import() completed", flush=True)
-        
         print("DEBUG: Calling sim.run()", flush=True)
         sim_instance.run()
         print("DEBUG: sim.run() returned; calling sim.summary()", flush=True)
@@ -1383,7 +1379,7 @@ def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict
         print("DEBUG: Simulation process complete", flush=True)
         
         # Generate the simulation report.
-        report_html = generate_report(sim_instance)
+        report_html = generate_report(sim_instance)  # Ensure generate_report is defined
         report_path = os.path.join(user_sim_folder, "simulation_report.html")
         with open(report_path, "w", encoding="utf-8") as f:
             print(f"DEBUG: Writing simulation report to {report_path}", flush=True)
@@ -1398,7 +1394,6 @@ def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict
         print("Error during simulation:", e, flush=True)
         traceback.print_exc()
     finally:
-        # Optionally reset sys.stdout
         pass
 
 @app.route('/run_simulation', methods=['POST'])
@@ -1406,7 +1401,6 @@ def run_simulation():
     print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
     
     # Build input dictionary from session data.
-    
     data_dict = {
         "facilities": session.get("facilities_data"),
         "unit_parameters_file": session.get("unit_params_file"),
@@ -1420,8 +1414,6 @@ def run_simulation():
         "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
         "proj_dir": session.get("proj_dir")
     }
-
-
     
     user_sim_folder = g.user_sim_folder
     print(f"DEBUG: Setting up simulation in {user_sim_folder}")
@@ -1452,9 +1444,10 @@ def stream():
             yield f"data: {message}\n\n"
             if message == "[Simulation Complete]":
                 break
-    return Response(event_stream(), mimetype="text/event-stream")    
+    return Response(event_stream(), mimetype="text/event-stream") 
 
 @app.route('/simulation_logs')
+
 def simulation_logs():
     return render_template('simulation_logs.html')
 
