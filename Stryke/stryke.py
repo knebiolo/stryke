@@ -1674,18 +1674,20 @@ class simulation():
 
     def run(self):
         """
-        Executes a comprehensive simulation and writes output to the HDF5 file.
-        Reopens the HDFStore in append mode using self.hdf_path.
+        Executes a comprehensive simulation of fish populations navigating through
+        a hydroelectric facility. Diagnostic print statements are included to help
+        trace parameter values and workflow progress.
         """
-        print('Create migratory route', flush=True)
+        # Create route and associated data.
+        print ('Create migratory rout')
         self.create_route()
         print('Starting simulation', flush=True)
         
-        # Setup string sizes.
+        # Setup string size dictionary for formatting.
         str_size = {'species': 30}
         try:
             for i in self.moves:
-                str_size[f'state_{i}'] = 30
+                str_size['state_%s' % i] = 30
         except Exception as e:
             print("Error setting up string sizes:", e, flush=True)
             str_size['state_0'] = 30
@@ -1699,6 +1701,7 @@ class simulation():
         q_cap_dict = {}
         unit_fac_dict = {}
     
+        #print("Setting up unit parameters...", flush=True)
         for index, row in self.unit_params.iterrows():
             unit = index
             unit_fac_dict[unit] = row['Facility']
@@ -1740,44 +1743,56 @@ class simulation():
                               'B': float(row['B']),
                               '_lambda': float(row['lambda'])}
                 u_param_dict[unit] = param_dict
+        #("Completed unit parameters setup.", flush=True)
     
+        # Create survival dictionary from nodes.
         for idx, row in self.nodes.iterrows():
+            # Use the Location field as key (assuming ID equals Location).
             surv_dict[row['Location']] = row['Survival']
+        #print("Survival dictionary created:", surv_dict, flush=True)
     
-        # Reopen the HDFStore in append mode.
-        self.hdf = pd.HDFStore(self.hdf_path, mode='a')
-        
+        # Iterate over each flow scenario.
         for scen in self.flow_scenarios:
+            #print(f"Starting scenario {scen} now", flush=True)
             scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
             scen_num = scen_df.iat[0, scen_df.columns.get_loc('Scenario Number')]
             season = scen_df.iat[0, scen_df.columns.get_loc('Season')]
             scenario = scen_df.iat[0, scen_df.columns.get_loc('Scenario')]
             scen_months = scen_df.iat[0, scen_df.columns.get_loc('Months')]
-        
+    
             if scen_df.iat[0, scen_df.columns.get_loc('Flow')] == 'hydrograph':
                 self.discharge_type = 'hydrograph'
             else:
                 self.discharge_type = 'fixed'
-        
-            if not isinstance(scen_months, (int, np.integer)):
+    
+            if type(scen_months) != np.int64:
                 month_list = scen_months.split(",")
                 scen_months = list(map(int, month_list))
             else:
                 scen_months = [scen_months]
             
             ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario'] == scenario]
+            #print(f"Scenario {scen}: Operating scenarios extracted.", flush=True)
+    
             species = self.pop[self.pop['Scenario'] == scenario].Species.unique()
-        
+            #print(f"Scenario {scen}: Species identified: {species}", flush=True)
+            
+            # Create hydrograph for this scenario.
             if self.discharge_type == 'hydrograph':
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df)
             else:
                 fixed_discharge = scen_df.iat[0, scen_df.columns.get_loc('Flow')]
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df, fixed_discharge=fixed_discharge)
-        
+#            print(f"Completed Discharge Scenario {scen} Setup using a {self.discharge_type} flow", flush=True)
+    
             for spc in species:
+#                print(f"Starting species {spc} scenario {scen}", flush=True)
                 spc_dat = self.pop[(self.pop['Scenario'] == scenario) & (self.pop.Species == spc)]
                 if spc_dat.empty:
+#                    print(f"No population data for species {spc} in scenario {scenario}", flush=True)
                     continue
+    
+                # Extract lognormal parameters (in centimeters)
                 s = spc_dat.iat[0, spc_dat.columns.get_loc('length shape')]
                 len_loc = spc_dat.iat[0, spc_dat.columns.get_loc('length location')]
                 len_scale = spc_dat.iat[0, spc_dat.columns.get_loc('length scale')]
@@ -1788,11 +1803,22 @@ class simulation():
                 occur_prob = spc_dat.iat[0, spc_dat.columns.get_loc('occur_prob')]
                 if math.isnan(occur_prob):
                     occur_prob = 1.0
-        
+    
+                # print(f"Species parameters for {species_name}:", flush=True)
+                # print(f"  s: {s}, len_loc: {len_loc}, len_scale: {len_scale}", flush=True)
+                # print(f"  Mean length: {mean_len}, SD: {sd_len}", flush=True)
+                # print(f"  Iterations: {iterations}, Occurrence probability: {occur_prob}", flush=True)
+    
+                spc_length = pd.DataFrame()
+    
                 for i in np.arange(0, iterations, 1):
+#                    print(f"Starting iteration {i} for species {spc}", flush=True)
                     for flow_row in flow_df.iterrows():
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
                         day = flow_row[1]['datetimeUTC']
+#                        print(f"Flow row - Day: {day}, Current Q: {curr_Q}", flush=True)
+    
+                        # Build Q_dict.
                         Q_dict = {'curr_Q': curr_Q}
                         min_Q_dict = {}
                         env_Q_dict = {}
@@ -1812,7 +1838,8 @@ class simulation():
                         Q_dict['min_Q'] = min_Q_dict
                         Q_dict['env_Q'] = env_Q_dict
                         Q_dict['bypass_Q'] = bypass_Q_dict
-        
+    
+                        # Update Q_dict and sta_cap for units.
                         sta_cap = {}
                         for u in units:
                             u_param_dict[u]['Q'] = curr_Q
@@ -1823,32 +1850,47 @@ class simulation():
                             Q_dict[u] = unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
                             sta_cap[fac] += unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
                         Q_dict['sta_cap'] = sta_cap
-        
+                        # print("Q_dict and sta_cap built:", flush=True)
+                        # print("  Q_dict:", Q_dict, flush=True)
+                        # print("  sta_cap:", sta_cap, flush=True)
+    
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
-        
+                        # print(f"Total hours: {tot_hours}", flush=True)
+    
                         if np.any(tot_hours > 0):
                             presence_seed = np.random.uniform(0, 1)
+                            # print(f"Presence seed: {presence_seed}", flush=True)
                             if occur_prob >= presence_seed:
                                 if math.isnan(spc_dat.iat[0, spc_dat.columns.get_loc('shape')]):
                                     n = int(spc_dat.iat[0, spc_dat.columns.get_loc('Fish')])
                                 else:
                                     n = self.population_sim(self.output_units, spc_dat, curr_Q)
+                                # print(f"Calculated number of fish (n): {n}", flush=True)
                                 if int(n) == 0:
                                     n = 1
-        
+                                    # print("n adjusted to 1 because initial value was 0", flush=True)
+    
                                 try:
                                     if not math.isnan(s):
+                                        # print("Generating population using lognorm.rvs", flush=True)
+                                        # print(f"  Parameters: s={s}, len_loc={len_loc}, len_scale={len_scale}, n={int(n)}", flush=True)
                                         population = np.abs(lognorm.rvs(s, len_loc, len_scale, int(n), random_state=rng))
                                         population = np.where(population > 150, 150, population)
                                         population = population * 0.0328084  # convert cm to feet
                                     else:
+                                        # print("Generating population using normal distribution", flush=True)
                                         population = np.abs(np.random.normal(mean_len, sd_len, int(n))) / 12.0
+                                    # print(f"Population of {len(population)} created for species {species_name} on day {day}", flush=True)
                                 except Exception as e:
+                                    # print("Error generating population for species", species_name, flush=True)
+                                    # print(f"Parameters: s={s}, len_loc={len_loc}, len_scale={len_scale}, n={n}", flush=True)
+                                    # print("Exception:", e, flush=True)
                                     continue
-        
+    
                                 try:
                                     U_crit_val = spc_dat.iat[0, spc_dat.columns.get_loc('U_crit')]
                                 except Exception as e:
+                                    # print("Error retrieving U_crit for species", species_name, flush=True)
                                     U_crit_val = 0
                                 swim_speed = np.repeat(U_crit_val, len(population))
                                 
@@ -1876,42 +1918,56 @@ class simulation():
                                         'population': np.float32(population),
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
+                                #print(f"Fish DataFrame created with {len(fishes)} rows", flush=True)
                                 
+                                # Process movement and survival for each movement step.
                                 for k in self.moves:
                                     if k == 0:
                                         status_arr = np.repeat(1, int(n))
                                     else:
                                         status_arr = fishes[f'survival_{k-1}'].values
-        
+    
                                     current_location = fishes[f'state_{k}'].values
-        
+    
                                     def surv_fun_att(state, surv_fun_dict):
                                         return surv_fun_dict[state]['Surv_Fun']
-        
+    
                                     v_surv_fun = np.vectorize(surv_fun_att, excluded=[1])
                                     try:
                                         surv_fun = v_surv_fun(current_location, self.surv_fun_dict)
                                     except Exception as e:
+                                        # print("Error vectorizing survival function for locations:", current_location, flush=True)
+                                        # print("Survival function dictionary:", self.surv_fun_dict, flush=True)
+                                        # print("Exception:", e, flush=True)
                                         surv_fun = np.repeat("a priori", len(current_location))
                                     
                                     dice = np.random.uniform(0.0, 1.0, int(n))
-        
+                                    # print("Debug - Node survival rates:", flush=True)
+                                    # print(f"  Population: {population}", flush=True)
+                                    # print(f"  Status: {status_arr}", flush=True)
+                                    # print(f"  Survival function: {surv_fun}", flush=True)
+                                    # print(f"  Location: {current_location}", flush=True)
+                                    # print(f"  Survival dict: {surv_dict}", flush=True)
+                                    # print(f"  Unit param dict: {u_param_dict}", flush=True)
+    
                                     v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[4,5])
                                     rates = v_surv_rate(population, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
                                     survival = np.where(dice <= rates, 1, 0)
-        
+    
                                     if k < max(self.moves):
                                         v_movement = np.vectorize(self.movement, excluded=[3,4,5,6,7,8])
                                         move = v_movement(current_location, survival, swim_speed, self.graph, intake_vel_dict, Q_dict, op_order_dict, q_cap_dict, unit_fac_dict)
                                     else:
                                         move = current_location
-        
+    
                                     fishes[f'draw_{k}'] = np.float32(dice)
                                     fishes[f'rates_{k}'] = np.float32(rates)
                                     fishes[f'survival_{k}'] = np.float32(survival)
                                     if k < max(self.moves):
                                         fishes[f'state_{k+1}'] = move
-                                
+    
+                                # print("Movement successfully simulated for iteration", i, flush=True)
+                                max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
                                 fishes.to_hdf(self.hdf,
                                               key=f'simulations/{scen}/{spc}',
                                               mode='a',
@@ -1919,7 +1975,7 @@ class simulation():
                                               append=True,
                                               min_itemsize=20)
                                 self.hdf.flush()
-        
+    
                                 if self.output_units == 'metric':
                                     curr_Q = curr_Q * 0.02831683199881
                                 daily_row_dict = {
@@ -1931,11 +1987,13 @@ class simulation():
                                     'flow': [np.float64(curr_Q)],
                                     'pop_size': [np.int64(len(fishes))]
                                 }
-        
+                                # Identify state and survival columns.
                                 state_columns = sorted([col for col in fishes.columns if col.startswith('state_')])
                                 survival_columns = sorted([col for col in fishes.columns if col.startswith('survival_')])
                                 
+                                # Convert state columns to Unicode strings.
                                 state_vals = fishes[state_columns].to_numpy(dtype='U50')
+                                # Use np.char.find to detect any uppercase 'U' in each state.
                                 mask = np.char.find(state_vals, 'U') >= 0
                                 entrained = mask.any(axis=1)
                                 first_U_index = np.where(entrained, mask.argmax(axis=1), -1)
@@ -1950,7 +2008,7 @@ class simulation():
                                 total_survived_entrained = survived.sum()
                                 daily_row_dict['num_entrained'] = total_entrained
                                 daily_row_dict['num_survived'] = total_survived_entrained
-        
+    
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 daily.to_hdf(self.hdf,
                                              key='Daily',
@@ -1959,6 +2017,7 @@ class simulation():
                                              append=True)
                                 self.hdf.flush()
                             else:
+                                #print(f"No fish present on day {day} (occurrence check failed)", flush=True)
                                 daily_row_dict = {
                                     'species': ['{:50}'.format(spc)],
                                     'scenario': ['{:50}'.format(scenario)],
@@ -1977,38 +2036,50 @@ class simulation():
                                              format='table',
                                              append=True)
                                 self.hdf.flush()
-                            print(f"Scenario {scenario} Dat {day} Iteration {i} for Species {species_name} complete", flush=True)
-                    self.hdf.flush()
-                    print(f"Completed Scenario {scen} for Species {species}", flush=True)
-                    
-                print("Completed Simulations - view results", flush=True)
+                        print(f"Scenario {scenario} Dat {day} Iteration {i} for Species {species_name} complete", flush=True)
                 self.hdf.flush()
-                self.hdf.close()
-        
+                print(f"Completed Scenario {scen} for Species {species}", flush=True)
+                
+            print("Completed Simulations - view results", flush=True)
+            self.hdf.flush()
+            self.hdf.close()
+
+
     def summary(self):
         """
         Summarizes the results of fish entrainment simulations stored in an HDF file.
+        ...
+        (documentation unchanged)
         """
         import os
         import pandas as pd
-        import io, base64
-        from datetime import datetime
-        import matplotlib.pyplot as plt
-        
+        import io
+        from contextlib import redirect_stdout
+        from scipy.stats import beta
+    
         hdf_path = os.path.join(self.proj_dir, '%s.h5' % (self.output_name))
         
+        # Use a context manager to open the HDF file for reading so it closes automatically.
         with pd.HDFStore(hdf_path, mode='r') as store:
+            # create some empty holders
             self.beta_dict = {}
+    
+            # get Population table
             pop = store['Population']
             species = pop.Species.unique()
+    
+            # get Scenarios
             scen = store['Flow Scenarios']
             scens = scen.Scenario.unique()
+    
+            # get units (if needed)
             units = store['Unit_Parameters'].index
+    
             self.daily_summary = store['Daily']
             self.daily_summary.iloc[:,6:] = self.daily_summary.iloc[:,6:].astype(float)
-        
+    
+            # Capture printed output
             output_buffer = io.StringIO()
-            from contextlib import redirect_stdout
             with redirect_stdout(output_buffer):
                 print("iterate through species and scenarios and summarize")
                 for i in species:
@@ -2017,6 +2088,8 @@ class simulation():
                             dat = store['simulations/%s/%s' % (j, i)]
                         except:
                             continue
+    
+                        # summarize species-scenario - whole project
                         whole_proj_succ = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
                             .sum().to_frame().reset_index(drop=False)\
                             .rename(columns={'survival_%s' % (max(self.moves)):'successes'})
@@ -2026,7 +2099,6 @@ class simulation():
                         whole_summ = whole_proj_succ.merge(whole_proj_count)
                         whole_summ['prob'] = whole_summ['successes'] / whole_summ['count']
                         try:
-                            from scipy.stats import beta
                             whole_params = beta.fit(whole_summ.prob.values)
                             whole_median = beta.median(whole_params[0], whole_params[1], whole_params[2], whole_params[3])
                             whole_std = beta.std(whole_params[0], whole_params[1], whole_params[2], whole_params[3])
@@ -2071,38 +2143,113 @@ class simulation():
                                                                           np.round(st_std,2), 
                                                                           np.round(lcl,2), 
                                                                           np.round(ucl,2)]
-                        print("Fit beta distributions to states", flush=True)
+                        print("Fit beta distributions to states")
                         del dat
-        
+    
                 self.beta_df = pd.DataFrame.from_dict(data=self.beta_dict, orient='index',
                                                        columns=['scenario number','species','state','survival rate','variance','ll','ul'])
                 try:
                     self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
                 except:
                     pass
-        
-                print("Beta DF shape:", self.beta_df.shape, flush=True)
-                print("Daily Summary shape:", self.daily_summary.shape, flush=True)
-                print("Yearly Summary shape:", self.cum_sum.shape, flush=True)
-        
+    
+                # Group daily_summary by year
+                yearly_summary = self.daily_summary.groupby(['species','scenario','iteration'])[['pop_size','num_survived','num_entrained']].sum()
+                yearly_summary.reset_index(inplace=True)
+    
+                # Build cumulative summary DataFrame from dictionary
+                cum_sum_dict = {
+                    'species': [],
+                    'scenario': [],
+                    'mean_yearly_ent': [],
+                    'lcl_yearly_ent': [],
+                    'ucl_yearly_ent': [],
+                    '1_in_10_day_entrainment': [],
+                    '1_in_100_day_entrainment': [],
+                    '1_in_1000_day_entrainment': [],
+                    'mean_yearly_mort': [],
+                    'lcl_yearly_mort': [],
+                    'ucl_yearly_mort': [],
+                    '1_in_10_day_mortality': [],
+                    '1_in_100_day_mortality': [],
+                    '1_in_1000_day_mortality': [],
+                }
+                for fishy in yearly_summary.species.unique():
+                    for scen in yearly_summary.scenario.unique():
+                        idat = yearly_summary[(yearly_summary.species == fishy) & (yearly_summary.scenario == scen)]
+                        cum_sum_dict['species'].append(fishy)
+                        cum_sum_dict['scenario'].append(scen)
+                        day_dat = self.daily_summary[(self.daily_summary.species == fishy) & (self.daily_summary.scenario == scen)]
+                        daily_counts = day_dat.num_entrained.values
+                        n_actual_days = len(daily_counts)
+                        if n_actual_days == 0:
+                            cum_sum_dict['mean_yearly_ent'].append(0.)
+                            cum_sum_dict['lcl_yearly_ent'].append(0.)
+                            cum_sum_dict['ucl_yearly_ent'].append(0.)
+                            cum_sum_dict['1_in_10_day_entrainment'].append(0.)
+                            cum_sum_dict['1_in_100_day_entrainment'].append(0.)
+                            cum_sum_dict['1_in_1000_day_entrainment'].append(0.)
+                            cum_sum_dict['mean_yearly_mort'].append(0.)
+                            cum_sum_dict['lcl_yearly_mort'].append(0.)
+                            cum_sum_dict['ucl_yearly_mort'].append(0.)
+                            cum_sum_dict['1_in_10_day_mortality'].append(0.)
+                            cum_sum_dict['1_in_100_day_mortality'].append(0.)
+                            cum_sum_dict['1_in_1000_day_mortality'].append(0.)
+                            continue
+                        df = day_dat[['day','iteration','num_entrained','num_survived']]
+                        if 'num_mortalities' not in df.columns:
+                            df['num_mortalities'] = df['num_entrained'] - df['num_survived']
+                        # Assuming bootstrap_mean_ci and summarize_ci are available
+                        entrained_mean, entrained_lower, entrained_upper = bootstrap_mean_ci(df['num_entrained'])
+                        killed_mean, killed_lower, killed_upper = bootstrap_mean_ci(df['num_mortalities'])
+                        return_periods = [10, 100, 1000]
+                        quantile_levels = {T: 1 - 1/T for T in return_periods}
+                        extreme_entrained = {T: df['num_entrained'].quantile(q) for T, q in quantile_levels.items()}
+                        extreme_killed = {T: df['num_mortalities'].quantile(q) for T, q in quantile_levels.items()}
+                        year_tots = df.groupby(['iteration'])[['num_entrained','num_mortalities']].sum()
+                        summary = year_tots.apply(summarize_ci)
+                        cum_sum_dict['mean_yearly_ent'].append(summary.at['mean','num_entrained'])
+                        cum_sum_dict['lcl_yearly_ent'].append(summary.at['lower_95_CI','num_entrained'])
+                        cum_sum_dict['ucl_yearly_ent'].append(summary.at['upper_95_CI','num_entrained'])
+                        cum_sum_dict['1_in_10_day_entrainment'].append(extreme_entrained[10])
+                        cum_sum_dict['1_in_100_day_entrainment'].append(extreme_entrained[100])
+                        cum_sum_dict['1_in_1000_day_entrainment'].append(extreme_entrained[1000])
+                        cum_sum_dict['mean_yearly_mort'].append(summary.at['mean','num_mortalities'])
+                        cum_sum_dict['lcl_yearly_mort'].append(summary.at['lower_95_CI','num_mortalities'])
+                        cum_sum_dict['ucl_yearly_mort'].append(summary.at['upper_95_CI','num_mortalities'])
+                        cum_sum_dict['1_in_10_day_mortality'].append(extreme_killed[10])
+                        cum_sum_dict['1_in_100_day_mortality'].append(extreme_killed[100])
+                        cum_sum_dict['1_in_1000_day_mortality'].append(extreme_killed[1000])
+
+                print("Yearly summary complete.")
+    
+                self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict, orient='columns')
+                # Debug print shapes
+                print("Beta DF shape:", self.beta_df.shape)
+                print("Daily Summary shape:", self.daily_summary.shape)
+                print("Yearly Summary shape:", self.cum_sum.shape)
+    
+                # Optionally, write these DataFrames to Excel (if needed)
                 try:
                     with pd.ExcelWriter(self.wks_dir, engine='openpyxl', mode='a') as writer:
                         self.beta_df.to_excel(writer, sheet_name='beta fit')
                         self.daily_summary.to_excel(writer, sheet_name='daily summary')
                         self.cum_sum.to_excel(writer, sheet_name='yearly summary')
                 except:
-                    print('Web App run detected, please download report', flush=True)
-        
+                    print('Web App run detected, please download report')
+    
                 summary_text = output_buffer.getvalue()
                 self.summary_text = summary_text
-        
-        print (f'Yearly Summary Shape: {self.cum_sum.shape}', flush=True)
-        print (self.cum_sum, flush=True)
+    
+        # At this point the HDFStore opened in read mode is closed.
+        print (f'Yearly Summary Shape: {self.cum_sum.shape}')
+        print (cum_sum_dict)
+        # Now open the file in append mode to write the summary DataFrames.
         with pd.HDFStore(hdf_path, mode='a') as store:
             store.put("Daily_Summary", self.daily_summary, format="table", data_columns=True)
             store.put("Beta_Distributions", self.beta_df, format="table", data_columns=True)
             store.put("Yearly_Summary", self.cum_sum, format="table", data_columns=True)
-        
+    
         return
 
                 
