@@ -1393,13 +1393,12 @@ def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict
     import sys
     try:
         print("DEBUG: Starting simulation process", flush=True)
-        with sim_instance as sim:
-            print("DEBUG: Calling sim.webapp_import()", flush=True)
-            sim.webapp_import(data_dict, output_name="WebAppModel")
-            print("DEBUG: Calling sim.run()", flush=True)
-            sim.run()
-            print("DEBUG: sim.run() returned; calling sim.summary()", flush=True)
-            sim.summary()
+        print("DEBUG: Calling sim.webapp_import()", flush=True)
+        sim_instance.webapp_import(data_dict, output_name="WebAppModel")
+        print("DEBUG: Calling sim.run()", flush=True)
+        sim_instance.run()
+        print("DEBUG: sim.run() returned; calling sim.summary()", flush=True)
+        sim_instance.summary()
         print("DEBUG: Simulation process complete", flush=True)
     except Exception as e:
         print("Error during simulation:", e, flush=True)
