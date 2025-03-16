@@ -37,25 +37,6 @@ import traceback
 import logging
 import logging.handlers
 
-# Create a multiprocessing queue for logging
-LOG_QUEUE = multiprocessing.Queue(-1)  # -1 means unlimited size
-
-# Create a handler that uses the logging queue
-queue_handler = logging.handlers.QueueHandler(LOG_QUEUE)
-
-# Get the root logger and attach the queue handler
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)  # Or any level you need
-logger.addHandler(queue_handler)
-
-# Create a stream handler for output (or a FileHandler if you want to log to a file)
-stream_handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-stream_handler.setFormatter(formatter)
-
-# Set up the listener with the queue and the handler
-queue_listener = logging.handlers.QueueListener(LOG_QUEUE, stream_handler)
-queue_listener.start()
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -78,28 +59,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../Stry
 from Stryke import stryke
 from Stryke.stryke import epri
 
-# Define a custom stream that writes messages to the multiprocessing queue.
-class QueueStream:
-    def __init__(self, q):
-        self.q = q
-    def write(self, message):
-        if message.strip():
-            # If the message is already a string, put it directly.
-            if isinstance(message, str):
-                try:
-                    self.q.put(message, timeout=0.1)
-                except Exception:
-                    pass
-            else:
-                # Otherwise, try to format it
-                try:
-                    formatted = str(message)
-                    self.q.put(formatted, timeout=0.1)
-                except Exception:
-                    pass
-    def flush(self):
-        pass
-
     
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -107,6 +66,33 @@ app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password he
 
 # Set session lifetime to 1 day (adjust as needed)
 app.permanent_session_lifetime = timedelta(days=1)
+
+# Create a multiprocessing queue for logging
+LOG_QUEUE = multiprocessing.Queue(-1)
+
+# Create a custom stream that writes log messages to LOG_QUEUE
+class QueueStream:
+    def __init__(self, q):
+        self.q = q
+    def write(self, message):
+        if message.strip():
+            try:
+                self.q.put(message)
+            except Exception:
+                pass
+    def flush(self):
+        pass
+
+# Set up logging to use QueueStream
+queue_stream = QueueStream(LOG_QUEUE)
+stream_handler = logging.StreamHandler(queue_stream)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+stream_handler.setFormatter(formatter)
+
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+logger.handlers = []  # Clear any default handlers
+logger.addHandler(stream_handler)
 
 @app.before_request
 def make_session_permanent():
@@ -1343,6 +1329,7 @@ def model_setup_summary():
     logger.debug ('model setup summary complet')
 from flask import current_app  # Import at module level if desired
 
+
 def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
     try:
         # Redirect stdout so that print messages are sent to the shared log queue.
@@ -1370,7 +1357,8 @@ def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
         logger.debug("Error during simulation:", e)
         traceback.print_exc()
     finally:
-        pass
+        log_queue.put("[Simulation Complete]")
+
 
 @app.route('/run_simulation', methods=['POST'])
 def run_simulation():
