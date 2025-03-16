@@ -1387,11 +1387,12 @@ def run_simulation():
     
     return redirect(url_for("simulation_logs"))
 
+import traceback
+
 def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict):
     import sys
     try:
         print("DEBUG: Starting simulation process", flush=True)
-        # If your simulation object supports a context manager, use it:
         with sim_instance as sim:
             print("DEBUG: Calling sim.webapp_import()", flush=True)
             sim.webapp_import(data_dict, output_name="WebAppModel")
@@ -1400,9 +1401,9 @@ def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict
             print("DEBUG: sim.run() returned; calling sim.summary()", flush=True)
             sim.summary()
         print("DEBUG: Simulation process complete", flush=True)
-        # (Optionally, generate a report here or signal completion via another method.)
     except Exception as e:
         print("Error during simulation:", e, flush=True)
+        traceback.print_exc()
 
 
 
