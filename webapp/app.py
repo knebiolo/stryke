@@ -1394,19 +1394,26 @@ def run_simulation():
     
     return redirect(url_for("simulation_logs"))
 
+import queue  # Import queue for handling queue.Empty exception
 
 @app.route('/stream')
 def stream():
-    # This endpoint streams log messages from the shared multiprocessing queue.
     def event_stream():
         while True:
-            message = LOG_QUEUE.get()
+            try:
+                message = LOG_QUEUE.get(timeout=2)  # Wait max 2 sec for a log
+            except queue.Empty:
+                yield "data: [No new logs]\n\n"
+                continue  # Continue the loop even if empty
+                
             if message is None:
                 continue
             yield f"data: {message}\n\n"
-            if message == "[Simulation Complete]":
+            if message.strip() == "[Simulation Complete]":
                 break
-    return Response(event_stream(), mimetype="text/event-stream") 
+    return Response(event_stream(), mimetype="text/event-stream")
+
+ 
 
 @app.route('/simulation_logs')
 
@@ -1994,4 +2001,4 @@ def download_report():
 
 # Un Comment to Test Locally
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
