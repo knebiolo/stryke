@@ -38,8 +38,8 @@ import matplotlib
 matplotlib.use('Agg')
 
 from matplotlib import rcParams
-rcParams['font.size'] = 6
-rcParams['font.family'] = 'serif'
+rcParams.update({'font.size': 8, 'font.family': 'sans-serif'})
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import warnings
@@ -59,6 +59,8 @@ import h5py
 #import tables
 from numpy.random import default_rng
 rng = default_rng()
+import logging
+logger = logging.getLogger(__name__)
 
 # Now pass the session to hydrofunctions if possible
 
@@ -177,7 +179,7 @@ class simulation():
         elif existing == True and wks:
             self.existing_import(proj_dir, wks, output_name)
         
-        print ('simulation object created')
+        logger.info('simulation object created')
             
  
     def existing_import(self, proj_dir, wks, output_name):
@@ -363,9 +365,7 @@ class simulation():
         self.output_units = data_dict.get('units_system')
         self.sim_mode = data_dict.get('simulation_mode')
         self.proj_dir = data_dict.get("proj_dir", os.getcwd())
-        print("DEBUG: Using proj_dir:", self.proj_dir, flush=True)
         hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
-        print("DEBUG: HDF path:", hdf_path, flush=True)
         
         # Convert graph summary data to DataFrames.
         graph_summary = data_dict.get('graph_summary', {})
@@ -373,19 +373,14 @@ class simulation():
         self.edges = to_dataframe(graph_summary.get('Edges', []))
         self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
         self.surv_fun_dict = self.surv_fun_df.to_dict('index')
-        
-        print("Nodes and Edges:", flush=True)
-        print(self.nodes, flush=True)
-        print(self.edges, flush=True)
+    
         
         # Build the simulation graph.
         sim_graph_data = data_dict.get('simulation_graph')
         if sim_graph_data is not None:
             G = json_graph.node_link_graph(sim_graph_data)
-            print("Graph successfully converted from JSON object", flush=True)
         else:
             G = nx.DiGraph()
-            print("Graph built using nodes and edges", flush=True)
             for _, row in self.nodes.iterrows():
                 node_id = row.get("ID", row.get("Location"))
                 G.add_node(node_id, **row.to_dict())
@@ -400,22 +395,13 @@ class simulation():
         
         if "graph_data" in data_dict:
             G = json_graph.node_link_graph(data_dict["graph_data"])
-            print("Imported Nodes:", list(G.nodes), flush=True)
-            print("Imported Edges:", list(G.edges), flush=True)
-        else:
-            print("graph_data not found; using the previously built graph.", flush=True)
-        
-        for required in ['river_node_0', 'river_node_1']:
-            if required not in G.nodes:
-                print(f"ERROR: '{required}' is missing from the graph!", flush=True)
         
         try:
             path_list = list(nx.all_shortest_paths(G, 'river_node_0', 'river_node_1'))
-            print("Shortest Path:", path_list, flush=True)
         except nx.NetworkXNoPath:
-            print("No path found between river_node_0 and river_node_1", flush=True)
+            logger.info("No path found between river_node_0 and river_node_1")
         except nx.NodeNotFound as e:
-            print("NodeNotFound:", e, flush=True)
+            logger.info("NodeNotFound:")
         
         if len(self.nodes) > 1:
             paths = nx.all_shortest_paths(G, 'river_node_0', 'river_node_1')
@@ -423,9 +409,7 @@ class simulation():
             self.moves = np.arange(0, max_len + 1, 1)
         else:
             self.moves = np.zeros(1, dtype=np.int32)
-        print('Migratory Routes:', flush=True)
         self.graph = G
-        print(G, flush=True)
         
         # 3. Unit Parameters.
         if "unit_parameters_file" in data_dict:
@@ -439,24 +423,17 @@ class simulation():
             if self.unit_params is not None:
                 self.unit_params['Unit_Name'] = self.unit_params.Facility + ' - Unit ' + self.unit_params.Unit.astype('str')
                 self.unit_params.set_index('Unit_Name', inplace=True)
-                print(f'Unit parameters: {self.unit_params}', flush=True)
         elif "unit_parameters" in data_dict:
             self.unit_params = to_dataframe(data_dict["unit_parameters"])
         
         # 4. Facilities.
         if "facilities" in data_dict:
             self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
-            print('Facilities:', flush=True)
-            print(self.facility_params, flush=True)
         
         # 5. Flow Scenarios.
         if "flow_scenarios" in data_dict:
             self.flow_scenarios_df = to_dataframe(data_dict["flow_scenarios"], numeric_cols=['FlowYear', 'Prorate'])
             self.flow_scenarios = self.flow_scenarios_df["Scenario"].unique()
-            print(f"The flow scenarios are: {self.flow_scenarios}", flush=True)
-            print('Flow Scenarios:', flush=True)
-            print(self.flow_scenarios_df, flush=True)
-            print(f"Unique flow scenarios: {self.flow_scenarios}", flush=True)
         
         # 6. Operating Scenarios.
         if "operating_scenarios_file" in data_dict:
@@ -480,28 +457,22 @@ class simulation():
             self.pop = to_dataframe(pop_data, numeric_cols=['Iterations', 'Length_mean', 'Length_sd', 'U_crit',
                                                                'length location', 'length scale', 'length shape',
                                                                'location', 'max_ent_rate', 'occur_prob', 'scale', 'shape'])
-            print("Population:", flush=True)
-            print(self.pop, flush=True)
         
         # 8. Hydrograph.
         if "hydrograph_file" in data_dict:
             self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
-            if self.input_hydrograph_df is not None:
-                print(self.input_hydrograph_df, flush=True)
+
         
         # 9. Unit Conversion.
         if data_dict.get("units_system", "imperial") == "metric":
             if hasattr(self, "input_hydrograph_df") and self.input_hydrograph_df is not None and "DAvgFlow_prorate" in self.input_hydrograph_df.columns:
                 self.input_hydrograph_df["DAvgFlow_prorate"] *= 35.3147
         
-        print("DEBUG: Using proj_dir:", self.proj_dir, flush=True)
         
         # 10. Create HDF5 file and store DataFrames.
         if os.path.exists(hdf_path):
-            print(f"DEBUG: File {hdf_path} exists; removing it.", flush=True)
             os.remove(hdf_path)
         hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
-        print(f"Creating HDF5 file at: {hdf_path}", flush=True)
         self.hdf = pd.HDFStore(hdf_path, mode='w')
         for key, df in [("Flow Scenarios", getattr(self, "flow_scenarios_df", None)),
                         ("Operating Scenarios", getattr(self, "operating_scenarios_df", None)),
@@ -512,12 +483,8 @@ class simulation():
                         ("Facilities", getattr(self, "facility_params", None)),
                         ("Hydrograph", getattr(self, "input_hydrograph_df", None))]:
             if df is not None:
-                print(f"DEBUG: Storing {key} to HDFStore", flush=True)
                 self.hdf[key] = df
-                print(f"DEBUG: Stored {key}", flush=True)
-        print("DEBUG: Flushing HDFStore", flush=True)
         self.hdf.flush()
-        print("DEBUG: Closing HDFStore", flush=True)
         self.hdf.close()
         
         # Save the HDFStore file path for later use in run()
@@ -529,7 +496,7 @@ class simulation():
             else:
                 self.flow_cap = None
         
-        print(f"Web app import completed. Data stored to {hdf_path}.", flush=True)
+        logger.info("Web app import completed. Data stored to %s",hdf_path)
 
     def create_graph_from_app(self, model_setup, session):
         """
@@ -912,7 +879,7 @@ class simulation():
                 try:
                     prob = surv_dict[route]
                 except:
-                    print ('Problem with a priori survival function')
+                    logger.debug ('Problem with a priori survival function')
     
             else:
                 #TODO add impingement logic, bring 
@@ -946,7 +913,7 @@ class simulation():
             try:
                 return np.float32(prob)
             except:
-                print ('check')
+                logger.debug ('check')
     
     # create function that builds networkx graph object from nodes and edges in project database
     def create_route(self):
@@ -1086,7 +1053,7 @@ class simulation():
                                         facility = self.unit_params.at[j, 'Facility']
                                         #print("Fallback facility for", j, ":", facility)
                                     except Exception as ex:
-                                        print("Fallback failed for", j, "with exception:", ex)
+                                        logger.debug("Fallback failed for", j, "with exception:", ex)
                                     continue
                         sta_cap = sta_cap_dict[facility]
                         min_Q = min_Q_dict[facility]
@@ -1400,7 +1367,7 @@ class simulation():
                 df.rename(columns = {'index':'datetimeUTC',0:'DAvgFlow_prorate'},inplace = True) 
                 df['month'] = pd.to_datetime(df.datetimeUTC).dt.month
                 if np.any(df.DAvgFlow_prorate.values < 0):
-                    print ('prorated daily average flow value not found')
+                    logger.debug ('prorated daily average flow value not found')
                 #flow_df = flow_df.append(df)
                 flow_df = pd.concat([df, flow_df])
         
@@ -1679,9 +1646,7 @@ class simulation():
         trace parameter values and workflow progress.
         """
         # Create route and associated data.
-        print ('Create migratory rout')
         self.create_route()
-        print('Starting simulation', flush=True)
         
         # Setup string size dictionary for formatting.
         str_size = {'species': 30}
@@ -1689,7 +1654,7 @@ class simulation():
             for i in self.moves:
                 str_size['state_%s' % i] = 30
         except Exception as e:
-            print("Error setting up string sizes:", e, flush=True)
+            logger.debug("Error setting up string sizes:", e)
             str_size['state_0'] = 30
     
         # Initialize dictionaries for unit parameters.
@@ -2036,11 +2001,12 @@ class simulation():
                                              format='table',
                                              append=True)
                                 self.hdf.flush()
-                        print(f"Scenario {scenario} Dat {day} Iteration {i} for Species {species_name} complete", flush=True)
+                        
+                        logger.info("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
                 self.hdf.flush()
-                print(f"Completed Scenario {scen} for Species {species}", flush=True)
+                logger.info("Completed Scenario %s for Species %s",scen,species)
                 
-            print("Completed Simulations - view results", flush=True)
+            logger.info("Completed Simulations - view results")
             self.hdf.flush()
             self.hdf.close()
 
@@ -2081,7 +2047,7 @@ class simulation():
             # Capture printed output
             output_buffer = io.StringIO()
             with redirect_stdout(output_buffer):
-                print("iterate through species and scenarios and summarize")
+                logger.info("iterate through species and scenarios and summarize")
                 for i in species:
                     for j in scens:
                         try:
@@ -2143,7 +2109,7 @@ class simulation():
                                                                           np.round(st_std,2), 
                                                                           np.round(lcl,2), 
                                                                           np.round(ucl,2)]
-                        print("Fit beta distributions to states")
+                        logger.info("Fit beta distributions to states")
                         del dat
     
                 self.beta_df = pd.DataFrame.from_dict(data=self.beta_dict, orient='index',
@@ -2221,13 +2187,13 @@ class simulation():
                         cum_sum_dict['1_in_100_day_mortality'].append(extreme_killed[100])
                         cum_sum_dict['1_in_1000_day_mortality'].append(extreme_killed[1000])
 
-                print("Yearly summary complete.")
+                logger.info("Yearly summary complete.")
     
                 self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict, orient='columns')
                 # Debug print shapes
-                print("Beta DF shape:", self.beta_df.shape)
-                print("Daily Summary shape:", self.daily_summary.shape)
-                print("Yearly Summary shape:", self.cum_sum.shape)
+                logger.info("Beta DF shape: %s",self.beta_df.shape)
+                logger.info("Daily Summary shape: %s",self.daily_summary.shape)
+                logger.info("Yearly Summary shape: %s",self.cum_sum.shape)
     
                 # Optionally, write these DataFrames to Excel (if needed)
                 try:
@@ -2236,14 +2202,12 @@ class simulation():
                         self.daily_summary.to_excel(writer, sheet_name='daily summary')
                         self.cum_sum.to_excel(writer, sheet_name='yearly summary')
                 except:
-                    print('Web App run detected, please download report')
+                    logger.info('Web App run detected, please download report')
     
                 summary_text = output_buffer.getvalue()
                 self.summary_text = summary_text
     
         # At this point the HDFStore opened in read mode is closed.
-        print (f'Yearly Summary Shape: {self.cum_sum.shape}')
-        print (cum_sum_dict)
         # Now open the file in append mode to write the summary DataFrames.
         with pd.HDFStore(hdf_path, mode='a') as store:
             store.put("Daily_Summary", self.daily_summary, format="table", data_columns=True)
