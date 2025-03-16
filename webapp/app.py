@@ -1348,77 +1348,100 @@ def model_setup_summary():
 from flask import current_app  # Import at module level if desired
 
 
+# @app.route('/run_simulation', methods=['POST'])
+# def run_simulation():
+#     from Stryke import stryke
+#     from flask import current_app
+#     print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
+
+#     # Build input dictionary from session
+#     data_dict = {
+#         "facilities": session.get("facilities_data"),
+#         "unit_parameters_file": session.get("unit_params_file"),
+#         "operating_scenarios_file": session.get("op_scen_file"),
+#         "population": session.get("population_data"),
+#         "flow_scenarios": session.get("flow_scenario"),
+#         "hydrograph_file": session.get("hydrograph_file"),
+#         "graph_data": session.get("simulation_graph"),
+#         "graph_summary": session.get("graph_summary"),
+#         "units_system": session.get("units", "imperial"),
+#         "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
+#         "proj_dir": session.get("proj_dir")
+#     }
+
+#     # Setup simulation
+#     user_sim_folder = g.user_sim_folder
+#     print(f"DEBUG: Setting up simulation in {user_sim_folder}")
+#     sim = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
+#     print("DEBUG: Calling sim.webapp_import()")
+#     sim.webapp_import(data_dict, output_name="WebAppModel")
+#     # Push app context into background thread
+#     app_obj = current_app._get_current_object()
+#     try:
+#         simulation_thread = threading.Thread(
+#             target=run_simulation_in_background_custom,
+#             args=(sim, user_sim_folder, app_obj, data_dict),
+#             daemon=True  # makes sure the thread won't prevent the app from exiting
+#         )
+#         simulation_thread.start()
+#         flash("Simulation started! Check logs for progress.")
+#     except Exception as e:
+#         print("Error starting simulation thread:", e)
+#         flash("Failed to start simulation. Check logs for details.")
+#     return redirect(url_for("simulation_logs"))
+
+# def run_simulation_in_background_custom(sim_instance, user_sim_folder, app_obj, data_dict):
+#     import sys
+#     with app_obj.app_context():
+#         old_stdout = sys.stdout
+#         sys.stdout = QueueStream(LOG_QUEUE)
+#         try:
+#             print("DEBUG: Starting background simulation run", flush = True)
+#             # Use the simulation object as a context manager if supported
+#             with sim_instance as sim:
+
+#                 print("DEBUG: Calling sim.run()", flush = True)
+#                 sim.run()
+#                 print("DEBUG: Calling sim.summary()", flush = True)
+#                 sim.summary()
+#             print("DEBUG: Exited simulation context manager; simulation complete", flush = True)
+#             LOG_QUEUE.put("[Simulation Complete]")
+
+#             print("DEBUG: Generating simulation report")
+#             report_html = generate_report(sim_instance)
+#             report_path = os.path.join(user_sim_folder, "simulation_report.html")
+#             with open(report_path, "w", encoding="utf-8") as f:
+#                 print(f"DEBUG: Writing simulation report to {report_path}")
+#                 f.write(report_html)
+#             with open(os.path.join(user_sim_folder, "report_path.txt"), "w") as f:
+#                 f.write(report_path)
+#         except Exception as e:
+#             print("Error during simulation:", e)
+#         finally:
+#             sys.stdout = old_stdout
+
 @app.route('/run_simulation', methods=['POST'])
 def run_simulation():
     from Stryke import stryke
-    from flask import current_app
-    print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
-
-    # Build input dictionary from session
-    data_dict = {
-        "facilities": session.get("facilities_data"),
-        "unit_parameters_file": session.get("unit_params_file"),
-        "operating_scenarios_file": session.get("op_scen_file"),
-        "population": session.get("population_data"),
-        "flow_scenarios": session.get("flow_scenario"),
-        "hydrograph_file": session.get("hydrograph_file"),
-        "graph_data": session.get("simulation_graph"),
-        "graph_summary": session.get("graph_summary"),
-        "units_system": session.get("units", "imperial"),
-        "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
-        "proj_dir": session.get("proj_dir")
-    }
-
-    # Setup simulation
+    print("DEBUG: session['proj_dir'] =", session.get("proj_dir"), flush = True)
+    data_dict = { ... }  # your data dictionary
     user_sim_folder = g.user_sim_folder
-    print(f"DEBUG: Setting up simulation in {user_sim_folder}")
+    print(f"DEBUG: Setting up simulation in {user_sim_folder}", flush = True)
     sim = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
-    print("DEBUG: Calling sim.webapp_import()")
-    sim.webapp_import(data_dict, output_name="WebAppModel")
-    # Push app context into background thread
-    app_obj = current_app._get_current_object()
+    
     try:
-        simulation_thread = threading.Thread(
-            target=run_simulation_in_background_custom,
-            args=(sim, user_sim_folder, app_obj, data_dict),
-            daemon=True  # makes sure the thread won't prevent the app from exiting
-        )
-        simulation_thread.start()
-        flash("Simulation started! Check logs for progress.")
+        print("DEBUG: Calling sim.webapp_import()", flush = True)
+        sim.webapp_import(data_dict, output_name="WebAppModel")
+        print("DEBUG: Calling sim.run()", flush = True)
+        sim.run()
+        print("DEBUG: Calling sim.summary()", flush = True)
+        sim.summary()
+        flash("Simulation completed!", flush = True)
     except Exception as e:
-        print("Error starting simulation thread:", e)
-        flash("Failed to start simulation. Check logs for details.")
+        print("Error during simulation:", e)
+        flash("Simulation failed. Check logs for details.")
     return redirect(url_for("simulation_logs"))
 
-def run_simulation_in_background_custom(sim_instance, user_sim_folder, app_obj, data_dict):
-    import sys
-    with app_obj.app_context():
-        old_stdout = sys.stdout
-        sys.stdout = QueueStream(LOG_QUEUE)
-        try:
-            print("DEBUG: Starting background simulation run", flush = True)
-            # Use the simulation object as a context manager if supported
-            with sim_instance as sim:
-
-                print("DEBUG: Calling sim.run()", flush = True)
-                sim.run()
-                print("DEBUG: Calling sim.summary()", flush = True)
-                sim.summary()
-            print("DEBUG: Exited simulation context manager; simulation complete", flush = True)
-            LOG_QUEUE.put("[Simulation Complete]")
-
-            print("DEBUG: Generating simulation report")
-            report_html = generate_report(sim_instance)
-            report_path = os.path.join(user_sim_folder, "simulation_report.html")
-            with open(report_path, "w", encoding="utf-8") as f:
-                print(f"DEBUG: Writing simulation report to {report_path}")
-                f.write(report_html)
-            with open(os.path.join(user_sim_folder, "report_path.txt"), "w") as f:
-                f.write(report_path)
-        except Exception as e:
-            print("Error during simulation:", e)
-        finally:
-            sys.stdout = old_stdout
 
 @app.route('/simulation_logs')
 def simulation_logs():
