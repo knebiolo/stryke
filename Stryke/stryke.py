@@ -176,6 +176,8 @@ class simulation():
     
         elif existing == True and wks:
             self.existing_import(proj_dir, wks, output_name)
+        
+        print ('simulation object created')
             
  
     def existing_import(self, proj_dir, wks, output_name):
@@ -351,179 +353,181 @@ class simulation():
         #self.hdf['Routing'] = self.routing
         self.hdf.flush()
     
-    def webapp_import(self, data_dict, output_name):
-        """
-        Imports data for a new simulation from in-memory/webapp sources,
-        and writes data to an HDF5 file.
-        """
-        # Store basic info.
-        self.output_name = output_name
-        self.output_units = data_dict.get('units_system')
-        self.sim_mode = data_dict.get('simulation_mode')
-        self.proj_dir = data_dict.get("proj_dir", os.getcwd())
-        print("DEBUG: Using proj_dir:", self.proj_dir, flush=True)
-        hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
-        print("DEBUG: HDF path:", hdf_path, flush=True)
-        
-        # Convert graph summary data to DataFrames.
-        graph_summary = data_dict.get('graph_summary', {})
-        self.nodes = to_dataframe(graph_summary.get('Nodes', []))
-        self.edges = to_dataframe(graph_summary.get('Edges', []))
-        self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
-        self.surv_fun_dict = self.surv_fun_df.to_dict('index')
-        
-        print("Nodes and Edges:", flush=True)
-        print(self.nodes, flush=True)
-        print(self.edges, flush=True)
-        
-        # Build the simulation graph.
-        sim_graph_data = data_dict.get('simulation_graph')
-        if sim_graph_data is not None:
-            G = json_graph.node_link_graph(sim_graph_data)
-            print("Graph successfully converted from JSON object", flush=True)
+def webapp_import(self, data_dict, output_name):
+    """
+    Imports data for a new simulation from in-memory/webapp sources,
+    and writes data to an HDF5 file.
+    """
+    # Store basic info.
+    self.output_name = output_name
+    self.output_units = data_dict.get('units_system')
+    self.sim_mode = data_dict.get('simulation_mode')
+    self.proj_dir = data_dict.get("proj_dir", os.getcwd())
+    print("DEBUG: Using proj_dir:", self.proj_dir, flush=True)
+    hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
+    print("DEBUG: HDF path:", hdf_path, flush=True)
+    
+    # Convert graph summary data to DataFrames.
+    graph_summary = data_dict.get('graph_summary', {})
+    self.nodes = to_dataframe(graph_summary.get('Nodes', []))
+    self.edges = to_dataframe(graph_summary.get('Edges', []))
+    self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
+    self.surv_fun_dict = self.surv_fun_df.to_dict('index')
+    
+    print("Nodes and Edges:", flush=True)
+    print(self.nodes, flush=True)
+    print(self.edges, flush=True)
+    
+    # Build the simulation graph.
+    sim_graph_data = data_dict.get('simulation_graph')
+    if sim_graph_data is not None:
+        G = json_graph.node_link_graph(sim_graph_data)
+        print("Graph successfully converted from JSON object", flush=True)
+    else:
+        G = nx.DiGraph()
+        print("Graph built using nodes and edges", flush=True)
+        for _, row in self.nodes.iterrows():
+            node_id = row.get("ID", row.get("Location"))
+            G.add_node(node_id, **row.to_dict())
+        for _, row in self.edges.iterrows():
+            source = row.get("_from")
+            target = row.get("_to")
+            try:
+                weight = float(row.get("weight", 1.0))
+            except (ValueError, TypeError):
+                weight = 1.0
+            G.add_edge(source, target, Weight=weight)
+    
+    if "graph_data" in data_dict:
+        G = json_graph.node_link_graph(data_dict["graph_data"])
+        print("Imported Nodes:", list(G.nodes), flush=True)
+        print("Imported Edges:", list(G.edges), flush=True)
+    else:
+        print("graph_data not found; using the previously built graph.", flush=True)
+    
+    for required in ['river_node_0', 'river_node_1']:
+        if required not in G.nodes:
+            print(f"ERROR: '{required}' is missing from the graph!", flush=True)
+    
+    try:
+        path_list = list(nx.all_shortest_paths(G, 'river_node_0', 'river_node_1'))
+        print("Shortest Path:", path_list, flush=True)
+    except nx.NetworkXNoPath:
+        print("No path found between river_node_0 and river_node_1", flush=True)
+    except nx.NodeNotFound as e:
+        print("NodeNotFound:", e, flush=True)
+    
+    if len(self.nodes) > 1:
+        paths = nx.all_shortest_paths(G, 'river_node_0', 'river_node_1')
+        max_len = max(len(path) for path in paths)
+        self.moves = np.arange(0, max_len + 1, 1)
+    else:
+        self.moves = np.zeros(1, dtype=np.int32)
+    print('Migratory Routes:', flush=True)
+    self.graph = G
+    print(G, flush=True)
+    
+    # 3. Unit Parameters.
+    if "unit_parameters_file" in data_dict:
+        self.unit_params = read_csv_if_exists(
+            data_dict["unit_parameters_file"],
+            numeric_cols=['B', 'D', 'D1', 'D2', 'H', 'N', 'Qcap', 'Qopt',
+                          'RPM', 'ada', 'intake_vel', 'iota', 'lambda',
+                          'op_order', 'roughness'],
+            index_col="Unit_Name"
+        )
+        if self.unit_params is not None:
+            self.unit_params['Unit_Name'] = self.unit_params.Facility + ' - Unit ' + self.unit_params.Unit.astype('str')
+            self.unit_params.set_index('Unit_Name', inplace=True)
+            print(f'Unit parameters: {self.unit_params}', flush=True)
+    elif "unit_parameters" in data_dict:
+        self.unit_params = to_dataframe(data_dict["unit_parameters"])
+    
+    # 4. Facilities.
+    if "facilities" in data_dict:
+        self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
+        print('Facilities:', flush=True)
+        print(self.facility_params, flush=True)
+    
+    # 5. Flow Scenarios.
+    if "flow_scenarios" in data_dict:
+        self.flow_scenarios_df = to_dataframe(data_dict["flow_scenarios"], numeric_cols=['FlowYear', 'Prorate'])
+        self.flow_scenarios = self.flow_scenarios_df["Scenario"].unique()
+        print(f"The flow scenarios are: {self.flow_scenarios}", flush=True)
+        print('Flow Scenarios:', flush=True)
+        print(self.flow_scenarios_df, flush=True)
+        print(f"Unique flow scenarios: {self.flow_scenarios}", flush=True)
+    
+    # 6. Operating Scenarios.
+    if "operating_scenarios_file" in data_dict:
+        self.operating_scenarios_df = read_csv_if_exists(
+            data_dict["operating_scenarios_file"],
+            numeric_cols=['Hours', 'Location', 'Prob Not Operating', 'Scale', 'Shape', 'Unit']
+        )
+    else:
+        self.operating_scenarios_df = None
+    
+    if self.operating_scenarios_df is not None and "Scenario" in self.operating_scenarios_df.columns:
+        self.op_scenarios = self.operating_scenarios_df["Scenario"].unique()
+    else:
+        self.op_scenarios = []
+    
+    # 7. Population.
+    if "population" in data_dict:
+        pop_data = data_dict["population"]
+        if isinstance(pop_data, dict):
+            pop_data = [pop_data]
+        self.pop = to_dataframe(pop_data, numeric_cols=['Iterations', 'Length_mean', 'Length_sd', 'U_crit',
+                                                           'length location', 'length scale', 'length shape',
+                                                           'location', 'max_ent_rate', 'occur_prob', 'scale', 'shape'])
+        print("Population:", flush=True)
+        print(self.pop, flush=True)
+    
+    # 8. Hydrograph.
+    if "hydrograph_file" in data_dict:
+        self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
+        if self.input_hydrograph_df is not None:
+            print(self.input_hydrograph_df, flush=True)
+    
+    # 9. Unit Conversion.
+    if data_dict.get("units", "imperial") == "metric":
+        if hasattr(self, "input_hydrograph_df") and self.input_hydrograph_df is not None and "DAvgFlow_prorate" in self.input_hydrograph_df.columns:
+            self.input_hydrograph_df["DAvgFlow_prorate"] *= 35.3147
+    
+    print("DEBUG: Using proj_dir:", self.proj_dir, flush=True)
+    
+    # 10. Create HDF5 file and store DataFrames.
+    if os.path.exists(hdf_path):
+        print(f"DEBUG: File {hdf_path} exists; removing it.", flush=True)
+        os.remove(hdf_path)
+    hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
+    print(f"Creating HDF5 file at: {hdf_path}", flush=True)
+    self.hdf = pd.HDFStore(hdf_path, mode='w')
+    for key, df in [("Flow Scenarios", getattr(self, "flow_scenarios_df", None)),
+                    ("Operating Scenarios", getattr(self, "operating_scenarios_df", None)),
+                    ("Population", getattr(self, "pop", None)),
+                    ("Nodes", self.nodes),
+                    ("Edges", self.edges),
+                    ("Unit_Parameters", getattr(self, "unit_params", None)),
+                    ("Facilities", getattr(self, "facility_params", None)),
+                    ("Hydrograph", getattr(self, "input_hydrograph_df", None))]:
+        if df is not None:
+            print(f"DEBUG: Storing {key} to HDFStore", flush=True)
+            self.hdf[key] = df
+            print(f"DEBUG: Stored {key}", flush=True)
+    print("DEBUG: Flushing HDFStore", flush=True)
+    self.hdf.flush()
+    print("DEBUG: Closing HDFStore", flush=True)
+    self.hdf.close()
+    
+    if hasattr(self, "unit_params") and self.unit_params is not None:
+        if "Qcap" in self.unit_params.columns and "Facility" in self.unit_params.columns:
+            self.flow_cap = self.unit_params.groupby("Facility")["Qcap"].sum()
         else:
-            G = nx.DiGraph()
-            print("Graph built using nodes and edges", flush=True)
-            for _, row in self.nodes.iterrows():
-                node_id = row.get("ID", row.get("Location"))
-                G.add_node(node_id, **row.to_dict())
-            for _, row in self.edges.iterrows():
-                source = row.get("_from")
-                target = row.get("_to")
-                try:
-                    weight = float(row.get("weight", 1.0))
-                except (ValueError, TypeError):
-                    weight = 1.0
-                G.add_edge(source, target, Weight=weight)
-        
-        if "graph_data" in data_dict:
-            G = json_graph.node_link_graph(data_dict["graph_data"])
-            print("Imported Nodes:", list(G.nodes), flush=True)
-            print("Imported Edges:", list(G.edges), flush=True)
-        else:
-            print("graph_data not found; using the previously built graph.", flush=True)
-        
-        for required in ['river_node_0', 'river_node_1']:
-            if required not in G.nodes:
-                print(f"ERROR: '{required}' is missing from the graph!", flush=True)
-        
-        try:
-            path_list = list(nx.all_shortest_paths(G, 'river_node_0', 'river_node_1'))
-            print("Shortest Path:", path_list, flush=True)
-        except nx.NetworkXNoPath:
-            print("No path found between river_node_0 and river_node_1", flush=True)
-        except nx.NodeNotFound as e:
-            print("NodeNotFound:", e, flush=True)
-        
-        if len(self.nodes) > 1:
-            paths = nx.all_shortest_paths(G, 'river_node_0', 'river_node_1')
-            max_len = max(len(path) for path in paths)
-            self.moves = np.arange(0, max_len + 1, 1)
-        else:
-            self.moves = np.zeros(1, dtype=np.int32)
-        print('Migratory Routes:', flush=True)
-        self.graph = G
-        print(G, flush=True)
-        
-        # 3. Unit Parameters.
-        if "unit_parameters_file" in data_dict:
-            self.unit_params = read_csv_if_exists(
-                data_dict["unit_parameters_file"],
-                numeric_cols=['B', 'D', 'D1', 'D2', 'H', 'N', 'Qcap', 'Qopt',
-                              'RPM', 'ada', 'intake_vel', 'iota', 'lambda',
-                              'op_order', 'roughness'],
-                index_col="Unit_Name"
-            )
-            if self.unit_params is not None:
-                self.unit_params['Unit_Name'] = self.unit_params.Facility + ' - Unit ' + self.unit_params.Unit.astype('str')
-                self.unit_params.set_index('Unit_Name', inplace=True)
-                print(f'Unit parameters: {self.unit_params}', flush=True)
-        elif "unit_parameters" in data_dict:
-            self.unit_params = to_dataframe(data_dict["unit_parameters"])
-        
-        # 4. Facilities.
-        if "facilities" in data_dict:
-            self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
-            print('Facilities:', flush=True)
-            print(self.facility_params, flush=True)
-        
-        # 5. Flow Scenarios.
-        if "flow_scenarios" in data_dict:
-            self.flow_scenarios_df = to_dataframe(data_dict["flow_scenarios"], numeric_cols=['FlowYear', 'Prorate'])
-            self.flow_scenarios = self.flow_scenarios_df["Scenario"].unique()
-            print(f"The flow scenarios are: {self.flow_scenarios}", flush=True)
-            print('Flow Scenarios:', flush=True)
-            print(self.flow_scenarios_df, flush=True)
-            print(f"Unique flow scenarios: {self.flow_scenarios}", flush=True)
-        
-        # 6. Operating Scenarios.
-        if "operating_scenarios_file" in data_dict:
-            self.operating_scenarios_df = read_csv_if_exists(
-                data_dict["operating_scenarios_file"],
-                numeric_cols=['Hours', 'Location', 'Prob Not Operating', 'Scale', 'Shape', 'Unit']
-            )
-        else:
-            self.operating_scenarios_df = None
-        
-        if self.operating_scenarios_df is not None and "Scenario" in self.operating_scenarios_df.columns:
-            self.op_scenarios = self.operating_scenarios_df["Scenario"].unique()
-        else:
-            self.op_scenarios = []
-        
-        # 7. Population.
-        if "population" in data_dict:
-            pop_data = data_dict["population"]
-            if isinstance(pop_data, dict):
-                pop_data = [pop_data]
-            self.pop = to_dataframe(pop_data, numeric_cols=['Iterations', 'Length_mean', 'Length_sd', 'U_crit',
-                                                               'length location', 'length scale', 'length shape',
-                                                               'location', 'max_ent_rate', 'occur_prob', 'scale', 'shape'])
-            print("Population:", flush=True)
-            print(self.pop, flush=True)
-        
-        # 8. Hydrograph.
-        if "hydrograph_file" in data_dict:
-            self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
-            if self.input_hydrograph_df is not None:
-                print(self.input_hydrograph_df, flush=True)
-        
-        # 9. Unit Conversion.
-        if data_dict.get("units", "imperial") == "metric":
-            if hasattr(self, "input_hydrograph_df") and self.input_hydrograph_df is not None and "DAvgFlow_prorate" in self.input_hydrograph_df.columns:
-                self.input_hydrograph_df["DAvgFlow_prorate"] *= 35.3147
-        
-        print("DEBUG: Using proj_dir:", self.proj_dir, flush=True)
-        
-        # 10. Create HDF5 file and store DataFrames.
-        if os.path.exists(hdf_path):
-            print(f"DEBUG: File {hdf_path} exists; removing it.", flush=True)
-            os.remove(hdf_path)
-        hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
-        print(f"Creating HDF5 file at: {hdf_path}", flush=True)
-        self.hdf = pd.HDFStore(hdf_path, mode='w')
-        for key, df in [("Flow Scenarios", getattr(self, "flow_scenarios_df", None)),
-                        ("Operating Scenarios", getattr(self, "operating_scenarios_df", None)),
-                        ("Population", getattr(self, "pop", None)),
-                        ("Nodes", self.nodes),
-                        ("Edges", self.edges),
-                        ("Unit_Parameters", getattr(self, "unit_params", None)),
-                        ("Facilities", getattr(self, "facility_params", None)),
-                        ("Hydrograph", getattr(self, "input_hydrograph_df", None))]:
-            if df is not None:
-                print(f"DEBUG: Storing {key} to HDFStore", flush=True)
-                self.hdf[key] = df
-        print("DEBUG: Flushing HDFStore", flush=True)
-        self.hdf.flush()
-        print("DEBUG: Closing HDFStore", flush=True)
-        self.hdf.close()
-        
-        if hasattr(self, "unit_params") and self.unit_params is not None:
-            if "Qcap" in self.unit_params.columns and "Facility" in self.unit_params.columns:
-                self.flow_cap = self.unit_params.groupby("Facility")["Qcap"].sum()
-            else:
-                self.flow_cap = None
-        
-        print(f"Web app import completed. Data stored to {hdf_path}.", flush=True)
+            self.flow_cap = None
+    
+    print(f"Web app import completed. Data stored to {hdf_path}.", flush=True)
+
 
 
 
