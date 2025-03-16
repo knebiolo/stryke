@@ -1363,15 +1363,12 @@ def model_setup_summary():
     print ('model setup summary complete', flush = True)
 from flask import current_app  # Import at module level if desired
 
-
-
 def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict, log_queue):
     try:
         # Redirect stdout to our multiprocessing-safe queue.
         sys.stdout = QueueStream(log_queue)
         print("DEBUG: Starting simulation process", flush=True)
         
-        # Run the simulation import, run, and summary sequentially.
         print("DEBUG: Calling sim.webapp_import()", flush=True)
         sim_instance.webapp_import(data_dict, output_name="WebAppModel")
         print("DEBUG: Calling sim.run()", flush=True)
@@ -1381,7 +1378,7 @@ def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict
         print("DEBUG: Simulation process complete", flush=True)
         
         # Generate the simulation report.
-        report_html = generate_report(sim_instance)  # Assumes generate_report() is defined
+        report_html = generate_report(sim_instance)  # generate_report() must be defined elsewhere
         report_path = os.path.join(user_sim_folder, "simulation_report.html")
         with open(report_path, "w", encoding="utf-8") as f:
             print(f"DEBUG: Writing simulation report to {report_path}", flush=True)
@@ -1392,18 +1389,17 @@ def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict
             f.write("ready")
         print("DEBUG: Report flag written", flush=True)
         
-        # Signal completion via the log queue.
+        # Signal simulation completion via the log queue.
         log_queue.put("[Simulation Complete]")
     except Exception as e:
         print("Error during simulation:", e, flush=True)
         traceback.print_exc()
     finally:
-        # Optionally, reset sys.stdout if needed.
+        # Optionally, reset sys.stdout if necessary.
         pass
 
 @app.route('/run_simulation', methods=['POST'])
-def run_simulation_route():
-    from Stryke import stryke  # Ensure your simulation library is imported here
+def run_simulation():
     print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
     
     # Build input dictionary from session data.
@@ -1451,7 +1447,6 @@ def stream():
             if message == "[Simulation Complete]":
                 break
     return Response(event_stream(), mimetype="text/event-stream")
-
 
 @app.route('/simulation_logs')
 def simulation_logs():
