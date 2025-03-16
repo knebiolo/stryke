@@ -1363,11 +1363,13 @@ def model_setup_summary():
     print ('model setup summary complete', flush = True)
 from flask import current_app  # Import at module level if desired
 
-def run_simulation_in_background_custom(sim_instance, user_sim_folder, data_dict, log_queue):
+def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
     try:
         # Redirect stdout so that print messages are sent to the shared log queue.
         sys.stdout = QueueStream(log_queue)
         print("DEBUG: Starting simulation process", flush=True)
+        print ("DEBUG: Creating sim object")
+        sim_instance = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
         print("DEBUG: Calling sim.webapp_import()", flush=True)
         print("DEBUG: data_dict keys:", list(data_dict.keys()), flush=True)
         sim_instance.webapp_import(data_dict, output_name="WebAppModel")
@@ -1423,7 +1425,7 @@ def run_simulation():
         # Create and start a new process for the simulation.
         p = multiprocessing.Process(
             target=run_simulation_in_background_custom,
-            args=(sim, user_sim_folder, data_dict, LOG_QUEUE)
+            args=(user_sim_folder, data_dict, LOG_QUEUE)
         )
         p.start()
         flash("Simulation started! Check logs for progress.")
