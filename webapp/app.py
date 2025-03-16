@@ -1406,9 +1406,10 @@ def run_simulation():
     print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
     
     # Build input dictionary from session data.
+    
     data_dict = {
         "facilities": session.get("facilities_data"),
-        "unit_parameters_file": session.get("unit_parameters_file"),
+        "unit_parameters_file": session.get("unit_params_file"),
         "operating_scenarios_file": session.get("op_scen_file"),
         "population": session.get("population_data"),
         "flow_scenarios": session.get("flow_scenario"),
@@ -1419,6 +1420,8 @@ def run_simulation():
         "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
         "proj_dir": session.get("proj_dir")
     }
+
+
     
     user_sim_folder = g.user_sim_folder
     print(f"DEBUG: Setting up simulation in {user_sim_folder}")
