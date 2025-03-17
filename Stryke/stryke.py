@@ -2217,7 +2217,6 @@ class simulation():
             store.put("Yearly_Summary", self.cum_sum, format="table", data_columns=True)
     
         return
-
                 
 class hydrologic():
     """

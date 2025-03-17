@@ -1505,10 +1505,10 @@ def report():
         #     return "<h1>Session missing proj_dir</h1>", 500
 
         report_path = os.path.join(proj_dir, "simulation_report.html")
-        print(f"[DEBUG] Checking report path: {report_path}")
+        logger.debug("[DEBUG] Checking report path: %s", report_path)
 
         if not os.path.exists(report_path):
-            print("[ERROR] simulation_report.html does not exist")
+            logger.debug("[ERROR] simulation_report.html does not exist")
             return f"<h1>Report not found: {report_path}</h1>", 404
 
         # Try reading file with utf-8
@@ -1516,7 +1516,7 @@ def report():
             with open(report_path, 'r', encoding='utf-8') as f:
                 report_html = f.read()
         except UnicodeDecodeError:
-            print("[WARNING] UTF-8 decode error — trying Latin-1 fallback")
+            logger.debug("[WARNING] UTF-8 decode error — trying Latin-1 fallback")
             with open(report_path, 'r', encoding='latin1') as f:
                 report_html = f.read()
 
@@ -1598,7 +1598,7 @@ def report():
 
     except Exception as e:
         import traceback
-        print("[FATAL ERROR in /report]")
+        logger.debug("[FATAL ERROR in /report]")
         traceback.print_exc()
         return f"<pre>500 Internal Server Error: {str(e)}</pre>", 500
 
