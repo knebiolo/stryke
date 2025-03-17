@@ -1520,14 +1520,81 @@ def report():
             with open(report_path, 'r', encoding='latin1') as f:
                 report_html = f.read()
 
-        # Do final test: render simple wrapper
-        return f"""
+        # render wrapper
+        full_report_html = f"""
         <!DOCTYPE html>
-        <html>
-        <head><title>Simulation Report</title></head>
-        <body><h2>Simulation Report:</h2><div>{report_html}</div></body>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Simulation Report</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background: #f7f7f7;
+                    margin: 20px;
+                    color: #333;
+                }}
+                .container {{
+                    max-width: 1000px;
+                    margin: auto;
+                    background: #fff;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                }}
+                h1 {{
+                    color: #0056b3;
+                }}
+                h2, h3 {{
+                    color: #0056b3;
+                    border-bottom: 1px solid #ddd;
+                    padding-bottom: 4px;
+                }}
+                p {{
+                    line-height: 1.6;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 1rem 0;
+                }}
+                th, td {{
+                    padding: 8px;
+                    border: 1px solid #ccc;
+                    text-align: left;
+                }}
+                .table-wrap {{
+                    overflow-x: auto;
+                }}
+                pre {{
+                    background: #f4f4f4;
+                    padding: 10px;
+                    border-radius: 5px;
+                }}
+                .download-link {{
+                    display: inline-block;
+                    margin-top: 20px;
+                    background: #007BFF;
+                    color: white;
+                    padding: 10px 15px;
+                    text-decoration: none;
+                    border-radius: 4px;
+                }}
+                .download-link:hover {{
+                    background: #0056b3;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                {report_html}
+                <a href="/download_report" class="download-link">⬇ Download Report</a>
+            </div>
+        </body>
         </html>
         """
+        return full_report_html
+
 
     except Exception as e:
         import traceback
@@ -1692,7 +1759,7 @@ def generate_report(sim):
     hdf_path = os.path.join(sim.proj_dir, f"{sim.output_name}.h5")
     if not os.path.exists(hdf_path):
         return "<p>Error: HDF file not found. Please run the simulation first.</p>"
-
+    logger.debug('hdf file exists %s',hdf_path)
     store = pd.HDFStore(hdf_path, mode='r')
 
     report_sections = [
@@ -1733,7 +1800,7 @@ def generate_report(sim):
     add_section("Flow Scenarios", "/Flow Scenarios")
     add_section("Operating Scenarios", "/Operating Scenarios")
     add_section("Population", "/Population")
-
+    logger.debug('finished basic data sections of report')
     # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
     report_sections.append("<h2>Hydrograph Plots</h2>")
     if "/Hydrograph" in store.keys():
@@ -1786,7 +1853,7 @@ def generate_report(sim):
         """)
     else:
         report_sections.append("<p>No hydrograph data available.</p>")
-
+    logger.debug('finished hydrograph')
     # --- BETA DISTRIBUTIONS ---
     add_section("Beta Distributions", "/Beta_Distributions")
 
@@ -1860,7 +1927,7 @@ def generate_report(sim):
             </div>
             """
         return panel_html
-
+    logger.debug('finished yearly panel')
     if yearly_df is not None and not yearly_df.empty:
         panel_html = render_yearly_panel(yearly_df, iteration_sums)
         report_sections.append(panel_html)
@@ -1923,7 +1990,7 @@ def generate_report(sim):
         report_sections.append("<p>No daily data available.</p>")
 
     store.close()
-
+    logger.debug('finished daily pannel')
     final_html = "\n".join(report_sections)
     full_report = f"""
     <!DOCTYPE html>
@@ -2002,6 +2069,7 @@ def generate_report(sim):
     </body>
     </html>
     """
+    logger.debug('report formatted')
     return full_report
 
 @app.route('/download_report')
