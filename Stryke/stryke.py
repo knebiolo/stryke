@@ -1436,10 +1436,10 @@ class simulation():
             fac_units = self.unit_params[self.unit_params.Facility == facility]
             #fac_units.set_index('Unit', inplace = True)
             fac_units = fac_units.sort_values(by = 'op_order')
-            logger.debug('Facility Type is %s',fac_type)
+            #logger.debug('Facility Type is %s',fac_type)
             # if operations are modeled with a distribution 
             for i in fac_units.index:
-                logger.debug('Facility index is %s',i)
+                #logger.debug('Facility index is %s',i)
                 if fac_type != 'run-of-river':
                     order = fac_units.at[i,'op_order']
                     # get log norm shape parameters
@@ -1519,7 +1519,7 @@ class simulation():
                 #                 flow_dict[i] = 0.
                 # # if it's run of river, units operate when there is water
                 else:
-                    logger.debug('start processing run of river facility unit %s',i)
+                    #logger.debug('start processing run of river facility unit %s',i)
                     at_capacity = False
                     cum_Q = 0.  # current cumulative discharge through the powerhouse
                     
@@ -1527,7 +1527,7 @@ class simulation():
                     for idx, row in fac_units.iterrows():
                         # Assume each unit row has a unique identifier in a column (e.g., 'Unit')
                         # If ops_df has a matching row for each unit, you can merge or filter by that identifier.
-                        logger.debug('working on unit %s', row['Unit'])
+                        #logger.debug('working on unit %s', row['Unit'])
                         # For example, if ops_df has a 'Unit' column:
                         unit_ops = ops_df[ops_df.Unit == row['Unit']]#[ops_df.Unit == idx
                         if unit_ops.empty:
@@ -1791,7 +1791,7 @@ class simulation():
                 spc_length = pd.DataFrame()
     
                 for i in np.arange(0, iterations, 1):
-                    logger.info('Building Q-Dict')
+                    #logger.info('Building Q-Dict')
 #                    print(f"Starting iteration {i} for species {spc}", flush=True)
                     for flow_row in flow_df.iterrows():
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
@@ -1822,7 +1822,7 @@ class simulation():
     
                         # Update Q_dict and sta_cap for units.
                         sta_cap = {}
-                        logger.debug('there are this many units %s', units)
+                        #logger.debug('there are this many units %s', units)
                         for u in units:
                             u_param_dict[u]['Q'] = curr_Q
                             unit_df = self.unit_params.loc[[u]]
@@ -1831,15 +1831,15 @@ class simulation():
                                 sta_cap[fac] = 0
                             Q_dict[u] = unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
                             sta_cap[fac] += unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
-                        logger.debug ('cycled through units, added to q-dict')
+                        #logger.debug ('cycled through units, added to q-dict')
                         Q_dict['sta_cap'] = sta_cap
                         # print("Q_dict and sta_cap built:", flush=True)
                         # print("  Q_dict:", Q_dict, flush=True)
                         # print("  sta_cap:", sta_cap, flush=True)
-                        logger.debug ('bout to start daily hours')
+                        #logger.debug ('bout to start daily hours')
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
                         # print(f"Total hours: {tot_hours}", flush=True)
-                        logger.info('Q-Dict Built')
+                        #logger.info('Q-Dict Built')
                         
                         if np.any(tot_hours > 0):
                             presence_seed = np.random.uniform(0, 1)
