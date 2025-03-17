@@ -1439,7 +1439,8 @@ class simulation():
             
             # if operations are modeled with a distribution 
             for i in fac_units.index:
-                if i != 'run-of-river':
+                i_type = fac_type[i]
+                if i_type != 'run-of-river':
                     order = fac_units.at[i,'op_order']
                     # get log norm shape parameters
                     shape = ops_df.at[i,'shape']
@@ -1516,29 +1517,29 @@ class simulation():
                             else:
                                 hours_dict[i] = 0.
                                 flow_dict[i] = 0.
-            # if it's run of river, units operate when there is water
-            else:
-                at_capacity = False
-                fac_units.set_index('Facility', inplace = True)
-                ops_df.set_index('Facility', inplace = True)
-                for i in fac_units.index:
-                    hours = ops_df.at[i, 'Hours']
-                    u_cap = fac_units.at[i, 'Qcap']
-                    # Determine the effective capacity limit
-                    effective_cap = min(prod_Q, sta_cap)
-                    
-                    if cum_Q + u_cap <= effective_cap:
-                        hours_dict[i] = hours
-                        flow_dict[i] = u_cap * hours * 3600.
-                        cum_Q = cum_Q + u_cap
-                    else:
-                        excess = cum_Q + u_cap - effective_cap
-                        hours_dict[i] = hours
-                        flow_dict[i] = (u_cap - excess) * hours * 3600
-                        at_capacity = True
-                    if at_capacity:  # Exit the for loop if we are at capacity
-                            break
-                fac_units.reset_index(inplace = True)
+                # if it's run of river, units operate when there is water
+                else:
+                    at_capacity = False
+                    fac_units.set_index('Facility', inplace = True)
+                    ops_df.set_index('Facility', inplace = True)
+                    for i in fac_units.index:
+                        hours = ops_df.at[i, 'Hours']
+                        u_cap = fac_units.at[i, 'Qcap']
+                        # Determine the effective capacity limit
+                        effective_cap = min(prod_Q, sta_cap)
+                        
+                        if cum_Q + u_cap <= effective_cap:
+                            hours_dict[i] = hours
+                            flow_dict[i] = u_cap * hours * 3600.
+                            cum_Q = cum_Q + u_cap
+                        else:
+                            excess = cum_Q + u_cap - effective_cap
+                            hours_dict[i] = hours
+                            flow_dict[i] = (u_cap - excess) * hours * 3600
+                            at_capacity = True
+                        if at_capacity:  # Exit the for loop if we are at capacity
+                                break
+                    fac_units.reset_index(inplace = True)
 
         # # implement Bad Creek algorithm here - is this method valid for new construction?
         # tot_hours = 0.
