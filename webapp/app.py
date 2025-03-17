@@ -1805,9 +1805,14 @@ def generate_report(sim):
     add_section("Beta Distributions", "/Beta_Distributions")
 
     # --- YEARLY SUMMARY PANEL (Iteration-based) ---
-    yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
-    daily_df = store["/Daily"] if "/Daily" in store.keys() else None
-
+    # Try to get keys both with and without leading slash.
+    yearly_key = "/Yearly_Summary" if "/Yearly_Summary" in store.keys() else "Yearly_Summary"
+    daily_key    = "/Daily" if "/Daily" in store.keys() else "Daily"
+    
+    yearly_df = store[yearly_key] if yearly_key in store.keys() else None
+    daily_df  = store[daily_key] if daily_key in store.keys() else None
+    
+    # Compute iteration sums from daily_df if available.
     if daily_df is not None and not daily_df.empty:
         if 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
             daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
@@ -1820,7 +1825,7 @@ def generate_report(sim):
             iteration_sums = None
     else:
         iteration_sums = None
-
+    
     def create_iteration_hist(df, metric, title):
         plt.rcParams.update({'font.size': 8})
         fig = plt.figure()
@@ -1833,14 +1838,14 @@ def generate_report(sim):
         plt.close(fig)
         buf.seek(0)
         return base64.b64encode(buf.getvalue()).decode('utf-8')
-
+    
     def render_yearly_panel(yearly_df, daily_df):
         """
-        Renders a panel for each species/scenario in the Yearly_Summary DataFrame,
-        using iteration-level sums for entrainment and mortality histograms,
-        and pulling stats (mean, 95% CI, return period events) from yearly_df.
+        Renders a panel for each species/scenario combination in the Yearly_Summary DataFrame.
+        When multiple units are present (i.e. more than one row per species/scenario),
+        the statistics are aggregated so that the histograms and summary stats reflect 
+        iteration sums across all iterations and units.
         """
-    
         if yearly_df is None or yearly_df.empty:
             return "<p>No yearly summary data available.</p>"
         if daily_df is None or daily_df.empty:
@@ -1849,36 +1854,52 @@ def generate_report(sim):
         # Start building the HTML
         panel_html = "<h2>Yearly Summary (Iteration-based)</h2>"
     
-        # Identify each unique (species, scenario) combo in Yearly_Summary
+        # Verify required columns exist.
+        for col in ['species', 'scenario']:
+            if col not in yearly_df.columns:
+                return f"<p>Column '{col}' not found in yearly summary data.</p>"
+            if col not in daily_df.columns:
+                return f"<p>Column '{col}' not found in daily data.</p>"
+    
+        # Identify unique (species, scenario) combinations.
         combos = yearly_df[['species', 'scenario']].drop_duplicates()
     
-        # Loop over each combo
+        # Loop over each combination.
         for _, combo_row in combos.iterrows():
             fishy = combo_row['species']
             scen = combo_row['scenario']
     
-            # Get the corresponding row(s) from Yearly_Summary
+            # Filter yearly_df and daily_df for this combination.
             sub_yr = yearly_df[(yearly_df.species == fishy) & (yearly_df.scenario == scen)]
-            if sub_yr.empty:
-                continue
-    
-            # In most cases there's exactly one row per species/scenario,
-            # but if not, you could loop here or pick the first row.
-            row = sub_yr.iloc[0]
-    
-            # Filter daily_df for the same species/scenario
             sub_daily = daily_df[(daily_df.species == fishy) & (daily_df.scenario == scen)]
             if sub_daily.empty:
-                # No daily data for this combo; skip
                 continue
     
-            # Sum entrainment/mortality by iteration (across all days, all units)
+            # Aggregate yearly stats across units if necessary.
+            # Here, we average the mean values, take the min of the lower CI and max of the upper CI,
+            # and choose the most extreme (max) return period events.
+            agg_yearly = sub_yr.agg({
+                'mean_yearly_ent': 'mean',
+                'lcl_yearly_ent': 'min',
+                'ucl_yearly_ent': 'max',
+                '1_in_10_day_entrainment': 'max',
+                '1_in_100_day_entrainment': 'max',
+                '1_in_1000_day_entrainment': 'max',
+                'mean_yearly_mort': 'mean',
+                'lcl_yearly_mort': 'min',
+                'ucl_yearly_mort': 'max',
+                '1_in_10_day_mortality': 'max',
+                '1_in_100_day_mortality': 'max',
+                '1_in_1000_day_mortality': 'max'
+            })
+    
+            # Sum entrainment/mortality by iteration (across all days and units).
             sub_iter = sub_daily.groupby('iteration').agg({
                 'num_entrained': 'sum',
                 'num_mortality': 'sum'
             }).reset_index()
     
-            # Create histograms for iteration-level entrainment/mortality
+            # Create histograms if iteration data exists.
             if not sub_iter.empty:
                 ent_hist_b64 = create_iteration_hist(
                     sub_iter,
@@ -1894,22 +1915,22 @@ def generate_report(sim):
                 ent_hist_b64 = None
                 mort_hist_b64 = None
     
-            # Extract the yearly stats from the row
-            mean_ent = row.get('mean_yearly_ent', "N/A")
-            lcl_ent  = row.get('lcl_yearly_ent', "N/A")
-            ucl_ent  = row.get('ucl_yearly_ent', "N/A")
-            ent_1in10   = row.get('1_in_10_day_entrainment', "N/A")
-            ent_1in100  = row.get('1_in_100_day_entrainment', "N/A")
-            ent_1in1000 = row.get('1_in_1000_day_entrainment', "N/A")
+            # Extract aggregated yearly stats.
+            mean_ent   = agg_yearly.get('mean_yearly_ent', "N/A")
+            lcl_ent    = agg_yearly.get('lcl_yearly_ent', "N/A")
+            ucl_ent    = agg_yearly.get('ucl_yearly_ent', "N/A")
+            ent_1in10  = agg_yearly.get('1_in_10_day_entrainment', "N/A")
+            ent_1in100 = agg_yearly.get('1_in_100_day_entrainment', "N/A")
+            ent_1in1000 = agg_yearly.get('1_in_1000_day_entrainment', "N/A")
+            
+            mean_mort  = agg_yearly.get('mean_yearly_mort', "N/A")
+            lcl_mort   = agg_yearly.get('lcl_yearly_mort', "N/A")
+            ucl_mort   = agg_yearly.get('ucl_yearly_mort', "N/A")
+            mort_1in10 = agg_yearly.get('1_in_10_day_mortality', "N/A")
+            mort_1in100 = agg_yearly.get('1_in_100_day_mortality', "N/A")
+            mort_1in1000 = agg_yearly.get('1_in_1000_day_mortality', "N/A")
     
-            mean_mort = row.get('mean_yearly_mort', "N/A")
-            lcl_mort  = row.get('lcl_yearly_mort', "N/A")
-            ucl_mort  = row.get('ucl_yearly_mort', "N/A")
-            mort_1in10   = row.get('1_in_10_day_mortality', "N/A")
-            mort_1in100  = row.get('1_in_100_day_mortality', "N/A")
-            mort_1in1000 = row.get('1_in_1000_day_mortality', "N/A")
-    
-            # Build a panel for this species/scenario
+            # Build the HTML panel for this species/scenario.
             panel_html += f"""
             <h3>Species: {fishy}, Scenario: {scen}</h3>
     
@@ -1951,8 +1972,6 @@ def generate_report(sim):
             """
     
         return panel_html
-    
-
 
     # --- DAILY HISTOGRAMS SIDE BY SIDE ---
     report_sections.append("<h2>Daily Histograms</h2>")

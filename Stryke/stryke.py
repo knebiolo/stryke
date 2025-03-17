@@ -1770,7 +1770,8 @@ class simulation():
                 if spc_dat.empty:
 #                    print(f"No population data for species {spc} in scenario {scenario}", flush=True)
                     continue
-                logger.info('Working on spcies %s',spc)
+                
+                #logger.info('Working on spcies %s',spc)
                 # Extract lognormal parameters (in centimeters)
                 s = spc_dat.iat[0, spc_dat.columns.get_loc('length shape')]
                 len_loc = spc_dat.iat[0, spc_dat.columns.get_loc('length location')]
@@ -1810,7 +1811,7 @@ class simulation():
                                 env_Q_dict[fac] = row['Env_Flow']
                                 bypass_Q_dict[fac] = row['Bypass_Flow']
                         else:
-                            logger.debug('Scenario not in facility parameters')
+                            #logger.debug('Scenario not in facility parameters')
                             for index, row in self.facility_params.iterrows():
                                 fac = index
                                 min_Q_dict[fac] = row['Min_Op_Flow']
@@ -1877,7 +1878,7 @@ class simulation():
                                     # print("Error retrieving U_crit for species", species_name, flush=True)
                                     U_crit_val = 0
                                 swim_speed = np.repeat(U_crit_val, len(population))
-                                logger.info('Population estimated')
+                                #logger.info('Population estimated')
                                 if len(self.nodes) > 1:
                                     fishes = pd.DataFrame({
                                         'scenario_num': np.repeat(scen_num, int(n)),
@@ -1903,7 +1904,7 @@ class simulation():
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
                                 #print(f"Fish DataFrame created with {len(fishes)} rows", flush=True)
-                                logger.info('Starting movement')
+                                #logger.info('Starting movement')
 
                                 # Process movement and survival for each movement step.
                                 for k in self.moves:
@@ -1951,7 +1952,7 @@ class simulation():
                                     if k < max(self.moves):
                                         fishes[f'state_{k+1}'] = move
                                         
-                                logger.info('Finished movement')
+                                #logger.info('Finished movement')
     
                                 # print("Movement successfully simulated for iteration", i, flush=True)
                                 max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
@@ -2126,11 +2127,13 @@ class simulation():
                                     st_std = 1.0
                                     lcl = 0.
                                     ucl = 1.
-                                self.beta_dict['%s_%s_%s' % (j, i, m)] = [j, i, m, 
-                                                                          np.round(st_median,6),
-                                                                          np.round(st_std,6), 
-                                                                          np.round(lcl,6), 
-                                                                          np.round(ucl,6)]
+                                self.beta_dict['%s_%s_%s' % (j, i, m)] = [j,
+                                                                          i,
+                                                                          m,
+                                                                          st_median,
+                                                                          st_std, 
+                                                                          lcl, 
+                                                                          ucl]
                         logger.info("Fit beta distributions to states")
                         del dat
     
