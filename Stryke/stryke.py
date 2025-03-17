@@ -429,7 +429,7 @@ class simulation():
         # 4. Facilities.
         if "facilities" in data_dict:
             self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
-            logger.debug('Facility parameter columns %s',self.facility_params.column)
+
         # 5. Flow Scenarios.
         if "flow_scenarios" in data_dict:
             self.flow_scenarios_df = to_dataframe(data_dict["flow_scenarios"], numeric_cols=['FlowYear', 'Prorate'])
@@ -1403,7 +1403,7 @@ class simulation():
         """
 
         ops_df = self.operating_scenarios_df[self.operating_scenarios_df.Scenario == scenario]
-        ops_df.set_index('Unit', inplace = True)
+        #ops_df.set_index('Unit', inplace = True)
         facilities = ops_df.Facility.unique()
         
         try:
@@ -1439,6 +1439,7 @@ class simulation():
             logger.debug('Facility Type is %s',fac_type)
             # if operations are modeled with a distribution 
             for i in fac_units.index:
+                logger.debug('Facility index is %s',i)
                 if fac_type != 'run-of-river':
                     order = fac_units.at[i,'op_order']
                     # get log norm shape parameters
