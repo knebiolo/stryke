@@ -122,6 +122,8 @@ def require_login_and_setup():
         # Store these directories in Flask's global context for easy access.
         g.user_upload_dir = user_upload_dir
         g.user_sim_folder = user_sim_folder
+        session['proj_dir'] = user_sim_folder  # <-- Add this line
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -519,7 +521,7 @@ def create_project():
         session['project_notes'] = project_notes
         session['units'] = units
         session['model_setup'] = model_setup
-        session['proj_dir'] = g.user_sim_folder  # Set the project directory
+        #session['proj_dir'] = g.user_sim_folder  # Set the project directory
         
         flash(f"Project '{project_name}' created successfully!")
         return redirect(url_for('flow_scenarios'))
@@ -1481,19 +1483,24 @@ def get_simulation_instance():
 def report():
     import os
     try:
-        user_sim_folder = session.get('proj_dir')  # 🟢 Use session-based isolation
+        user_sim_folder = session.get('proj_dir')
+        print("DEBUG: user_sim_folder =", user_sim_folder)
+
         if not user_sim_folder:
-            return "<p>Error: Project folder not found in session.</p>", 400
+            raise Exception("user_sim_folder is None")
 
         path_file = os.path.join(user_sim_folder, "report_path.txt")
+        print("DEBUG: path_file =", path_file)
+
         if not os.path.exists(path_file):
-            return f"<p>Error: report_path.txt not found at {path_file}</p>", 404
+            raise FileNotFoundError(f"Missing report_path.txt: {path_file}")
 
         with open(path_file, 'r') as f:
             report_path = f.read().strip()
+        print("DEBUG: report_path =", report_path)
 
         if not os.path.exists(report_path):
-            return f"<p>Error: Simulation report not found at {report_path}</p>", 404
+            raise FileNotFoundError(f"Missing HTML report: {report_path}")
 
         with open(report_path, 'r', encoding='utf-8') as f:
             report_html = f.read()
