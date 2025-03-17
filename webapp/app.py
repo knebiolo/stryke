@@ -1501,8 +1501,11 @@ def report():
     try:
         # Safely grab session folder
         proj_dir = session.get('proj_dir')
+        logger.debug('project directory can be found at: %s',proj_dir)
         # if not proj_dir:
         #     return "<h1>Session missing proj_dir</h1>", 500
+        if not proj_dir:
+            return "<h1>Session missing proj_dir</h1>", 500
 
         report_path = os.path.join(proj_dir, "simulation_report.html")
         logger.debug("[DEBUG] Checking report path: %s", report_path)
@@ -1585,12 +1588,7 @@ def report():
                 }}
             </style>
         </head>
-        <body>
-            <div class="container">
-                {report_html}
-                <a href="/download_report" class="download-link">⬇ Download Report</a>
-            </div>
-        </body>
+
         </html>
         """
         return full_report_html
