@@ -1395,7 +1395,7 @@ def run_simulation_in_background_custom(data_dict, log_queue):
         report_html = generate_report(sim_instance)
 
         report_path = os.path.join(user_sim_folder, "simulation_report.html")
-        session['report_path'] = report_path
+
         with open(report_path, "w", encoding="utf-8") as f:
             logger.debug("DEBUG: Writing simulation report to %s", report_path)
             f.write(report_html)
