@@ -1,77 +1,67 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Simulation Live Logs</title>
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      var downloadButton = document.getElementById("downloadResultsButton");
-      // Hide the button initially.
-      downloadButton.style.display = "none";
-      
-      var source = new EventSource("/stream");
-      source.onmessage = function(event) {
-        var logDiv = document.getElementById("log");
-        logDiv.innerHTML += event.data + "<br>";
-        logDiv.scrollTop = logDiv.scrollHeight; // Auto-scroll to bottom
-        // Show the button when simulation is complete.
-        if (event.data.trim() === "[Simulation Complete]") {
-          downloadButton.style.display = "block";
+    <meta charset="UTF-8">
+    <title>Simulation Live Logs</title>
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
         }
-      };
-    });
 
-  </script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    header {
-      border-bottom: 1px solid #ccc;
-      padding-bottom: 10px;
-      margin-bottom: 20px;
-    }
-    nav a {
-      margin-right: 15px;
-      text-decoration: none;
-      color: #007bff;
-    }
-    #log {
-      background: #f4f4f4;
-      padding: 10px;
-      border: 1px solid #ccc;
-      height: 400px;
-      overflow-y: scroll;
-      font-family: monospace;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-  </style>
+        #logOutput {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            background: #f8f8f8;
+            padding: 10px;
+            font-family: monospace;
+        }
+
+        #resultsButton {
+            display: none;
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #resultsButton:hover {
+            background-color: #0056b3;
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <h1>Welcome to the Simulation Portal</h1>
-    <nav>
-      <a href="{{ url_for('index') }}">Home</a>
-    </nav>
-    <p>
-      This page displays live updates as your simulation runs. Once the simulation has completed,
-      a button will appear to view the full, detailed report in a separate page. Monitor the progress below:
-    </p>
-  </header>
-  
-  <main>
-      <h2>Simulation Live Logs</h2>
-      <div id="log">Waiting for logs...</div>
-      <br>
-      <p>
-        To save the report as a PDF, please use your browser's "Print" function and select "Save as PDF".
-      </p>
-  </main>
+    <h2>Simulation Progress</h2>
+    <div id="logOutput">Waiting for simulation to start...</div>
+    <button id="resultsButton" onclick="window.location.href='/results'">View Results</button>
 
+    <script>
+        const logOutput = document.getElementById("logOutput");
+        const eventSource = new EventSource("/stream");
+
+        eventSource.onmessage = function(event) {
+            const line = document.createElement("div");
+            line.textContent = event.data;
+            logOutput.appendChild(line);
+            logOutput.scrollTop = logOutput.scrollHeight;
+
+            if (event.data.trim() === "[Simulation Complete]") {
+                eventSource.close();
+                document.getElementById("resultsButton").style.display = "inline-block";
+            }
+        };
+
+        eventSource.onerror = function(event) {
+            const line = document.createElement("div");
+            line.textContent = "[ERROR] Connection lost or server unavailable.";
+            logOutput.appendChild(line);
+        };
+    </script>
 </body>
 </html>

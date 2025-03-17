@@ -15,9 +15,7 @@ import io
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, after_this_request, send_from_directory, session, Response, g
 from flask import jsonify
 import matplotlib
-from matplotlib import rcParams
 matplotlib.use('Agg')
-rcParams.update({'font.size': 8, 'font.family': 'sans-serif'})
 import matplotlib.pyplot as plt
 from datetime import datetime
 import zipfile
@@ -32,11 +30,9 @@ from datetime import timedelta
 import numpy as np
 from contextlib import redirect_stdout
 import json
-import multiprocessing
 import traceback
 import logging
 import logging.handlers
-
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -59,16 +55,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../Stry
 from Stryke import stryke
 from Stryke.stryke import epri
 
-    
-app = Flask(__name__)
-app.secret_key = 'your_secret_key'
-app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password here
+# Create a global log queue
+LOG_QUEUE = queue.Queue()
 
-# Set session lifetime to 1 day (adjust as needed)
-app.permanent_session_lifetime = timedelta(days=1)
-
-# Create a multiprocessing queue for logging
-LOG_QUEUE = multiprocessing.Queue(-1)
 
 # Create a custom stream that writes log messages to LOG_QUEUE
 class QueueStream:
@@ -93,6 +82,13 @@ logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 logger.handlers = []  # Clear any default handlers
 logger.addHandler(stream_handler)
+
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'
+app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password here
+
+# Set session lifetime to 1 day (adjust as needed)
+app.permanent_session_lifetime = timedelta(days=1)
 
 @app.before_request
 def make_session_permanent():
@@ -164,7 +160,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 @app.route("/health")
 def health():
-    logger.debug("Health endpoint accessed")
+    print("Health endpoint accessed")
     return "OK", 200
 
 # def run_simulation(ws, wks, output_name):
@@ -181,25 +177,27 @@ def health():
 #         LOG_QUEUE.put(None)
 
 def run_simulation_in_background(ws, wks, output_name):
+    """Background thread for running the simulation and streaming logs to LOG_QUEUE."""
     old_stdout = sys.stdout
-    sys.stdout = QueueStream(LOG_QUEUE)
-    try:
-        with stryke.simulation(ws, wks, output_name=output_name) as sim:
-            sim.run()
-            sim.summary()
-            # sim.close() is automatically handled by __exit__
+    sys.stdout = QueueStream(LOG_QUEUE)  # Redirect print/logs to web log stream
 
-        output_file = os.path.join(ws, f"{output_name}.h5")
-        if os.path.exists(output_file):
-            logger.debug("Simulation output created: %s",output_file)
-        else:
-            logger.debug("Error: Simulation output file was not created!")
-    except Exception as e:
-        logger.debug("Error during simulation:", e)
-    finally:
-        sys.stdout = old_stdout
+    try:
+        logger.info("Starting simulation...")
+
+        sim = stryke.simulation(ws, wks, output_name=output_name)
+        sim.run()
+        sim.summary()
+
+        logger.info("Simulation completed successfully.")
         LOG_QUEUE.put("[Simulation Complete]")
 
+    except Exception as e:
+        logger.exception("Simulation failed.")
+        LOG_QUEUE.put(f"[ERROR] Simulation failed: {str(e)}")
+        LOG_QUEUE.put("[Simulation Complete]")  # Ensure stream still terminates
+
+    finally:
+        sys.stdout = old_stdout
 
 @app.route('/')
 def index():
@@ -259,15 +257,15 @@ def download_zip():
             old_path = os.path.join(user_sim_folder, fname)
             try:
                 os.remove(old_path)
-                logger.info("Removed old ZIP: %s",old_path)
+                print(f"Removed old ZIP: {old_path}")
             except Exception as e:
-                logger.debug("Error removing old ZIP: %s",e)
+                print(f"Error removing old ZIP {old_path}: {e}")
 
     # Create a new ZIP file.
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     zip_filename = f"simulation_results_{timestamp}.zip"
     zip_filepath = os.path.join(user_sim_folder, zip_filename)
-    logger.info("Creating ZIP file: %s",zip_filepath)
+    print(f"Creating ZIP file: {zip_filepath}")
 
     try:
         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -279,10 +277,14 @@ def download_zip():
                 if os.path.isfile(file_path):
                     try:
                         zipf.write(file_path, arcname=file_name)
+                        print(f"Added to ZIP: {file_name}")
                     except Exception as e:
-                        logger.debug('error %s',e)
+                        print(f"Skipping file {file_name} => {e}")
+        print(f"ZIP file successfully created: {zip_filepath}")
     except Exception as e:
-        logger.debug('error %s',e)
+        print(f"Error creating ZIP file: {e}")
+        flash("Failed to create ZIP file.")
+        return redirect(url_for('some_error_page'))
 
     if os.path.exists(zip_filepath):
         return send_file(zip_filepath, as_attachment=True)
@@ -290,18 +292,25 @@ def download_zip():
         flash("ZIP file not found.")
         return redirect(url_for('some_error_page'))
 
+from flask import Response, stream_with_context
 
-# @app.route('/stream')
-# def stream():
-#     def event_stream():
-#         while True:
-#             message = LOG_QUEUE.get()
-#             if message is None:
-#                 continue
-#             yield f"data: {message}\n\n"
-#             if message == "[Simulation Complete]":
-#                 break
-#     return Response(event_stream(), mimetype="text/event-stream")
+@app.route('/stream')
+def stream():
+    """Server-Sent Events route to stream live logs from LOG_QUEUE."""
+    def event_stream():
+        while True:
+            try:
+                message = LOG_QUEUE.get(timeout=2)  # Use timeout to avoid deadlock
+                if message is None:
+                    continue
+                yield f"data: {message}\n\n"
+                if message.strip() == "[Simulation Complete]":
+                    break
+            except queue.Empty:
+                # Optionally yield a keep-alive ping
+                yield f"data: [waiting for logs...]\n\n"
+
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
 
 @app.route('/results')
 def results():
@@ -321,7 +330,7 @@ def fit_distributions():
     
     if request.method == 'POST':
         try:
-            logger.info("LOG: Received POST request for fitting.")
+            print("LOG: Received POST request for fitting.")
             old_stdout = sys.stdout
             mystdout = io.StringIO()
             sys.stdout = mystdout
@@ -389,14 +398,16 @@ def fit_distributions():
             if river:
                 filter_args["River"] = river
             
-            logger.info("LOG: Extracted filter arguments - %s",filter_args)
+            print(f"LOG: Extracted filter arguments - {filter_args}")
 
             try:
+                print("LOG: Running EPRI fitting function...")
                 fish = stryke.epri(**filter_args)
                 fish.ParetoFit()
                 fish.LogNormalFit()
                 fish.WeibullMinFit()
                 fish.LengthSummary()
+                print("LOG: Fitting functions executed successfully.")
             except Exception as e:
                 sys.stdout = old_stdout
                 flash(f"Error during fitting: {e}")
@@ -452,8 +463,9 @@ def fit_distributions():
 
         except Exception as e:
             sys.stdout = old_stdout
-            logger.debug("Error: %s",e)
-            return render_template('fit_distributions.html', summary=e)
+            error_message = f"ERROR: {e}"
+            print(error_message)
+            return render_template('fit_distributions.html', summary=error_message)
              
     else:
         return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
@@ -485,7 +497,7 @@ def clear_folder(folder_path):
                 elif os.path.isdir(file_path):
                     shutil.rmtree(file_path)
             except Exception as e:
-                logger.debug("Failed to delete %s: %s", file_path, e)
+                print(f"Failed to delete {file_path}: {e}")
 
 
 
@@ -497,7 +509,7 @@ def create_project():
         project_notes = request.form.get('project_notes')
         units = request.form.get('units')
         model_setup = request.form.get('model_setup')
-        logger.info('choice of units is %s',units)
+        print(f'choice of units is {units}')
         
         # Save data to session or database
         session['project_name'] = project_name
@@ -535,7 +547,8 @@ def process_hydrograph_data(raw_data):
     # Convert the datetime column to proper datetime format.
     # This step can be adjusted to handle non-standard datetime formats.
     df['datetimeUTC'] = pd.to_datetime(df['datetimeUTC'], errors='coerce', infer_datetime_format=True)
-   
+    print ('hydrograph before to numeric:')
+    print (df)    
     # Convert discharge values to numeric.
     df['DAvgFlow_prorate'] = pd.to_numeric(df['DAvgFlow_prorate'], errors='coerce')
     
@@ -544,14 +557,14 @@ def process_hydrograph_data(raw_data):
     
     # Set the datetime column as the index if that is required downstream.
     #df.set_index('datetimeUTC', inplace=True)
-    logger.info('finished setting up hydrograph')
+    print ('hydrograph:')
+    print (df)
     return df
 
 @app.route('/flow_scenarios', methods=['GET', 'POST'])
 def flow_scenarios():
     if request.method == 'POST':
         # Retrieve form fields
-
         scenario_type = request.form.get('scenario_type')
         scenario_name = request.form.get('scenario_name')
         scenario_number = request.form.get('scenario_number')
@@ -566,6 +579,8 @@ def flow_scenarios():
             discharge = None
             hydrograph_data = request.form.get('hydrograph_data')
         
+        print("DEBUG: Received scenario_type:", scenario_type, flush=True)
+        print("DEBUG: Received hydrograph_data:", hydrograph_data, flush=True)
         
         # Store form values in session.
         session['scenario_type'] = scenario_type
@@ -594,7 +609,6 @@ def flow_scenarios():
             df_hydro.reset_index(inplace=True)
             flow_year = int(df_hydro.datetimeUTC.dt.year.iloc[0]) if not df_hydro.empty else None
             
-            logger.debug('hydrograph dataframe %s records long',df_hydro.shape)
             # Force the Flow column to be the string 'hydrograph'
             discharge_value = 'hydrograph'
             
@@ -625,6 +639,9 @@ def flow_scenarios():
                 'Prorate': [1]
             })
         
+        # Debug print the flow scenario DataFrame.
+        print("DEBUG: Flow scenario DataFrame:")
+        print(flow_scenario_df, flush=True)
         
         # Store the flow scenario in session.
         session['flow_scenario'] = flow_scenario_df.to_dict(orient='records')
@@ -651,7 +668,7 @@ def sync_simulation_mode():
 @app.route('/facilities', methods=['GET', 'POST'])
 def facilities():
     if request.method == 'POST':
-        logger.info("POST form data:", request.form)
+        print("POST form data:", request.form)
 
         # Determine simulation mode and number of facilities.
         sim_mode = session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing')
@@ -751,7 +768,9 @@ def facilities():
         flash(f"{num_facilities} facility(ies) saved successfully!")
         return redirect(url_for('unit_parameters'))  # Adjust for next page as needed.
 
-
+        # Debug print the flow scenario DataFrame.
+        print("DEBUG: Facilities DataFrame:")
+        print(facilities_data, flush=True)
 
     units = session.get('units', 'metric')
     scenario = session.get('scenario_name', 'Unknown Scenario')
@@ -761,7 +780,9 @@ def facilities():
 @app.route('/unit_parameters', methods=['GET', 'POST'])
 def unit_parameters():
     if request.method == 'POST':
-
+        print("Received form data:")
+        for key, value in request.form.items():
+            print(f"{key} : {value}")
 
         # Merge form data into rows (each row represents one unit's parameters)
         rows = {}
@@ -772,11 +793,15 @@ def unit_parameters():
             field_name, row_id = parts
             # Remove any trailing underscore and digits from field_name
             clean_field_name = re.sub(r'_\d+$', '', field_name)
+            print(f"Key: {key} split into clean_field_name: {clean_field_name} and row_id: {row_id}")
             if row_id.isdigit():
                 if row_id not in rows:
                     rows[row_id] = {}
                 rows[row_id][clean_field_name] = value
 
+        print("Merged rows:")
+        for row_id, data in rows.items():
+            print(f"Row {row_id}: {data}")
 
         # Convert merged rows to a list of dictionaries.
         unit_parameters_raw = list(rows.values())
@@ -843,7 +868,10 @@ def unit_parameters():
         #session['unit_parameters_dataframe'] = df_units.to_json(orient='records')
         #session['unit_parameters'] = df_units.to_dict(orient='records')
         
-
+        # Debug print the flow scenario DataFrame.
+        print("DEBUG: Unit Parameters DataFrame:")
+        print(df_units, flush=True)
+        
         flash("Unit parameters saved successfully!")
         return redirect(url_for('operating_scenarios'))
     return render_template('unit_parameters.html')
@@ -930,7 +958,9 @@ def operating_scenarios():
         session['op_scen_file'] = op_scen_path        
         flash("Operating scenarios saved successfully!")
         return redirect(url_for('graph_editor'))  # Replace with your next route as needed.
-
+    
+        print("DEBUG: Operating Scenarios DataFrame:")
+        print(df_os, flush=True)
         
     return render_template('operating_scenarios.html')
 
@@ -1019,6 +1049,8 @@ def save_graph():
     session['nodes_data'] = summary_nodes
     session['edges_data'] = summary_edges
 
+    print("Saved Nodes:", list(G.nodes), flush = True)
+    print("Saved Edges:", list(G.edges), flush = True)
 
     return jsonify(success=True, summary=session['graph_summary'])
 
@@ -1239,6 +1271,8 @@ def population():
         flash("Population parameters saved successfully!")
         return redirect(url_for('model_setup_summary'))
     
+        print("DEBUG: Population Parameters DataFrame:")
+        print(df_population, flush=True)
 
     # GET request
     return render_template('population.html', species_defaults=species_defaults)
@@ -1254,30 +1288,36 @@ def model_setup_summary():
     unit_columns = []
     if 'unit_params_file' in session:
         unit_params_file = session['unit_params_file']
+        print("Found unit_params_file in session:", unit_params_file)
         if os.path.exists(unit_params_file):
             try:
                 df_unit = pd.read_csv(unit_params_file)
                 unit_parameters = df_unit.to_dict(orient='records')
                 unit_columns = list(df_unit.columns)
+                print("Loaded unit parameters:", unit_parameters)
             except Exception as e:
-                logger.debug("Error reading unit_params_file:", e)
+                print("Error reading unit_params_file:", e)
         else:
-            logger.debug("Unit parameters file not found on disk:", unit_params_file)
+            print("Unit parameters file not found on disk:", unit_params_file)
     else:
-        logger.debug("No unit_params_file key in session.")
+        print("No unit_params_file key in session.")
 
     # --- Operating Scenarios ---
     operating_scenarios = []
     if 'op_scen_file' in session:
         ops_file = session['op_scen_file']
+        print("Found operating_scenarios_file in session:", ops_file)
         if os.path.exists(ops_file):
             try:
                 df_ops = pd.read_csv(ops_file)
                 operating_scenarios = df_ops.to_dict(orient='records')
+                print("Loaded operating scenarios:", operating_scenarios)
             except Exception as e:
-                logger.debug("Error reading operating_scenarios_file:", e)
+                print("Error reading operating_scenarios_file:", e)
+        else:
+            print("Operating scenarios file not found on disk:", ops_file)
     else:
-        logger.debug("No operating_scenarios_file key in session.")
+        print("No operating_scenarios_file key in session.")
 
     # --- Flow Scenarios (stored as JSON in session) ---
     flow_scenarios = session.get("flow_scenario", [])
@@ -1285,13 +1325,16 @@ def model_setup_summary():
         try:
             flow_scenarios = json.loads(flow_scenarios)
         except Exception as e:
-            logger.debug("Error decoding flow_scenario JSON:", e)
+            print("Error decoding flow_scenario JSON:", e)
             flow_scenarios = []
+    print("Flow scenarios:", flow_scenarios)
 
     # --- Graph Data ---
     graph_summary = session.get('graph_summary', {"Nodes": [], "Edges": []})
     graph_nodes = graph_summary.get('Nodes', [])
     graph_edges = graph_summary.get('Edges', [])
+    print("Graph summary (Nodes):", graph_nodes)
+    print("Graph summary (Edges):", graph_edges)
 
     # --- Other Data ---
     facilities_data = session.get('facilities_data', [])
@@ -1299,7 +1342,7 @@ def model_setup_summary():
     try:
         population_parameters = json.loads(population_data_raw)
     except Exception as e:
-        logger.debug("Error decoding population data:", e)
+        print("Error decoding population data:", e)
         population_parameters = []
     if isinstance(population_parameters, dict):
         population_parameters = [population_parameters]
@@ -1328,97 +1371,35 @@ def model_setup_summary():
         facilities_data=facilities_data,
         population_parameters=population_parameters
     )
-    logger.debug ('model setup summary complet')
+    print ('model setup summary complete', flush = True)
 from flask import current_app  # Import at module level if desired
 
-
-def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
-    try:
-        # Redirect stdout so that print messages are sent to the shared log queue.
-        sys.stdout = QueueStream(log_queue)
-        logger.debug ("DEBUG: Creating sim object")
-        sim_instance = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
-        sim_instance.webapp_import(data_dict, output_name="WebAppModel")
-        sim_instance.run()
-        sim_instance.summary()
-        logger.debug("DEBUG: Simulation process complete")
-        
-        # Generate the simulation report.
-        report_html = generate_report(sim_instance)  # Ensure generate_report is defined
-        report_path = os.path.join(user_sim_folder, "simulation_report.html")
-        with open(report_path, "w", encoding="utf-8") as f:
-            logger.debug("DEBUG: Writing simulation report to %s", report_path)
-            f.write(report_html)
-        # Write a flag file to signal that the report is ready.
-        flag_path = os.path.join(user_sim_folder, "report_ready.txt")
-        with open(flag_path, "w") as f:
-            f.write("ready")
-        logger.debug ("[Simulation Complete]")
-        #log_queue.put("[Simulation Complete]")
-    except Exception as e:
-        logger.debug("Error during simulation:", e)
-        traceback.print_exc()
-    finally:
-        log_queue.put("[Simulation Complete]")
 
 
 @app.route('/run_simulation', methods=['POST'])
 def run_simulation():
-    
-    # Build input dictionary from session data.
-    data_dict = {
-        "facilities": session.get("facilities_data"),
-        "unit_parameters_file": session.get("unit_params_file"),
-        "operating_scenarios_file": session.get("op_scen_file"),
-        "population": session.get("population_data"),
-        "flow_scenarios": session.get("flow_scenario"),
-        "hydrograph_file": session.get("hydrograph_file"),
-        "graph_data": session.get("simulation_graph"),
-        "graph_summary": session.get("graph_summary"),
-        "units_system": session.get("units", "imperial"),
-        "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
-        "proj_dir": session.get("proj_dir")
-    }
-    
+    from Stryke import stryke
+    print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
+    data_dict = { ... }  # your data dictionary
     user_sim_folder = g.user_sim_folder
-    # sim = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
+    print(f"DEBUG: Setting up simulation in {user_sim_folder}")
+    sim = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
     
     try:
-        # Create and start a new process for the simulation.
-        p = multiprocessing.Process(
-            target=run_simulation_in_background_custom,
-            args=(user_sim_folder, data_dict, LOG_QUEUE)
-        )
-        p.start()
-        flash("Simulation started! Check logs for progress.")
+        print("DEBUG: Calling sim.webapp_import()")
+        sim.webapp_import(data_dict, output_name="WebAppModel")
+        print("DEBUG: Calling sim.run()")
+        sim.run()
+        print("DEBUG: Calling sim.summary()")
+        sim.summary()
+        flash("Simulation completed!")
     except Exception as e:
-        flash("Failed to start simulation. Check logs for details.")
-    
+        print("Error during simulation:", e)
+        flash("Simulation failed. Check logs for details.")
     return redirect(url_for("simulation_logs"))
 
-import queue  # Import queue for handling queue.Empty exception
-
-@app.route('/stream')
-def stream():
-    def event_stream():
-        while True:
-            try:
-                message = LOG_QUEUE.get(timeout=2)  # Wait max 2 sec for a log
-            except queue.Empty:
-                yield "data: [No new logs]\n\n"
-                continue  # Continue the loop even if empty
-                
-            if message is None:
-                continue
-            yield f"data: {message}\n\n"
-            if message.strip() == "[Simulation Complete]":
-                break
-    return Response(event_stream(), mimetype="text/event-stream")
-
- 
 
 @app.route('/simulation_logs')
-
 def simulation_logs():
     return render_template('simulation_logs.html')
 
@@ -1600,214 +1581,204 @@ def generate_report(sim):
             report_sections.append(enforce_horizontal(df, title))
         else:
             report_sections.append(f"<p>No {title} data available.</p>")
-    try:
-        # Basic sections
-        add_section("Nodes", "/Nodes")
-        add_section("Edges", "/Edges")
-        add_section("Unit Parameters", "/Unit_Parameters")
-        add_section("Facilities", "/Facilities")
-        add_section("Flow Scenarios", "/Flow Scenarios")
-        add_section("Operating Scenarios", "/Operating Scenarios")
-        add_section("Population", "/Population")
-    except:
-        logger.debug('basic sections mission')
 
-    # try:
-    #     # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
-    #     report_sections.append("<h2>Hydrograph Plots</h2>")
-    #     if "/Hydrograph" in store.keys():
-    #         hydrograph_df = store["/Hydrograph"]
-    #         if 'datetimeUTC' in hydrograph_df.columns:
-    #             hydrograph_df['datetimeUTC'] = pd.to_datetime(hydrograph_df['datetimeUTC'])
-    
-    #         def create_hydro_timeseries(df):
-    #             plt.rcParams.update({'font.size': 8})
-    #             fig = plt.figure(figsize=(6,4))
-    #             plt.plot(df['datetimeUTC'], df['DAvgFlow_prorate'], marker='.', linestyle='-')
-    #             plt.xlabel("Date")
-    #             plt.ylabel("Discharge")
-    #             plt.title("Hydrograph Time Series")
-    #             plt.xticks(rotation=45)
-    #             plt.tight_layout()
-    #             buf = io.BytesIO()
-    #             plt.savefig(buf, format='png', bbox_inches='tight')
-    #             plt.close(fig)
-    #             buf.seek(0)
-    #             return base64.b64encode(buf.getvalue()).decode('utf-8')
-    
-    #         def create_hydro_hist(df):
-    #             plt.rcParams.update({'font.size': 8})
-    #             fig = plt.figure(figsize=(6,4))
-    #             plt.hist(df["DAvgFlow_prorate"].dropna(), bins=10, edgecolor='black')
-    #             plt.xlabel("Discharge")
-    #             plt.ylabel("Frequency")
-    #             plt.title("Recurrence Histogram")
-    #             plt.tight_layout()
-    #             buf = io.BytesIO()
-    #             plt.savefig(buf, format='png', bbox_inches='tight')
-    #             plt.close(fig)
-    #             buf.seek(0)
-    #             return base64.b64encode(buf.getvalue()).decode('utf-8')
-    
-    #         ts_b64 = create_hydro_timeseries(hydrograph_df)
-    #         hist_b64 = create_hydro_hist(hydrograph_df)
-    #         report_sections.append(f"""
-    #         <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
-    #             <div style="flex:1; min-width:300px; text-align:center;">
-    #                 <h3>Time Series</h3>
-    #                 <img src="data:image/png;base64,{ts_b64}" style="max-width:100%; height:auto;" />
-    #             </div>
-    #             <div style="flex:1; min-width:300px; text-align:center;">
-    #                 <h3>Recurrence Histogram</h3>
-    #                 <img src="data:image/png;base64,{hist_b64}" style="max-width:100%; height:auto;" />
-    #             </div>
-    #         </div>
-    #         """)
-    #     else:
-    #         report_sections.append("<p>No hydrograph data available.</p>")
-    # except:
-    #     logger.debug('hydrography section failed')
+    # Basic sections
+    add_section("Nodes", "/Nodes")
+    add_section("Edges", "/Edges")
+    add_section("Unit Parameters", "/Unit_Parameters")
+    add_section("Facilities", "/Facilities")
+    add_section("Flow Scenarios", "/Flow Scenarios")
+    add_section("Operating Scenarios", "/Operating Scenarios")
+    add_section("Population", "/Population")
+
+    # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
+    report_sections.append("<h2>Hydrograph Plots</h2>")
+    if "/Hydrograph" in store.keys():
+        hydrograph_df = store["/Hydrograph"]
+        if 'datetimeUTC' in hydrograph_df.columns:
+            hydrograph_df['datetimeUTC'] = pd.to_datetime(hydrograph_df['datetimeUTC'])
+
+        def create_hydro_timeseries(df):
+            plt.rcParams.update({'font.size': 8})
+            fig = plt.figure(figsize=(6,4))
+            plt.plot(df['datetimeUTC'], df['DAvgFlow_prorate'], marker='.', linestyle='-')
+            plt.xlabel("Date")
+            plt.ylabel("Discharge")
+            plt.title("Hydrograph Time Series")
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        def create_hydro_hist(df):
+            plt.rcParams.update({'font.size': 8})
+            fig = plt.figure(figsize=(6,4))
+            plt.hist(df["DAvgFlow_prorate"].dropna(), bins=10, edgecolor='black')
+            plt.xlabel("Discharge")
+            plt.ylabel("Frequency")
+            plt.title("Recurrence Histogram")
+            plt.tight_layout()
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        ts_b64 = create_hydro_timeseries(hydrograph_df)
+        hist_b64 = create_hydro_hist(hydrograph_df)
+        report_sections.append(f"""
+        <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
+            <div style="flex:1; min-width:300px; text-align:center;">
+                <h3>Time Series</h3>
+                <img src="data:image/png;base64,{ts_b64}" style="max-width:100%; height:auto;" />
+            </div>
+            <div style="flex:1; min-width:300px; text-align:center;">
+                <h3>Recurrence Histogram</h3>
+                <img src="data:image/png;base64,{hist_b64}" style="max-width:100%; height:auto;" />
+            </div>
+        </div>
+        """)
+    else:
+        report_sections.append("<p>No hydrograph data available.</p>")
 
     # --- BETA DISTRIBUTIONS ---
     add_section("Beta Distributions", "/Beta_Distributions")
-    # try:
-    #     # --- YEARLY SUMMARY PANEL (Iteration-based) ---
-    #     yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
-    #     daily_df = store["/Daily"] if "/Daily" in store.keys() else None
-    
-    #     if daily_df is not None and not daily_df.empty:
-    #         if 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
-    #             daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
-    #         if 'iteration' in daily_df.columns:
-    #             iteration_sums = daily_df.groupby('iteration').agg({
-    #                 'num_entrained': 'sum',
-    #                 'num_mortality': 'sum'
-    #             }).reset_index()
-    #         else:
-    #             iteration_sums = None
-    #     else:
-    #         iteration_sums = None
-    
-    #     def create_iteration_hist(df, metric, title):
-    #         plt.rcParams.update({'font.size': 8})
-    #         fig = plt.figure()
-    #         plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
-    #         plt.xlabel(metric.replace('_', ' ').title())
-    #         plt.ylabel("Frequency")
-    #         plt.title(title)
-    #         buf = io.BytesIO()
-    #         plt.savefig(buf, format='png', bbox_inches='tight')
-    #         plt.close(fig)
-    #         buf.seek(0)
-    #         return base64.b64encode(buf.getvalue()).decode('utf-8')
-    
-    #     def render_yearly_panel(yearly_df, iteration_sums):
-    #         if yearly_df is None or yearly_df.empty:
-    #             return "<p>No yearly summary data available.</p>"
-    #         row = yearly_df.iloc[0]  # Only one row expected
-    #         panel_html = "<h2>Yearly Summary (Iteration-based)</h2>"
-    #         for metric in ["entrainment", "mortality"]:
-    #             if iteration_sums is not None and f'num_{metric}' in iteration_sums.columns:
-    #                 hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric}', f"Total {metric.title()} Distribution by Iteration")
-    #             else:
-    #                 hist_b64 = ""
-    #             # Use expected column keys; adjust if needed.
-    #             if metric == 'entrainment':
-    #                 abbv = 'ent'
-    #             else:
-    #                 abbv = 'mort'
-    #             mean_val = row.get(f"mean_yearly_{abbv}", "N/A")
-    #             lcl_val = row.get(f"lcl_yearly_{abbv}", "N/A")
-    #             ucl_val = row.get(f"ucl_yearly_{abbv}", "N/A")
-    #             like10 = row.get(f"1_in_10_day_{metric}", "N/A")
-    #             like100 = row.get(f"1_in_100_day_{metric}", "N/A")
-    #             like1000 = row.get(f"1_in_1000_day_{metric}", "N/A")
-    #             panel_html += f"""
-    #             <div style="display:flex; flex-wrap:wrap; margin-bottom:20px; border:1px solid #ccc; padding:10px; border-radius:5px;">
-    #                 <div style="flex:1; min-width:300px; padding:10px; border-right:1px solid #ddd;">
-    #                     <h3>Histogram ({metric.title()})</h3>
-    #                     <div style="text-align:center;">
-    #                         {'<img src="data:image/png;base64,' + hist_b64 + '" style="max-width:100%; height:auto;" />' if hist_b64 else "<p>No histogram data</p>"}
-    #                     </div>
-    #                 </div>
-    #                 <div style="flex:1; min-width:300px; padding:10px;">
-    #                     <h3>Statistics ({metric.title()})</h3>
-    #                     <p><strong>Average Annual:</strong> {mean_val}</p>
-    #                     <p><strong>95% CI:</strong> {lcl_val} - {ucl_val}</p>
-    #                     <p><strong>1 in 10 day event:</strong> {like10}</p>
-    #                     <p><strong>1 in 100 day event:</strong> {like100}</p>
-    #                     <p><strong>1 in 1000 day event:</strong> {like1000}</p>
-    #                 </div>
-    #             </div>
-    #             """
-    #         return panel_html
-    
-    #     if yearly_df is not None and not yearly_df.empty:
-    #         panel_html = render_yearly_panel(yearly_df, iteration_sums)
-    #         report_sections.append(panel_html)
-    #     else:
-    #         report_sections.append("<p>No yearly summary data available.</p>")
-    # except:
-    #     logger.debug('yearly summary section failed')
 
-    # try:
-    #     # --- DAILY HISTOGRAMS SIDE BY SIDE ---
-    #     report_sections.append("<h2>Daily Histograms</h2>")
-    #     if daily_df is not None and not daily_df.empty:
-    #         # Ensure daily mortality exists
-    #         if 'num_mortality' not in daily_df.columns and 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
-    #             daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
-    
-    #         def create_daily_hist(data, col, title):
-    #             plt.rcParams.update({'font.size': 8})
-    #             fig = plt.figure()
-    #             plt.hist(data[col].dropna(), bins=20, edgecolor='black')
-    #             plt.xlabel(col.replace('_', ' ').title())
-    #             plt.ylabel("Frequency")
-    #             plt.title(title)
-    #             buf = io.BytesIO()
-    #             plt.savefig(buf, format='png', bbox_inches='tight')
-    #             plt.close(fig)
-    #             buf.seek(0)
-    #             return base64.b64encode(buf.getvalue()).decode('utf-8')
-    
-    #         entr_img = None
-    #         mort_img = None
-    #         if 'num_entrained' in daily_df.columns:
-    #             entr_img = create_daily_hist(daily_df, 'num_entrained', 'Daily Entrainment Distribution')
-    #         if 'num_mortality' in daily_df.columns:
-    #             mort_img = create_daily_hist(daily_df, 'num_mortality', 'Daily Mortality Distribution')
-    
-    #         report_sections.append("""
-    #         <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
-    #         """)
-    #         if entr_img:
-    #             report_sections.append(f"""
-    #             <div style="flex:1; min-width:300px; text-align:center;">
-    #                 <h3>Daily Entrainment</h3>
-    #                 <img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />
-    #             </div>
-    #             """)
-    #         else:
-    #             report_sections.append("""
-    #             <div style="flex:1; min-width:300px; text-align:center;">
-    #                 <h3>Daily Entrainment</h3>
-    #                 <p>No 'num_entrained' data available.</p>
-    #             </div>
-    #             """)
-    #         if mort_img:
-    #             report_sections.append(f"""
-    #             <div style="flex:1; min-width:300px; text-align:center;">
-    #                 <h3>Daily Mortality</h3>
-    #                 <img src="data:image/png;base64,{mort_img}" style="max-width:100%; height:auto;" />
-    #             </div>
-    #             """)
-    #         report_sections.append("</div>")
-    #     else:
-    #         report_sections.append("<p>No daily data available.</p>")
-    # except:
-    #     logger.debug('histograms failed')
-    
+    # --- YEARLY SUMMARY PANEL (Iteration-based) ---
+    yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
+    daily_df = store["/Daily"] if "/Daily" in store.keys() else None
+
+    if daily_df is not None and not daily_df.empty:
+        if 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
+            daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
+        if 'iteration' in daily_df.columns:
+            iteration_sums = daily_df.groupby('iteration').agg({
+                'num_entrained': 'sum',
+                'num_mortality': 'sum'
+            }).reset_index()
+        else:
+            iteration_sums = None
+    else:
+        iteration_sums = None
+
+    def create_iteration_hist(df, metric, title):
+        plt.rcParams.update({'font.size': 8})
+        fig = plt.figure()
+        plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
+        plt.xlabel(metric.replace('_', ' ').title())
+        plt.ylabel("Frequency")
+        plt.title(title)
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight')
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    def render_yearly_panel(yearly_df, iteration_sums):
+        if yearly_df is None or yearly_df.empty:
+            return "<p>No yearly summary data available.</p>"
+        row = yearly_df.iloc[0]  # Only one row expected
+        panel_html = "<h2>Yearly Summary (Iteration-based)</h2>"
+        for metric in ["entrainment", "mortality"]:
+            if iteration_sums is not None and f'num_{metric}' in iteration_sums.columns:
+                hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric}', f"Total {metric.title()} Distribution by Iteration")
+            else:
+                hist_b64 = ""
+            # Use expected column keys; adjust if needed.
+            if metric == 'entrainment':
+                abbv = 'ent'
+            else:
+                abbv = 'mort'
+            mean_val = row.get(f"mean_yearly_{abbv}", "N/A")
+            lcl_val = row.get(f"lcl_yearly_{abbv}", "N/A")
+            ucl_val = row.get(f"ucl_yearly_{abbv}", "N/A")
+            like10 = row.get(f"1_in_10_day_{metric}", "N/A")
+            like100 = row.get(f"1_in_100_day_{metric}", "N/A")
+            like1000 = row.get(f"1_in_1000_day_{metric}", "N/A")
+            panel_html += f"""
+            <div style="display:flex; flex-wrap:wrap; margin-bottom:20px; border:1px solid #ccc; padding:10px; border-radius:5px;">
+                <div style="flex:1; min-width:300px; padding:10px; border-right:1px solid #ddd;">
+                    <h3>Histogram ({metric.title()})</h3>
+                    <div style="text-align:center;">
+                        {'<img src="data:image/png;base64,' + hist_b64 + '" style="max-width:100%; height:auto;" />' if hist_b64 else "<p>No histogram data</p>"}
+                    </div>
+                </div>
+                <div style="flex:1; min-width:300px; padding:10px;">
+                    <h3>Statistics ({metric.title()})</h3>
+                    <p><strong>Average Annual:</strong> {mean_val}</p>
+                    <p><strong>95% CI:</strong> {lcl_val} - {ucl_val}</p>
+                    <p><strong>1 in 10 day event:</strong> {like10}</p>
+                    <p><strong>1 in 100 day event:</strong> {like100}</p>
+                    <p><strong>1 in 1000 day event:</strong> {like1000}</p>
+                </div>
+            </div>
+            """
+        return panel_html
+
+    if yearly_df is not None and not yearly_df.empty:
+        panel_html = render_yearly_panel(yearly_df, iteration_sums)
+        report_sections.append(panel_html)
+    else:
+        report_sections.append("<p>No yearly summary data available.</p>")
+
+    # --- DAILY HISTOGRAMS SIDE BY SIDE ---
+    report_sections.append("<h2>Daily Histograms</h2>")
+    if daily_df is not None and not daily_df.empty:
+        # Ensure daily mortality exists
+        if 'num_mortality' not in daily_df.columns and 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
+            daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
+
+        def create_daily_hist(data, col, title):
+            plt.rcParams.update({'font.size': 8})
+            fig = plt.figure()
+            plt.hist(data[col].dropna(), bins=20, edgecolor='black')
+            plt.xlabel(col.replace('_', ' ').title())
+            plt.ylabel("Frequency")
+            plt.title(title)
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        entr_img = None
+        mort_img = None
+        if 'num_entrained' in daily_df.columns:
+            entr_img = create_daily_hist(daily_df, 'num_entrained', 'Daily Entrainment Distribution')
+        if 'num_mortality' in daily_df.columns:
+            mort_img = create_daily_hist(daily_df, 'num_mortality', 'Daily Mortality Distribution')
+
+        report_sections.append("""
+        <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
+        """)
+        if entr_img:
+            report_sections.append(f"""
+            <div style="flex:1; min-width:300px; text-align:center;">
+                <h3>Daily Entrainment</h3>
+                <img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />
+            </div>
+            """)
+        else:
+            report_sections.append("""
+            <div style="flex:1; min-width:300px; text-align:center;">
+                <h3>Daily Entrainment</h3>
+                <p>No 'num_entrained' data available.</p>
+            </div>
+            """)
+        if mort_img:
+            report_sections.append(f"""
+            <div style="flex:1; min-width:300px; text-align:center;">
+                <h3>Daily Mortality</h3>
+                <img src="data:image/png;base64,{mort_img}" style="max-width:100%; height:auto;" />
+            </div>
+            """)
+        report_sections.append("</div>")
+    else:
+        report_sections.append("<p>No daily data available.</p>")
+
     store.close()
 
     final_html = "\n".join(report_sections)
@@ -1890,9 +1861,6 @@ def generate_report(sim):
     """
     return full_report
 
-
-
-
 @app.route('/download_report')
 def download_report():
     report_path = session.get('report_path')
@@ -1909,98 +1877,7 @@ def download_report():
     )
 
 
-# @app.route('/report')
-# def report():
-#     report_html = session.get('latest_report_html')
-
-#     if not report_html:
-#         return "<p>Error: Report not found in session. Please run the simulation first.</p>"
-
-#     full_report_html = f"""<!DOCTYPE html>
-#     <html lang="en">
-#     <head>
-#       <meta charset="UTF-8">
-#       <title>Simulation Report</title>
-#     </head>
-#     <body>
-#     {report_html}
-#     <br><a href="/download_report">Download Report</a>
-#     </body>
-#     </html>"""
-#     return full_report_html
-
-
-# from flask import Response
-
-# @app.route('/download_report')
-# def download_report():
-#     report_html = session.get('latest_report_html')
-#     if not report_html:
-#         return "<p>Error: Report not found in session.</p>"
-
-#     full_report_html = f"""<!DOCTYPE html>
-#     <html lang="en">
-#     <head>
-#       <meta charset="UTF-8">
-#       <title>Simulation Report</title>
-#     </head>
-#     <body>
-#     {report_html}
-#     </body>
-#     </html>"""
-
-#     return Response(
-#         full_report_html,
-#         mimetype='text/html',
-#         headers={"Content-Disposition": "attachment;filename=simulation_report.html"}
-#     )
-
-
-# @app.route('/download_results')
-# def download_results():
-#     try:
-#         # Re-create the simulation object from stored session/previous import.
-#         # This example assumes that your simulation object can be re-initialized using your webapp_import method.
-#         sim_data = {
-#             "graph_summary": session.get("graph_summary"),
-#             "unit_parameters": session.get("unit_parameters"),
-#             "facilities": session.get("facilities_data"),
-#             "flow_scenarios": session.get("flow_scenario"),
-#             "operating_scenarios": session.get("operating_scenarios"),
-#             "population": session.get("population_data"),
-#             "hydrograph": session.get("hydrograph_df")
-#         }
-#         sim = stryke.simulation(proj_dir=os.getcwd(), output_name="WebAppModel")
-#         sim.webapp_import(sim_data, output_name="WebAppModel")
-        
-#         # Generate the report
-#         report_html = generate_report(sim)
-        
-#         # Save the report to a file in the user's simulation folder
-#         sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
-#         report_path = os.path.join(sim_folder, "simulation_report.html")
-#         with open(report_path, "w", encoding="utf-8") as f:
-#             f.write(report_html)
-        
-#         return send_file(report_path, as_attachment=True)
-#     except Exception as e:
-#         flash(f"Error generating report: {e}")
-#         return redirect(url_for("simulation_logs"))
-# from weasyprint import HTML
-
-# @app.route('/report_pdf')
-# def report_pdf():
-#     # Generate the full HTML report (using your existing report() function)
-#     report_html = report()
-#     try:
-#         pdf = HTML(string=report_html).write_pdf()
-#     except Exception as e:
-#         return f"<p>Error converting report to PDF: {e}</p>", 500
-
-#     response = Response(pdf, mimetype='application/pdf')
-#     response.headers['Content-Disposition'] = 'attachment; filename=simulation_report.pdf'
-#     return response
 
 # Un Comment to Test Locally
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded = True, use_reloader=False)
