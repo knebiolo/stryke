@@ -1438,8 +1438,8 @@ class simulation():
             fac_units = fac_units.sort_values(by = 'op_order')
             
             # if operations are modeled with a distribution 
-            if fac_type != 'run-of-river':
-                for i in fac_units.index:
+            for i in fac_units.index:
+                if i != 'run-of-river':
                     order = fac_units.at[i,'op_order']
                     # get log norm shape parameters
                     shape = ops_df.at[i,'shape']
@@ -1818,11 +1818,12 @@ class simulation():
                                 sta_cap[fac] = 0
                             Q_dict[u] = unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
                             sta_cap[fac] += unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
+                        logger.debug ('cycled through units, added to q-dict')
                         Q_dict['sta_cap'] = sta_cap
                         # print("Q_dict and sta_cap built:", flush=True)
                         # print("  Q_dict:", Q_dict, flush=True)
                         # print("  sta_cap:", sta_cap, flush=True)
-    
+                        logger.debug ('bout to start daily hours')
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
                         # print(f"Total hours: {tot_hours}", flush=True)
                         logger.info('Q-Dict Built')
