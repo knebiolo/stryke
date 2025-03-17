@@ -285,19 +285,18 @@
         
         <!-- Modeled: Dropdown for Species -->
         <div id="modeledDiv" class="hidden">
-          <label for="modeledSpecies">Select Species for Modeled Rates 
+          <label for="modeledSpecies">
+            Select Species for Modeled Rates
             <span class="tooltip" title="Choose a species from the list">[?]</span>
           </label>
           <select id="modeledSpecies" name="modeledSpecies" onchange="fillModeledFields()">
             <option value="">--Select Species--</option>
-            <option value="Mid Atlantic Micropterus in Spring">Mid Atlantic Micropterus in Spring</option>
-            {% if session.species_list is defined %}
-              {% for sp in session.species_list %}
-                <option value="{{ sp }}">{{ sp }}</option>
-              {% endfor %}
-            {% endif %}
+            {% for sp in species_defaults %}
+              <option value="{{ sp.name }}">{{ sp.name }}</option>
+            {% endfor %}
           </select>
         </div>
+
         
         <!-- Empirical: Distribution and Parameter Inputs -->
         <div id="empiricalDistDiv" class="hidden">
