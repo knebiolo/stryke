@@ -1439,8 +1439,7 @@ class simulation():
             
             # if operations are modeled with a distribution 
             for i in fac_units.index:
-                i_type = fac_type[i]
-                if i_type != 'run-of-river':
+                if fac_type != 'run-of-river':
                     order = fac_units.at[i,'op_order']
                     # get log norm shape parameters
                     shape = ops_df.at[i,'shape']
