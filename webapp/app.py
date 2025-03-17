@@ -604,7 +604,7 @@ def flow_scenarios():
             if units == 'metric':
                 df_hydro['DAvgFlow_prorate'] = df_hydro['DAvgFlow_prorate'] * 35.3147
             
-            hydro_file_path = os.path.join(g.user_sim_folder, 'hydrograph.csv')
+            hydro_file_path = os.path.join(session['proj_dir'], 'hydrograph.csv')
             df_hydro.to_csv(hydro_file_path, index=False)
             session['hydrograph_file'] = hydro_file_path
             
@@ -862,7 +862,7 @@ def unit_parameters():
                     df_units[col] = pd.to_numeric(df_units[col], errors='coerce') * conv_flow
 
         # Assume unit_params is your DataFrame containing the unit parameters
-        unit_params_path = os.path.join(g.user_sim_folder, 'unit_params.csv')
+        unit_params_path = os.path.join(session['proj_dir'], 'unit_params.csv')
         df_units.to_csv(unit_params_path, index=False)
         
         # Store only the file path in the session
@@ -954,7 +954,7 @@ def operating_scenarios():
         # Save the combined operating scenarios to the session.
         #session['operating_scenarios'] = df_os.to_dict(orient='records')
         # Assume unit_params is your DataFrame containing the unit parameters
-        op_scen_path = os.path.join(g.user_sim_folder, 'op_scen.csv')
+        op_scen_path = os.path.join(session['proj_dir'], 'op_scen.csv')
         df_os.to_csv(op_scen_path, index=False)
         
         # Store only the file path in the session
@@ -1422,7 +1422,7 @@ def run_simulation():
         "proj_dir": session.get("proj_dir")
     }
 
-    user_sim_folder = g.user_sim_folder
+    user_sim_folder = session['proj_dir']
 
     try:
         thread = threading.Thread(
@@ -1480,95 +1480,102 @@ def get_simulation_instance():
 @app.route('/report')
 def report():
     import os
-    user_sim_folder = g.user_sim_folder
-    path_file = os.path.join(user_sim_folder, "report_path.txt")
+    try:
+        user_sim_folder = session.get('proj_dir')  # 🟢 Use session-based isolation
+        if not user_sim_folder:
+            return "<p>Error: Project folder not found in session.</p>", 400
 
-    if not os.path.exists(path_file):
-        return "<p>Error: Report file path not found.</p>"
+        path_file = os.path.join(user_sim_folder, "report_path.txt")
+        if not os.path.exists(path_file):
+            return f"<p>Error: report_path.txt not found at {path_file}</p>", 404
 
-    with open(path_file, 'r') as f:
-        report_path = f.read().strip()
+        with open(path_file, 'r') as f:
+            report_path = f.read().strip()
 
-    if not os.path.exists(report_path):
-        return "<p>Error: Report file not found.</p>"
+        if not os.path.exists(report_path):
+            return f"<p>Error: Simulation report not found at {report_path}</p>", 404
 
-    with open(report_path, 'r', encoding='utf-8') as f:
-        report_html = f.read()
+        with open(report_path, 'r', encoding='utf-8') as f:
+            report_html = f.read()
 
-    full_report_html = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Simulation Report</title>
-        <style>
-            body {{
-                font-family: Arial, sans-serif;
-                background: #f7f7f7;
-                margin: 20px;
-                color: #333;
-            }}
-            .container {{
-                max-width: 1000px;
-                margin: auto;
-                background: #fff;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            }}
-            h1 {{
-                color: #0056b3;
-            }}
-            h2, h3 {{
-                color: #0056b3;
-                border-bottom: 1px solid #ddd;
-                padding-bottom: 4px;
-            }}
-            p {{
-                line-height: 1.6;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin: 1rem 0;
-            }}
-            th, td {{
-                padding: 8px;
-                border: 1px solid #ccc;
-                text-align: left;
-            }}
-            .table-wrap {{
-                overflow-x: auto;
-            }}
-            pre {{
-                background: #f4f4f4;
-                padding: 10px;
-                border-radius: 5px;
-            }}
-            .download-link {{
-                display: inline-block;
-                margin-top: 20px;
-                background: #007BFF;
-                color: white;
-                padding: 10px 15px;
-                text-decoration: none;
-                border-radius: 4px;
-            }}
-            .download-link:hover {{
-                background: #0056b3;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            {report_html}
-            <a href="/download_report" class="download-link">⬇ Download Report</a>
-        </div>
-    </body>
-    </html>
-    """
-    return full_report_html
-
+        full_report_html = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Simulation Report</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background: #f7f7f7;
+                    margin: 20px;
+                    color: #333;
+                }}
+                .container {{
+                    max-width: 1000px;
+                    margin: auto;
+                    background: #fff;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                }}
+                h1 {{
+                    color: #0056b3;
+                }}
+                h2, h3 {{
+                    color: #0056b3;
+                    border-bottom: 1px solid #ddd;
+                    padding-bottom: 4px;
+                }}
+                p {{
+                    line-height: 1.6;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 1rem 0;
+                }}
+                th, td {{
+                    padding: 8px;
+                    border: 1px solid #ccc;
+                    text-align: left;
+                }}
+                .table-wrap {{
+                    overflow-x: auto;
+                }}
+                pre {{
+                    background: #f4f4f4;
+                    padding: 10px;
+                    border-radius: 5px;
+                }}
+                .download-link {{
+                    display: inline-block;
+                    margin-top: 20px;
+                    background: #007BFF;
+                    color: white;
+                    padding: 10px 15px;
+                    text-decoration: none;
+                    border-radius: 4px;
+                }}
+                .download-link:hover {{
+                    background: #0056b3;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                {report_html}
+                <a href="/download_report" class="download-link">⬇ Download Report</a>
+            </div>
+        </body>
+        </html>
+        """
+        return full_report_html
+    
+    except Exception as e:
+        logger.exception(f"Unhandled error in /report route: {e}")
+        return f"<p>Critical error loading report: {str(e)}</p>", 500
+    
 def generate_report(sim):
     """
     Generate the comprehensive HTML report for the simulation.
