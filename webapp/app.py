@@ -1397,11 +1397,6 @@ def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
         with open(report_path, "w", encoding="utf-8") as f:
             logger.debug("DEBUG: Writing simulation report to %s", report_path)
             f.write(report_html)
-        
-        # ✔️ THIS is all you need
-        path_file = os.path.join(user_sim_folder, "report_path.txt")
-        with open(path_file, "w") as f:
-            f.write(report_path)
 
     except Exception as e:
         logger.exception(e)  # ✅ Use logger.exception, not logger.debug(..., e)
@@ -1522,6 +1517,8 @@ def report():
             logger.debug("[WARNING] UTF-8 decode error — trying Latin-1 fallback")
             with open(report_path, 'r', encoding='latin1') as f:
                 report_html = f.read()
+                
+
 
         # render wrapper
         full_report_html = f"""
@@ -1588,7 +1585,12 @@ def report():
                 }}
             </style>
         </head>
-
+        <body>
+            <div class="container">
+                {report_html}
+                <a href="/download_report" class="download-link">Download Report</a>
+            </div>
+        </body>
         </html>
         """
         return full_report_html
