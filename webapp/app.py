@@ -1388,31 +1388,21 @@ def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
         sim_instance.summary()
 
         logger.debug("DEBUG: Simulation process complete")
-
-        # Generate the simulation report
+        
+        # Write the simulation report
         report_html = generate_report(sim_instance)
         report_path = os.path.join(user_sim_folder, "simulation_report.html")
         with open(report_path, "w", encoding="utf-8") as f:
             logger.debug("DEBUG: Writing simulation report to %s", report_path)
             f.write(report_html)
-
-        # Write report_path.txt for /report route
+        
+        # ✔️ THIS is all you need
         path_file = os.path.join(user_sim_folder, "report_path.txt")
         with open(path_file, "w") as f:
             f.write(report_path)
-        
-        # Optionally: store it in session as backup
-        session['report_path'] = report_path
-
-            
-        # # After writing the HTML report
-        # path_file = os.path.join(user_sim_folder, "report_path.txt")
-        # with open(path_file, "w") as f:
-        #     f.write(report_path)
-
 
     except Exception as e:
-        logger.exception("Error during simulation")  # ✅ Use logger.exception, not logger.debug(..., e)
+        logger.exception(e)  # ✅ Use logger.exception, not logger.debug(..., e)
     finally:
         log_queue.put("[Simulation Complete]")  # ✅ Ensure this always fires
 
