@@ -1436,7 +1436,6 @@ class simulation():
             fac_units = self.unit_params[self.unit_params.Facility == facility]
             #fac_units.set_index('Unit', inplace = True)
             fac_units = fac_units.sort_values(by = 'op_order')
-            fac_units.set_index('Unit', inplace = True)
             logger.debug('Facility Type is %s',fac_type)
             # if operations are modeled with a distribution 
             for i in fac_units.index:
@@ -1527,9 +1526,9 @@ class simulation():
                     for idx, row in fac_units.iterrows():
                         # Assume each unit row has a unique identifier in a column (e.g., 'Unit')
                         # If ops_df has a matching row for each unit, you can merge or filter by that identifier.
-                        logger.debug('working on unit %s', idx)
+                        logger.debug('working on unit %s', row['Unit'])
                         # For example, if ops_df has a 'Unit' column:
-                        unit_ops = ops_df[ops_df.Unit == row.Unit]#[ops_df.Unit == idx
+                        unit_ops = ops_df[ops_df.Unit == row['Unit']]#[ops_df.Unit == idx
                         if unit_ops.empty:
                             logger.debug("No operations data found for unit %s", idx)
                             continue
