@@ -1499,26 +1499,67 @@ def debug_report_path():
 def report():
     import os
     try:
+        # Safely grab session folder
         proj_dir = session.get('proj_dir')
         if not proj_dir:
-            return "<p>proj_dir missing from session.</p>", 500
+            return "<h1>Session missing proj_dir</h1>", 500
 
-        path_file = os.path.join(proj_dir, "report_path.txt")
-        if not os.path.exists(path_file):
-            return "<p>report_path.txt not found.</p>", 404
-
-        with open(path_file, 'r') as f:
-            report_path = f.read().strip()
+        report_path = os.path.join(proj_dir, "simulation_report.html")
+        print(f"[DEBUG] Checking report path: {report_path}")
 
         if not os.path.exists(report_path):
-            return f"<p>Report file not found at {report_path}</p>", 404
+            print("[ERROR] simulation_report.html does not exist")
+            return f"<h1>Report not found: {report_path}</h1>", 404
 
-        return send_file(report_path)
+        # Try reading file with utf-8
+        try:
+            with open(report_path, 'r', encoding='utf-8') as f:
+                report_html = f.read()
+        except UnicodeDecodeError:
+            print("[WARNING] UTF-8 decode error — trying Latin-1 fallback")
+            with open(report_path, 'r', encoding='latin1') as f:
+                report_html = f.read()
+
+        # Do final test: render simple wrapper
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Simulation Report</title></head>
+        <body><h2>Simulation Report:</h2><div>{report_html}</div></body>
+        </html>
+        """
 
     except Exception as e:
         import traceback
+        print("[FATAL ERROR in /report]")
         traceback.print_exc()
-        return f"<pre>Error: {str(e)}</pre>", 500
+        return f"<pre>500 Internal Server Error: {str(e)}</pre>", 500
+
+
+# @app.route('/report')
+# def report():
+#     import os
+#     try:
+#         proj_dir = session.get('proj_dir')
+#         if not proj_dir:
+#             return "<p>proj_dir missing from session.</p>", 500
+
+#         path_file = os.path.join(proj_dir, "report_path.txt")
+#         if not os.path.exists(path_file):
+#             return "<p>report_path.txt not found.</p>", 404
+
+#         with open(path_file, 'r') as f:
+#             report_path = f.read().strip()
+
+#         if not os.path.exists(report_path):
+#             return f"<p>Report file not found at {report_path}</p>", 404
+
+#         return send_file(report_path)
+
+#     except Exception as e:
+#         import traceback
+#         traceback.print_exc()
+#         return f"<pre>Error: {str(e)}</pre>", 500
 
 # @app.route('/report')
 # def report():
