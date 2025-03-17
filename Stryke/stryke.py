@@ -1797,6 +1797,7 @@ class simulation():
                                 env_Q_dict[fac] = row['Env_Flow']
                                 bypass_Q_dict[fac] = row['Bypass_Flow']
                         else:
+                            logger.debug('Scenario not in facility parameters')
                             for index, row in self.facility_params.iterrows():
                                 fac = index
                                 min_Q_dict[fac] = row['Min_Op_Flow']
@@ -1808,6 +1809,7 @@ class simulation():
     
                         # Update Q_dict and sta_cap for units.
                         sta_cap = {}
+                        logger.debug('there are this many units %s', units)
                         for u in units:
                             u_param_dict[u]['Q'] = curr_Q
                             unit_df = self.unit_params.loc[[u]]
@@ -1824,6 +1826,7 @@ class simulation():
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
                         # print(f"Total hours: {tot_hours}", flush=True)
                         logger.info('Q-Dict Built')
+                        
                         if np.any(tot_hours > 0):
                             presence_seed = np.random.uniform(0, 1)
                             # print(f"Presence seed: {presence_seed}", flush=True)
