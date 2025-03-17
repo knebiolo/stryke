@@ -551,6 +551,9 @@ def process_hydrograph_data(raw_data):
 def flow_scenarios():
     if request.method == 'POST':
         # Retrieve form fields
+        logger.debug(f"[create_hydrograph] Incoming flow_scenarios_df:\n{flow_scenarios_df.head()}")
+        logger.debug(f"[create_hydrograph] Columns: {flow_scenarios_df.columns}")
+
         scenario_type = request.form.get('scenario_type')
         scenario_name = request.form.get('scenario_name')
         scenario_number = request.form.get('scenario_number')
@@ -593,6 +596,7 @@ def flow_scenarios():
             df_hydro.reset_index(inplace=True)
             flow_year = int(df_hydro.datetimeUTC.dt.year.iloc[0]) if not df_hydro.empty else None
             
+            logger.debug('hydrograph dataframe %s records long',df_hydro.shape)
             # Force the Flow column to be the string 'hydrograph'
             discharge_value = 'hydrograph'
             

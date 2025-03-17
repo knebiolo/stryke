@@ -1314,9 +1314,10 @@ class simulation():
         flow_df = pd.DataFrame()
         
         scen_df = flow_scenarios_df[flow_scenarios_df.Scenario == scen]
-        
+        logger.info('scenario dataframe %s'. scen_df)
         # if the discharge type is hydrograph - import hydrography and transform using prorate factor
         if discharge_type == 'hydrograph':
+            logger.debug('hydrograph')
             #print ('discharge type: hydrograph')
             gage = str(scen_df.at[scen_df.index[0],'Gage'])
             prorate = scen_df.at[scen_df.index[0],'Prorate']
