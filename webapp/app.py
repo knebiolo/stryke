@@ -176,7 +176,7 @@ def health():
 #         sys.stdout = old_stdout
 #         LOG_QUEUE.put(None)
 
-def run_simulation_in_background(ws, wks, output_name):
+def run_simulation_in_background(ws, wks, output_name, data_dict):
     """Background thread for running the simulation and streaming logs to LOG_QUEUE."""
     old_stdout = sys.stdout
     sys.stdout = QueueStream(LOG_QUEUE)  # Redirect print/logs to web log stream
@@ -185,6 +185,7 @@ def run_simulation_in_background(ws, wks, output_name):
         logger.info("Starting simulation...")
 
         sim = stryke.simulation(ws, wks, output_name=output_name)
+        sim.webapp_import()
         sim.run()
         sim.summary()
 
@@ -1372,30 +1373,66 @@ def model_setup_summary():
         population_parameters=population_parameters
     )
     print ('model setup summary complete', flush = True)
-from flask import current_app  # Import at module level if desired
 
+def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
+    try:
+        sys.stdout = QueueStream(log_queue)  # Send print/logs to frontend
 
+        logger.debug("DEBUG: Creating sim object")
+        sim_instance = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
+
+        sim_instance.webapp_import(data_dict, output_name="WebAppModel")
+        sim_instance.run()
+        sim_instance.summary()
+
+        logger.debug("DEBUG: Simulation process complete")
+
+        # Generate the simulation report
+        report_html = generate_report(sim_instance)
+        report_path = os.path.join(user_sim_folder, "simulation_report.html")
+        with open(report_path, "w", encoding="utf-8") as f:
+            logger.debug("DEBUG: Writing simulation report to %s", report_path)
+            f.write(report_html)
+
+        # Flag file for report readiness
+        flag_path = os.path.join(user_sim_folder, "report_ready.txt")
+        with open(flag_path, "w") as f:
+            f.write("ready")
+
+    except Exception as e:
+        logger.exception("Error during simulation")  # ✅ Use logger.exception, not logger.debug(..., e)
+    finally:
+        log_queue.put("[Simulation Complete]")  # ✅ Ensure this always fires
 
 @app.route('/run_simulation', methods=['POST'])
 def run_simulation():
-    from Stryke import stryke
-    print("DEBUG: session['proj_dir'] =", session.get("proj_dir"))
-    data_dict = { ... }  # your data dictionary
+    data_dict = {
+        "facilities": session.get("facilities_data"),
+        "unit_parameters_file": session.get("unit_params_file"),
+        "operating_scenarios_file": session.get("op_scen_file"),
+        "population": session.get("population_data"),
+        "flow_scenarios": session.get("flow_scenario"),
+        "hydrograph_file": session.get("hydrograph_file"),
+        "graph_data": session.get("simulation_graph"),
+        "graph_summary": session.get("graph_summary"),
+        "units_system": session.get("units", "imperial"),
+        "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
+        "proj_dir": session.get("proj_dir")
+    }
+
     user_sim_folder = g.user_sim_folder
-    print(f"DEBUG: Setting up simulation in {user_sim_folder}")
-    sim = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
-    
+
     try:
-        print("DEBUG: Calling sim.webapp_import()")
-        sim.webapp_import(data_dict, output_name="WebAppModel")
-        print("DEBUG: Calling sim.run()")
-        sim.run()
-        print("DEBUG: Calling sim.summary()")
-        sim.summary()
-        flash("Simulation completed!")
+        thread = threading.Thread(
+            target=run_simulation_in_background_custom,
+            args=(user_sim_folder, data_dict, LOG_QUEUE)
+        )
+        thread.start()
+        flash("Simulation started! Check logs for progress.")
     except Exception as e:
-        print("Error during simulation:", e)
-        flash("Simulation failed. Check logs for details.")
+        logger.exception("Failed to start simulation thread.")
+        flash("Failed to start simulation. Check logs for details.")
+
     return redirect(url_for("simulation_logs"))
 
 
