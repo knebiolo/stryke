@@ -1378,10 +1378,10 @@ def model_setup_summary():
     )
     print ('model setup summary complete', flush = True)
 
-def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
+def run_simulation_in_background_custom(data_dict, log_queue):
     try:
         sys.stdout = QueueStream(log_queue)  # Send print/logs to frontend
-
+        user_sim_folder = data_dict['proj_dir']
         logger.debug("DEBUG: Creating sim object")
         sim_instance = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
 
@@ -1419,12 +1419,12 @@ def run_simulation():
         "proj_dir": session.get("proj_dir")
     }
 
-    user_sim_folder = session['proj_dir']
+    #user_sim_folder = session['proj_dir']
 
     try:
         thread = threading.Thread(
             target=run_simulation_in_background_custom,
-            args=(user_sim_folder, data_dict, LOG_QUEUE)
+            args=(data_dict, LOG_QUEUE)
         )
         thread.start()
         flash("Simulation started! Check logs for progress.")
