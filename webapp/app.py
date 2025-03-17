@@ -1089,6 +1089,54 @@ def population():
             "length location": "2.1245",
             "length scale": "15.9345"
         },
+        {
+            "name": "Lepomis, Great Lakes, Met Winter",
+            "dist": "Log Normal",
+            "shape": "0.9881",
+            "location": "0",
+            "scale": "0.0033",
+            "max_ent_rate": "0.18",
+            "occur_prob": "0.2078",
+            "length shape": "0.6577",
+            "length location": "-1.1654",
+            "length scale": "5.7882"
+        },
+        {
+            "name": "Ambloplites, Great Lakes, Met Winter",
+            "dist": "Pareto",
+            "shape": "0.5974",
+            "location": "0",
+            "scale": "0.0052",
+            "max_ent_rate": "1.85",
+            "occur_prob": "0.3279",
+            "length shape": "0.7897",
+            "length location": "-0.9668",
+            "length scale": "5.5452"
+        },
+        {
+            "name": "Ameiurus, Great Lakes, Met Winter",
+            "dist": "Log Normal",
+            "shape": "1.0344",
+            "location": "0",
+            "scale": "0.0143",
+            "max_ent_rate": "0.12",
+            "occur_prob": "0.3085",
+            "length shape": "0.0982",
+            "length location": "-19.9968",
+            "length scale": "27.2126"
+        },
+        {
+            "name": "Catostomus, Great Lakes, Met Winter",
+            "dist": "Pareto",
+            "shape": "0.5357",
+            "location": "0",
+            "scale": "0.0051",
+            "max_ent_rate": "2.35",
+            "occur_prob": "0.4918",
+            "length shape": "0.197",
+            "length location": "-17.815",
+            "length scale": "32.4136"
+        },
         # ...
     ]
 
