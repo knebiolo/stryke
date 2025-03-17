@@ -1520,26 +1520,35 @@ class simulation():
                 else:
                     logger.debug('start processing run of river facility')
                     at_capacity = False
-                    fac_units.set_index('Facility', inplace = True)
-                    ops_df.set_index('Facility', inplace = True)
-                    for i in fac_units.index:
-                        hours = ops_df.at[i, 'Hours']
-                        u_cap = fac_units.at[i, 'Qcap']
+                    cum_Q = 0.  # current cumulative discharge through the powerhouse
+                    
+                    # Don't set the index; just iterate over each unit row.
+                    for idx, unit in fac_units.iterrows():
+                        # Assume each unit row has a unique identifier in a column (e.g., 'Unit')
+                        # If ops_df has a matching row for each unit, you can merge or filter by that identifier.
+                        # For example, if ops_df has a 'Unit' column:
+                        unit_ops = ops_df[ops_df['Unit'] == unit['Unit']]
+                        if unit_ops.empty:
+                            logger.debug("No operations data found for unit %s", unit['Unit'])
+                            continue
+                        hours = unit_ops.iloc[0]['Hours']  # pick the first matching row
+                        u_cap = unit['Qcap']
+                        
                         # Determine the effective capacity limit
                         effective_cap = min(prod_Q, sta_cap)
                         
                         if cum_Q + u_cap <= effective_cap:
-                            hours_dict[i] = hours
-                            flow_dict[i] = u_cap * hours * 3600.
-                            cum_Q = cum_Q + u_cap
+                            hours_dict[unit['Unit']] = hours
+                            flow_dict[unit['Unit']] = u_cap * hours * 3600.
+                            cum_Q += u_cap
                         else:
                             excess = cum_Q + u_cap - effective_cap
-                            hours_dict[i] = hours
-                            flow_dict[i] = (u_cap - excess) * hours * 3600
+                            hours_dict[unit['Unit']] = hours
+                            flow_dict[unit['Unit']] = (u_cap - excess) * hours * 3600.
                             at_capacity = True
-                        if at_capacity:  # Exit the for loop if we are at capacity
-                                break
-                    fac_units.reset_index(inplace = True)
+                    
+                        if at_capacity:  # Exit the loop if at capacity
+                            break
 
         # # implement Bad Creek algorithm here - is this method valid for new construction?
         # tot_hours = 0.
