@@ -2106,10 +2106,10 @@ class simulation():
                                     lcl = 0.
                                     ucl = 1.
                                 self.beta_dict['%s_%s_%s' % (j, i, m)] = [j, i, m, 
-                                                                          np.round(st_median,4),
-                                                                          np.round(st_std,4), 
-                                                                          np.round(lcl,4), 
-                                                                          np.round(ucl,4)]
+                                                                          np.round(st_median,6),
+                                                                          np.round(st_std,6), 
+                                                                          np.round(lcl,6), 
+                                                                          np.round(ucl,6)]
                         logger.info("Fit beta distributions to states")
                         del dat
     
