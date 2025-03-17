@@ -429,7 +429,7 @@ class simulation():
         # 4. Facilities.
         if "facilities" in data_dict:
             self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
-        
+            logger.debug('Facility parameter columns %s',self.facility_params.column)
         # 5. Flow Scenarios.
         if "flow_scenarios" in data_dict:
             self.flow_scenarios_df = to_dataframe(data_dict["flow_scenarios"], numeric_cols=['FlowYear', 'Prorate'])
@@ -1518,7 +1518,7 @@ class simulation():
                 #                 flow_dict[i] = 0.
                 # # if it's run of river, units operate when there is water
                 else:
-                    logger.debug('start processing run of river facility')
+                    logger.debug('start processing run of river facility unit %s',i)
                     at_capacity = False
                     cum_Q = 0.  # current cumulative discharge through the powerhouse
                     
