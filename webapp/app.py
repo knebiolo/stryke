@@ -1532,8 +1532,7 @@ def report():
 
 
     # render wrapper
-    full_report_html = f"""
-    <!DOCTYPE html>
+    full_report_html = """<!DOCTYPE html>
     <html lang="en">
     <head>
         <meta charset="UTF-8">
@@ -1603,7 +1602,8 @@ def report():
         </div>
     </body>
     </html>
-    """
+    """.format(report_html=report_html)
+
     return full_report_html
 
 
