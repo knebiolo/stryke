@@ -1479,9 +1479,34 @@ def get_simulation_instance():
     sim.output_name = session.get('output_name', 'simulation_output')
     return sim
 
+@app.route('/debug_report_path')
+def debug_report_path():
+    import os
+    try:
+        proj_dir = session.get('proj_dir')
+        path_file = os.path.join(proj_dir, "report_path.txt")
+        if not os.path.exists(path_file):
+            return f"<p>report_path.txt not found: {path_file}</p>", 404
+        with open(path_file, 'r') as f:
+            path_contents = f.read().strip()
+        return f"<p>Contents of report_path.txt: {path_contents}</p>"
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"<p>Fatal error: {e}</p>", 500
+
+
 @app.route('/report')
 def report():
-    import os
+    try:
+        proj_dir = session.get('proj_dir')
+        if not proj_dir:
+            return "<p>session['proj_dir'] is missing</p>", 500
+        return f"<p>session['proj_dir']: {proj_dir}</p>"
+    except Exception as e:
+        traceback.print_exc()
+        return f"<p>Fatal error: {e}</p>", 500
+
     try:
         user_sim_folder = session.get('proj_dir')
         print("DEBUG: user_sim_folder =", user_sim_folder)
@@ -1933,4 +1958,4 @@ def download_report():
 
 # Un Comment to Test Locally
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded = True, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded = True, use_reloader=False)
