@@ -1531,6 +1531,7 @@ class simulation():
                         if unit_ops.empty:
                             logger.debug("No operations data found for unit %s", unit['Unit'])
                             continue
+                        logger.debug('column names: %s',unit_ops.columns)
                         hours = unit_ops.iloc[0]['Hours']  # pick the first matching row
                         u_cap = unit['Qcap']
                         
