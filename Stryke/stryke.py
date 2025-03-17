@@ -1436,7 +1436,7 @@ class simulation():
             fac_units = self.unit_params[self.unit_params.Facility == facility]
             #fac_units.set_index('Unit', inplace = True)
             fac_units = fac_units.sort_values(by = 'op_order')
-            
+            logger.debug('Facility Type is %s',fac_type)
             # if operations are modeled with a distribution 
             for i in fac_units.index:
                 if fac_type != 'run-of-river':
@@ -1451,73 +1451,74 @@ class simulation():
                     # flip a coin - see if this unit is running today
                     prob_not_operating = ops_df.at[i,'Prob_Not_Op']
                     
-                    if operations == 'independent':
-                        if np.random.uniform(0,1,1) <= prob_not_operating:
-                            hours_dict[i] = 0.
-                            flow_dict[i] = 0.
-    
-                        else:
-                            # TODO Bad Creek Analysis halved hours - change back
-                            hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
-    
-                            if hours > 24.:
-                                hours = 24.
-                            elif hours < 0:
-                                hours = 0.
-                            hours_dict[i] = hours
-                            flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.    
+                    #if operations == 'independent':
+                    if np.random.uniform(0,1,1) <= prob_not_operating:
+                        hours_dict[i] = 0.
+                        flow_dict[i] = 0.
+
+                    else:
+                        # TODO Bad Creek Analysis halved hours - change back
+                        hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
+
+                        if hours > 24.:
+                            hours = 24.
+                        elif hours < 0:
+                            hours = 0.
+                        hours_dict[i] = hours
+                        flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.    
                             
-                    elif operations == 'dependent':
-                        # if this is the first unit to be operated
-                        #TODO change this back to just 1 == 1 - updated for Bad Creek Analysis
-                        if order == 1:# or i == 5:
-                            if np.random.uniform(0,1,1) <= prob_not_operating:
-                                hours_dict[i] = 0.
-                                flow_dict[i] = 0.
+                #     elif operations == 'dependent':
+                #         # if this is the first unit to be operated
+                #         #TODO change this back to just 1 == 1 - updated for Bad Creek Analysis
+                #         if order == 1:# or i == 5:
+                #             if np.random.uniform(0,1,1) <= prob_not_operating:
+                #                 hours_dict[i] = 0.
+                #                 flow_dict[i] = 0.
         
-                            else:
-                                # TODO Bad Creek Analysis halved hours - change back
-                                hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
+                #             else:
+                #                 # TODO Bad Creek Analysis halved hours - change back
+                #                 hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
     
-                                if hours > 24.:
-                                    hours = 24.
-                                elif hours < 0:
-                                    hours = 0.
-                                hours_dict[i] = hours
-                                flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.
+                #                 if hours > 24.:
+                #                     hours = 24.
+                #                 elif hours < 0:
+                #                     hours = 0.
+                #                 hours_dict[i] = hours
+                #                 flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.
     
-                        # if it is any other unit        
-                        else:
-                            prev_unit = fac_units[fac_units.op_order == order -1].index
-                            prev_hours = hours_dict[prev_unit]
+                #         # if it is any other unit        
+                #         else:
+                #             prev_unit = fac_units[fac_units.op_order == order -1].index
+                #             prev_hours = hours_dict[prev_unit]
                             
-                            # if the previous unit ran
-                            if prev_hours > 0:
-                                hours_remain = np.where(hours_operated[i] <= prev_hours, hours_operated[i], np.nan)
-                                hours_remain = hours_remain[~np.isnan(hours_remain)]
-                                if len(hours_remain) > 0:
-                                    fit_to_remain = lognorm.fit(hours_remain)
-                                    if np.random.uniform(0,1,1) <= prob_not_operating:
-                                        hours_dict[i] = 0.
-                                        flow_dict[i] = 0.
-                                    else:
-                                        # TODO Bad Creek Analysis halved hours - change back
-                                        hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0] #* 0.412290503
+                #             # if the previous unit ran
+                #             if prev_hours > 0:
+                #                 hours_remain = np.where(hours_operated[i] <= prev_hours, hours_operated[i], np.nan)
+                #                 hours_remain = hours_remain[~np.isnan(hours_remain)]
+                #                 if len(hours_remain) > 0:
+                #                     fit_to_remain = lognorm.fit(hours_remain)
+                #                     if np.random.uniform(0,1,1) <= prob_not_operating:
+                #                         hours_dict[i] = 0.
+                #                         flow_dict[i] = 0.
+                #                     else:
+                #                         # TODO Bad Creek Analysis halved hours - change back
+                #                         hours = lognorm.rvs(fit_to_remain[0],fit_to_remain[0],fit_to_remain[0],1)[0] #* 0.412290503
     
-                                        if hours > 24.:
-                                            hours = 24.
-                                        elif hours < 0:
-                                            hours = 0.
-                                        hours_dict[i] = hours                        
-                                        flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.
-                                else:
-                                    hours_dict[i] = 0.
-                                    flow_dict[i] = 0.                            
-                            else:
-                                hours_dict[i] = 0.
-                                flow_dict[i] = 0.
-                # if it's run of river, units operate when there is water
+                #                         if hours > 24.:
+                #                             hours = 24.
+                #                         elif hours < 0:
+                #                             hours = 0.
+                #                         hours_dict[i] = hours                        
+                #                         flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.
+                #                 else:
+                #                     hours_dict[i] = 0.
+                #                     flow_dict[i] = 0.                            
+                #             else:
+                #                 hours_dict[i] = 0.
+                #                 flow_dict[i] = 0.
+                # # if it's run of river, units operate when there is water
                 else:
+                    logger.debug('start processing run of river facility')
                     at_capacity = False
                     fac_units.set_index('Facility', inplace = True)
                     ops_df.set_index('Facility', inplace = True)
