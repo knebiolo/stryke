@@ -1529,7 +1529,7 @@ class simulation():
                         # If ops_df has a matching row for each unit, you can merge or filter by that identifier.
                         logger.debug('working on unit %s', idx)
                         # For example, if ops_df has a 'Unit' column:
-                        unit_ops = ops_df.iloc[idx]#[ops_df.Unit == idx
+                        unit_ops = ops_df.loc[idx]#[ops_df.Unit == idx
                         if unit_ops.empty:
                             logger.debug("No operations data found for unit %s", idx)
                             continue
