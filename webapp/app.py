@@ -1437,7 +1437,10 @@ def run_simulation():
 
 @app.route('/simulation_logs')
 def simulation_logs():
-    return render_template('simulation_logs.html')
+    return redirect(os.path.join(session.get('proj_dir'),"simulation_report.html"))
+
+
+    #return render_template('simulation_logs.html')
 
 def generate_discharge_histogram_text(df, column="DAvgFlow_prorate", bins=10):
     """
