@@ -1951,4 +1951,4 @@ def download_report():
 
 # Un Comment to Test Locally
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded = True, use_reloader=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded = True, use_reloader=False)
