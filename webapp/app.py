@@ -1393,7 +1393,7 @@ def run_simulation_in_background_custom(data_dict, log_queue):
         
         # Write the simulation report
         report_html = generate_report(sim_instance)
-        print (report_html)
+
         report_path = os.path.join(user_sim_folder, "simulation_report.html")
         session['report_path'] = report_path
         with open(report_path, "w", encoding="utf-8") as f:
@@ -1439,10 +1439,7 @@ def run_simulation():
 
 @app.route('/simulation_logs')
 def simulation_logs():
-    return redirect(os.path.join(session.get('proj_dir'),"simulation_report.html"))
-
-
-    #return render_template('simulation_logs.html')
+    return render_template('simulation_logs.html')
 
 def generate_discharge_histogram_text(df, column="DAvgFlow_prorate", bins=10):
     """
@@ -1941,6 +1938,8 @@ def generate_report(sim):
 
 @app.route('/download_report')
 def download_report():
+    #return redirect(os.path.join(session.get('proj_dir'),"simulation_report.html"))
+
     report_path = session.get('report_path')
     if not report_path or not os.path.exists(report_path):
         return "<p>Error: Report file not found.</p>"
