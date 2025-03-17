@@ -1436,6 +1436,7 @@ class simulation():
             fac_units = self.unit_params[self.unit_params.Facility == facility]
             #fac_units.set_index('Unit', inplace = True)
             fac_units = fac_units.sort_values(by = 'op_order')
+            fac_units.set_index('Unit', inplace = True)
             logger.debug('Facility Type is %s',fac_type)
             # if operations are modeled with a distribution 
             for i in fac_units.index:
@@ -1526,11 +1527,11 @@ class simulation():
                     for idx, row in fac_units.iterrows():
                         # Assume each unit row has a unique identifier in a column (e.g., 'Unit')
                         # If ops_df has a matching row for each unit, you can merge or filter by that identifier.
-                        logger.debug('working on unit %s', row['Unit'])
+                        logger.debug('working on unit %s', idx)
                         # For example, if ops_df has a 'Unit' column:
-                        unit_ops = ops_df[ops_df.Unit == row['Unit']]
+                        unit_ops = ops_df.iloc[idx]#[ops_df.Unit == idx
                         if unit_ops.empty:
-                            logger.debug("No operations data found for unit %s", row['Unit'])
+                            logger.debug("No operations data found for unit %s", idx)
                             continue
 
                         hours = unit_ops.iloc[0]['Hours']  # pick the first matching row
@@ -1540,13 +1541,13 @@ class simulation():
                         effective_cap = min(prod_Q, sta_cap)
                         
                         if cum_Q + u_cap <= effective_cap:
-                            hours_dict[row['Unit']] = hours
-                            flow_dict[row['Unit']] = u_cap * hours * 3600.
+                            hours_dict[idx] = hours
+                            flow_dict[idx] = u_cap * hours * 3600.
                             cum_Q += u_cap
                         else:
                             excess = cum_Q + u_cap - effective_cap
-                            hours_dict[row['Unit']] = hours
-                            flow_dict[row['Unit']] = (u_cap - excess) * hours * 3600.
+                            hours_dict[idx] = hours
+                            flow_dict[idx] = (u_cap - excess) * hours * 3600.
                             at_capacity = True
                     
                         if at_capacity:  # Exit the loop if at capacity
