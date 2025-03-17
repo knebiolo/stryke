@@ -33,6 +33,8 @@ import json
 import traceback
 import logging
 import logging.handlers
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
+
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -1394,10 +1396,20 @@ def run_simulation_in_background_custom(user_sim_folder, data_dict, log_queue):
             logger.debug("DEBUG: Writing simulation report to %s", report_path)
             f.write(report_html)
 
-        # Flag file for report readiness
-        flag_path = os.path.join(user_sim_folder, "report_ready.txt")
-        with open(flag_path, "w") as f:
-            f.write("ready")
+        # Write report_path.txt for /report route
+        path_file = os.path.join(user_sim_folder, "report_path.txt")
+        with open(path_file, "w") as f:
+            f.write(report_path)
+        
+        # Optionally: store it in session as backup
+        session['report_path'] = report_path
+
+            
+        # # After writing the HTML report
+        # path_file = os.path.join(user_sim_folder, "report_path.txt")
+        # with open(path_file, "w") as f:
+        #     f.write(report_path)
+
 
     except Exception as e:
         logger.exception("Error during simulation")  # ✅ Use logger.exception, not logger.debug(..., e)
