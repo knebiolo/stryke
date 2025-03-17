@@ -39,8 +39,7 @@
 <body>
     <h2>Simulation Progress</h2>
     <div id="logOutput">Waiting for simulation to start...</div>
-    <button id="resultsButton" onclick="window.location.href='/results'">View Results</button>
-
+    <button id="resultsButton" onclick="window.location.href='/report'">View Results</button> 
     <script>
         const logOutput = document.getElementById("logOutput");
         const eventSource = new EventSource("/stream");
