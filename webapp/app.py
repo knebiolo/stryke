@@ -1402,6 +1402,7 @@ def run_simulation_in_background_custom(data_dict, log_queue):
 
         # Write the report path to a marker file
         with open(os.path.join(user_sim_folder, "report_path.txt"), "w", encoding="utf-8") as f:
+            logger.debug("DEBUG: Writing report path to file")
             f.write(report_path)
 
     except Exception as e:
@@ -1502,18 +1503,19 @@ def report():
     try:
         # Safely grab session folder
         proj_dir = session.get('proj_dir')
-        logger.debug('project directory can be found at: %s',proj_dir)
+        # logger.debug('project directory can be found at: %s',proj_dir)
+        # # if not proj_dir:
+        # #     return "<h1>Session missing proj_dir</h1>", 500
         # if not proj_dir:
         #     return "<h1>Session missing proj_dir</h1>", 500
-        if not proj_dir:
-            return "<h1>Session missing proj_dir</h1>", 500
-
-        # Option 2: Read from the marker file
+        
         marker = os.path.join(proj_dir, "report_path.txt")
         if os.path.exists(marker):
             with open(marker, 'r', encoding='utf-8') as f:
                 report_path = f.read().strip()
-
+        else:# If the marker file doesn't exist, assume the report is at the default location.
+            report_path = os.path.join(proj_dir, "simulation_report.html")
+                
         if not os.path.exists(report_path):
             logger.debug("[ERROR] simulation_report.html does not exist")
             return f"<h1>Report not found: {report_path}</h1>", 404
