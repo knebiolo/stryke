@@ -1501,8 +1501,8 @@ def report():
     try:
         # Safely grab session folder
         proj_dir = session.get('proj_dir')
-        if not proj_dir:
-            return "<h1>Session missing proj_dir</h1>", 500
+        # if not proj_dir:
+        #     return "<h1>Session missing proj_dir</h1>", 500
 
         report_path = os.path.join(proj_dir, "simulation_report.html")
         print(f"[DEBUG] Checking report path: {report_path}")
@@ -1602,144 +1602,6 @@ def report():
         traceback.print_exc()
         return f"<pre>500 Internal Server Error: {str(e)}</pre>", 500
 
-
-# @app.route('/report')
-# def report():
-#     import os
-#     try:
-#         proj_dir = session.get('proj_dir')
-#         if not proj_dir:
-#             return "<p>proj_dir missing from session.</p>", 500
-
-#         path_file = os.path.join(proj_dir, "report_path.txt")
-#         if not os.path.exists(path_file):
-#             return "<p>report_path.txt not found.</p>", 404
-
-#         with open(path_file, 'r') as f:
-#             report_path = f.read().strip()
-
-#         if not os.path.exists(report_path):
-#             return f"<p>Report file not found at {report_path}</p>", 404
-
-#         return send_file(report_path)
-
-#     except Exception as e:
-#         import traceback
-#         traceback.print_exc()
-#         return f"<pre>Error: {str(e)}</pre>", 500
-
-# @app.route('/report')
-# def report():
-#     try:
-#         proj_dir = session.get('proj_dir')
-#         if not proj_dir:
-#             return "<p>session['proj_dir'] is missing</p>", 500
-#         return f"<p>session['proj_dir']: {proj_dir}</p>"
-#     except Exception as e:
-#         traceback.print_exc()
-#         return f"<p>Fatal error: {e}</p>", 500
-
-#     try:
-#         user_sim_folder = session.get('proj_dir')
-#         print("DEBUG: user_sim_folder =", user_sim_folder)
-
-#         if not user_sim_folder:
-#             raise Exception("user_sim_folder is None")
-
-#         path_file = os.path.join(user_sim_folder, "report_path.txt")
-#         print("DEBUG: path_file =", path_file)
-
-#         if not os.path.exists(path_file):
-#             raise FileNotFoundError(f"Missing report_path.txt: {path_file}")
-
-#         with open(path_file, 'r') as f:
-#             report_path = f.read().strip()
-#         print("DEBUG: report_path =", report_path)
-
-#         if not os.path.exists(report_path):
-#             raise FileNotFoundError(f"Missing HTML report: {report_path}")
-
-#         with open(report_path, 'r', encoding='utf-8') as f:
-#             report_html = f.read()
-
-#         full_report_html = f"""
-#         <!DOCTYPE html>
-#         <html lang="en">
-#         <head>
-#             <meta charset="UTF-8">
-#             <title>Simulation Report</title>
-#             <style>
-#                 body {{
-#                     font-family: Arial, sans-serif;
-#                     background: #f7f7f7;
-#                     margin: 20px;
-#                     color: #333;
-#                 }}
-#                 .container {{
-#                     max-width: 1000px;
-#                     margin: auto;
-#                     background: #fff;
-#                     padding: 20px;
-#                     border-radius: 8px;
-#                     box-shadow: 0 0 10px rgba(0,0,0,0.1);
-#                 }}
-#                 h1 {{
-#                     color: #0056b3;
-#                 }}
-#                 h2, h3 {{
-#                     color: #0056b3;
-#                     border-bottom: 1px solid #ddd;
-#                     padding-bottom: 4px;
-#                 }}
-#                 p {{
-#                     line-height: 1.6;
-#                 }}
-#                 table {{
-#                     width: 100%;
-#                     border-collapse: collapse;
-#                     margin: 1rem 0;
-#                 }}
-#                 th, td {{
-#                     padding: 8px;
-#                     border: 1px solid #ccc;
-#                     text-align: left;
-#                 }}
-#                 .table-wrap {{
-#                     overflow-x: auto;
-#                 }}
-#                 pre {{
-#                     background: #f4f4f4;
-#                     padding: 10px;
-#                     border-radius: 5px;
-#                 }}
-#                 .download-link {{
-#                     display: inline-block;
-#                     margin-top: 20px;
-#                     background: #007BFF;
-#                     color: white;
-#                     padding: 10px 15px;
-#                     text-decoration: none;
-#                     border-radius: 4px;
-#                 }}
-#                 .download-link:hover {{
-#                     background: #0056b3;
-#                 }}
-#             </style>
-#         </head>
-#         <body>
-#             <div class="container">
-#                 {report_html}
-#                 <a href="/download_report" class="download-link">⬇ Download Report</a>
-#             </div>
-#         </body>
-#         </html>
-#         """
-#         return full_report_html
-    
-#     except Exception as e:
-#         logger.exception(f"Unhandled error in /report route: {e}")
-#         return f"<p>Critical error loading report: {str(e)}</p>", 500
-    
 def generate_report(sim):
     """
     Generate the comprehensive HTML report for the simulation.

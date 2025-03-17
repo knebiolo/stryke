@@ -2195,6 +2195,7 @@ class simulation():
                 logger.info("Beta DF shape: %s",self.beta_df.shape)
                 logger.info("Daily Summary shape: %s",self.daily_summary.shape)
                 logger.info("Yearly Summary shape: %s",self.cum_sum.shape)
+                logger.info('yearly: %s',self.cum_sum)
     
                 # Optionally, write these DataFrames to Excel (if needed)
                 try:
