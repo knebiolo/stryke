@@ -1197,6 +1197,78 @@ def population():
             "length location": "-4.8473",
             "length scale": "12.5246"
         },
+        {
+            "name": "Rhinichthys, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "1.1916",
+            "location": "0",
+            "scale": "0.0017",
+            "max_ent_rate": "0.07",
+            "occur_prob": "0.2636",
+            "length shape": "0.0047",
+            "length location": "-538.9506",
+            "length scale": "545.041"
+        },
+        {
+            "name": "Salmo, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "1.4869",
+            "location": "0",
+            "scale": "0.0013",
+            "max_ent_rate": "0.34",
+            "occur_prob": "0.2679",
+            "length shape": "0.9693",
+            "length location": "-4.6793",
+            "length scale": "5.3207"
+        },
+        {
+            "name": "Salvelinus, Great Lakes, Annual",
+            "dist": "Log Normal",
+            "shape": "1.6537",
+            "location": "0",
+            "scale": "0.0088",
+            "max_ent_rate": "0.24",
+            "occur_prob": "0.2273",
+            "length shape": "0.0819",
+            "length location": "-92.9551",
+            "length scale": "110.736"
+        },
+        {
+            "name": "Sander, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "1.7446",
+            "location": "0",
+            "scale": "0.0363",
+            "max_ent_rate": "0.85",
+            "occur_prob": "0.5221",
+            "length shape": "0.4177",
+            "length location": "-1.0242",
+            "length scale": "16.4924"
+        },
+        {
+            "name": "Semotilus, Great Lakes, Met Fall & Winter",
+            "dist": "Pareto",
+            "shape": "0.5018",
+            "location": "0",
+            "scale": "0.0009",
+            "max_ent_rate": "0.62",
+            "occur_prob": "0.1186",
+            "length shape": "0.124",
+            "length location": "-27.1355",
+            "length scale": "37.8381"
+        },
+        {
+            "name": "Umbra, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "0.8115",
+            "location": "0",
+            "scale": "0.0073",
+            "max_ent_rate": "0.06",
+            "occur_prob": "0.2824",
+            "length shape": "0.167",
+            "length location": "-15.5853",
+            "length scale": "20.9652"
+        },
         # ...
     ]
 
@@ -1775,6 +1847,7 @@ def generate_report(sim):
         f"<p>HDF keys found: {store.keys()}</p>"
     ]
 
+    units = sim.output_units
     # Helper: Wrap DataFrame HTML in a scrollable container.
     def enforce_horizontal(df, name=""):
         if df is None or df.empty:
@@ -1791,10 +1864,24 @@ def generate_report(sim):
         table_html = df.to_html(index=False, border=1, classes="table")
         return shape_info + f"<div style='overflow-x:auto;'>{table_html}</div>"
 
-    def add_section(title, key):
+    def add_section(title, key,  units):
         report_sections.append(f"<h2>{title}</h2>")
         if key in store.keys():
             df = store[key]
+            if units == 'metric':
+                if key == '/Unit_Parameters':
+                    df['intake_vel'] = df.intake_vel * 0.3048
+                    df['D'] = df.D * 0.3048
+                    df['Qopt'] = df.Qopt * 0.0283168
+                    df['Qcap'] = df.Qcap * 0.0283168
+                    df['B'] = df.B * 0.3048
+                    df['D1'] = df.D1 * 0.3048
+                    df['D2'] = df.D2 * 0.3048
+                elif key == '/Facilities':
+                    df['Bypass_Flow'] = df.Bypass_Flow * 0.0283168
+                    df['Env_Flow'] = df.Env_Flow * 0.0283168
+                    df['Min_Op_Flow'] = df.Min_Op_Flow * 0.0283168
+                    
             report_sections.append(enforce_horizontal(df, title))
         else:
             report_sections.append(f"<p>No {title} data available.</p>")
@@ -1815,6 +1902,8 @@ def generate_report(sim):
         hydrograph_df = store["/Hydrograph"]
         if 'datetimeUTC' in hydrograph_df.columns:
             hydrograph_df['datetimeUTC'] = pd.to_datetime(hydrograph_df['datetimeUTC'])
+            if units == 'metric':
+                hydrograph_df['DAvgFlow_prorate'] = hydrograph_df.DAvgFlow_prorate * 0.0283168
 
         def create_hydro_timeseries(df):
             plt.rcParams.update({'font.size': 8})
