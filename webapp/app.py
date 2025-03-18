@@ -1078,18 +1078,6 @@ def get_unit_parameters():
 def population():
     species_defaults = [
         {
-            "name": "Mid Atlantic Micropterus in Spring",
-            "dist": "Log Normal",
-            "shape": "0.99",
-            "location": "0",
-            "scale": "0.0013",
-            "max_ent_rate": "0.0413",
-            "occur_prob": "0.4118",
-            "length shape": "0.5907",
-            "length location": "2.1245",
-            "length scale": "15.9345"
-        },
-        {
             "name": "Lepomis, Great Lakes, Met Winter",
             "dist": "Log Normal",
             "shape": "0.9881",
@@ -1136,6 +1124,66 @@ def population():
             "length shape": "0.197",
             "length location": "-17.815",
             "length scale": "32.4136"
+        },
+        {
+            "name": "Noturus, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "1.0017",
+            "location": "0",
+            "scale": "0.0085",
+            "max_ent_rate": "0.13",
+            "occur_prob": "0.4032",
+            "length shape": "0.5009",
+            "length location": "-3.4597",
+            "length scale": "11.6064"
+        },
+        {
+            "name": "Culaea, Great Lakes, Met Winter",
+            "dist": "Log Normal",
+            "shape": "1.4119",
+            "location": "0",
+            "scale": "0.0195",
+            "max_ent_rate": "0.79",
+            "occur_prob": "0.3158",
+            "length shape": "0.4749",
+            "length location": "-1.6826",
+            "length scale": "4.6771"
+        },
+        {
+            "name": "Cyprinella, Great Lakes, Met Fall & Winter",
+            "dist": "Weibull",
+            "shape": "1.0455",
+            "location": "0",
+            "scale": "0.0308",
+            "max_ent_rate": "0.18",
+            "occur_prob": "0.3605",
+            "length shape": "0.0071",
+            "length location": "-415.9701",
+            "length scale": "421.6351"
+        },
+        {
+            "name": " Esox, Great Lakes, Met Fall & Winter",
+            "dist": "Pareto",
+            "shape": "0.6404",
+            "location": "0",
+            "scale": "0.0016",
+            "max_ent_rate": "0.06",
+            "occur_prob": "0.228",
+            "length shape": "0.2138",
+            "length location": "-27.0125",
+            "length scale": "55.4757"
+        },
+        {
+            "name": " Etheostoma, Great Lakes, Met Fall & Winter",
+            "dist": "Pareto",
+            "shape": "1.3824",
+            "location": "0",
+            "scale": "0.0033",
+            "max_ent_rate": "0.05",
+            "occur_prob": "0.0677",
+            "length shape": "0.0643",
+            "length location": "-41.3359",
+            "length scale": "46.2126"
         },
         # ...
     ]
