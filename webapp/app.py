@@ -1818,8 +1818,10 @@ def generate_report(sim):
             }).reset_index()
         else:
             iteration_sums = None
+            logger.debug('no daily df')
     else:
         iteration_sums = None
+        logger.debug('no daily df')
 
     def create_iteration_hist(df, metric, title):
         plt.rcParams.update({'font.size': 8})
@@ -1880,12 +1882,13 @@ def generate_report(sim):
     
 
 
-    logger.debug('finished yearly panel')
+    logger.debug('finished creating yearly panel')
     if yearly_df is not None and not yearly_df.empty:
         panel_html = render_yearly_panel(yearly_df, iteration_sums)
         report_sections.append(panel_html)
     else:
         report_sections.append("<p>No yearly summary data available.</p>")
+        logger.debug('something went wrong, yearly df empty')
 
     # --- DAILY HISTOGRAMS SIDE BY SIDE ---
     report_sections.append("<h2>Daily Histograms</h2>")
