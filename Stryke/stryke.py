@@ -2227,6 +2227,7 @@ class simulation():
                             .rename(columns={'survival_%s' % (max(self.moves)):'count'})
                         whole_summ = whole_proj_succ.merge(whole_proj_count)
                         whole_summ['prob'] = whole_summ['successes'] / whole_summ['count']
+                        whole_summ.fillna(0, inplace=True)
                         
                         # give a summary of whole project survival
                         logger.info("==== Whole Project Survival Summary ====")
