@@ -2244,9 +2244,9 @@ class simulation():
                         logger.info("Per-day survival probability summary:")
                         per_day = whole_summ.groupby('day')['prob'].agg(['mean', 'min', 'max', 'std']).reset_index()
                         
-                        for _, row in per_day.iterrows():
-                            logger.info("  Day %3d | Mean = %.4f, Min = %.4f, Max = %.4f, Std Dev = %.4f",
-                                        row['day'], row['mean'], row['min'], row['max'], row['std'])
+                        # for _, row in per_day.iterrows():
+                        #     logger.info("  Day %s | Mean = %.4f, Min = %.4f, Max = %.4f, Std Dev = %.4f",
+                        #                 row['day'], row['mean'], row['min'], row['max'], row['std'])
 
                         try:
                             whole_params = beta.fit(whole_summ.prob.values)
