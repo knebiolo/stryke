@@ -1269,6 +1269,138 @@ def population():
             "length location": "-15.5853",
             "length scale": "20.9652"
         },
+        {
+            "name": "Lota, Great Lakes, Met Winter",
+            "dist": "Pareto",
+            "shape": "0.5486",
+            "location": "0",
+            "scale": "0.0033",
+            "max_ent_rate": "1.32",
+            "occur_prob": "0.1227",
+            "length shape": "0.167",
+            "length location": "-36.1855",
+            "length scale": "59.929"
+        },
+        {
+            "name": "Luxilus, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "2.6755",
+            "location": "0",
+            "scale": "0.1121",
+            "max_ent_rate": "4.5",
+            "occur_prob": "0.5041",
+            "length shape": "0.0152",
+            "length location": "-182.0854",
+            "length scale": "189.282"
+        },
+        {
+            "name": "Micropterus, Great Lakes, Met Winter",
+            "dist": "Log Normal",
+            "shape": "0.7591",
+            "location": "0",
+            "scale": "0.0079",
+            "max_ent_rate": "0.07",
+            "occur_prob": "0.3077",
+            "length shape": "0.1181",
+            "length location": "-20.6739",
+            "length scale": "29.5847"
+        },
+        {
+            "name": "Morone, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "1.214",
+            "location": "0",
+            "scale": "0.0156",
+            "max_ent_rate": "0.08",
+            "occur_prob": "0.6667",
+            "length shape": "0.4341",
+            "length location": "1.834",
+            "length scale": "8.0233"
+        },
+        {
+            "name": "Moxostoma, Great Lakes, Met Winter",
+            "dist": "Log Normal",
+            "shape": "1.3572",
+            "location": "0",
+            "scale": "0.0198",
+            "max_ent_rate": "0.3",
+            "occur_prob": "0.1837",
+            "length shape": "0.7031",
+            "length location": "-1.3125",
+            "length scale": "7.2819"
+        },
+        {
+            "name": "Nocomis, Great Lakes, Met Fall, Winter & Spring",
+            "dist": "Log Normal",
+            "shape": "1.4922",
+            "location": "0",
+            "scale": "0.0082",
+            "max_ent_rate": "0.2",
+            "occur_prob": "0.3231",
+            "length shape": "0.6069",
+            "length location": "-2.0622",
+            "length scale": "7.0788"
+        },
+        {
+            "name": "Notemigonus, Great Lakes, Met Winter",
+            "dist": "Pareto",
+            "shape": "0.5433",
+            "location": "0",
+            "scale": "0.0574",
+            "max_ent_rate": "1.31",
+            "occur_prob": "0.5102",
+            "length shape": "0.1365",
+            "length location": "-5.0983",
+            "length scale": "12.5858"
+        },
+        {
+            "name": "Notropis, Great Lakes, Met Winter",
+            "dist": "Pareto",
+            "shape": "0.9849",
+            "location": "0",
+            "scale": "0.0045",
+            "max_ent_rate": "0.26",
+            "occur_prob": "0.2647",
+            "length shape": "0.0023",
+            "length location": "-1153.8089",
+            "length scale": "1160.4858"
+        },
+        {
+            "name": "Oncorhynchus, Great Lakes, Met Winter",
+            "dist": "Weibull",
+            "shape": "0.6833",
+            "location": "0",
+            "scale": "0.0073",
+            "max_ent_rate": "0.05",
+            "occur_prob": "0.2303",
+            "length shape": "0.0582",
+            "length location": "-74.0199",
+            "length scale": "94.144"
+        },
+        {
+            "name": "Osmerus, Great Lakes, Annual",
+            "dist": "Log Normal",
+            "shape": "3.8764",
+            "location": "0",
+            "scale": "0.0012",
+            "max_ent_rate": "400.12",
+            "occur_prob": "0.5882",
+            "length shape": "0.2795",
+            "length location": "0.0606",
+            "length scale": "7.795"
+        },
+        {
+            "name": "Perca, Great Lakes, Met Winter",
+            "dist": "Pareto",
+            "shape": "0.3831",
+            "location": "0",
+            "scale": "24.4615",
+            "max_ent_rate": "3.54",
+            "occur_prob": "0.4426",
+            "length shape": "0.1231",
+            "length location": "-14.7021",
+            "length scale": "24.4615"
+        },
         # ...
     ]
 
@@ -1895,6 +2027,7 @@ def generate_report(sim):
     add_section("Flow Scenarios", "/Flow Scenarios", units)
     add_section("Operating Scenarios", "/Operating Scenarios", units)
     add_section("Population", "/Population", units)
+    
     logger.debug('finished basic data sections of report')
     
     # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
