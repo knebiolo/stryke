@@ -1987,20 +1987,31 @@ class simulation():
                                 # Convert state columns to Unicode strings.
                                 state_vals = fishes[state_columns].to_numpy(dtype='U50')
                                 # Use np.char.find to detect any uppercase 'U' in each state.
+
+                                # Mask: where 'U' is found per state column per row
                                 mask = np.char.find(state_vals, 'U') >= 0
                                 entrained = mask.any(axis=1)
-                                first_U_index = np.where(entrained, mask.argmax(axis=1), -1)
+                                
+                                # Safer way to find first index of 'U' in each row
+                                first_U_index = np.full(len(fishes), -1)
+                                first_U_index[entrained] = mask[entrained].argmax(axis=1)
+                                
+                                # Access survival values only where entrained
                                 survival_vals = fishes[survival_columns].values
                                 survived = np.zeros(len(fishes), dtype=bool)
-                                rows = np.arange(len(fishes))
-                                survived[entrained] = (survival_vals[rows[entrained], first_U_index[entrained]] == 1)
                                 
+                                valid_indices = first_U_index[entrained]
+                                survived[entrained] = survival_vals[entrained, valid_indices] == 1
+
                                 fishes['is_entrained'] = entrained
                                 fishes['survived_entrainment'] = survived
                                 total_entrained = entrained.sum()
                                 total_survived_entrained = survived.sum()
                                 daily_row_dict['num_entrained'] = total_entrained
                                 daily_row_dict['num_survived'] = total_survived_entrained
+    
+                                logger.debug("Total fish: %d | Entrained: %d | Survived entrainment: %d",
+                                             len(fishes), total_entrained, total_survived_entrained)    
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 daily.to_hdf(self.hdf,
