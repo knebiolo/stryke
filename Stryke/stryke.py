@@ -2227,10 +2227,33 @@ class simulation():
                 for i, row in self.beta_df.iterrows():
                     logger.info(row.to_string())                
                 logger.info("Yearly Summary shape: %s",self.cum_sum.shape)
-                logger.info("==== Yearly Summary ====")
-                logger.info(self.cum_sum.to_string(index=False))
-                for i, row in self.cum_sum.iterrows():
-                    logger.info(row.to_string())    
+                summary = self.cum_sum.iloc[0]
+                
+                logger.info("==== Yearly Summary (Entrainment & Mortality Statistics) ====")
+                
+                # 1. Entrainment mean and CI
+                logger.info("Entrainment: Mean = %.4f, 95%% CI = [%.4f, %.4f]",
+                            summary['mean_yearly_entrainment'],
+                            summary['lcl_yearly_entrainment'],
+                            summary['ucl_yearly_entrainment'])
+                
+                # 2. Mortality mean and CI
+                logger.info("Mortality: Mean = %.4f, 95%% CI = [%.4f, %.4f]",
+                            summary['mean_yearly_mortality'],
+                            summary['lcl_yearly_mortality'],
+                            summary['ucl_yearly_mortality'])
+                
+                # 3–5. Entrainment rare events
+                logger.info("Entrainment risk levels (probability of exceedance):")
+                logger.info("  1-in-10 day:    %.4f", summary['1_in_10_day_entrainment'])
+                logger.info("  1-in-100 day:  %.4f", summary['1_in_100_day_entrainment'])
+                logger.info("  1-in-1000 day: %.4f", summary['1_in_1000_day_entrainment'])
+                
+                # 6–8. Mortality rare events
+                logger.info("Mortality risk levels (probability of exceedance):")
+                logger.info("  1-in-10 day:    %.4f", summary['1_in_10_day_mortality'])
+                logger.info("  1-in-100 day:  %.4f", summary['1_in_100_day_mortality'])
+                logger.info("  1-in-1000 day: %.4f", summary['1_in_1000_day_mortality']) 
                     
                 # Optionally, write these DataFrames to Excel (if needed)
                 try:
