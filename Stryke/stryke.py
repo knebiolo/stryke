@@ -2123,10 +2123,10 @@ class simulation():
                                     ucl = beta.ppf(0.975, a=st_params[0], b=st_params[1],
                                                      loc=st_params[2], scale=st_params[3])
                                 except:
-                                    st_median = 0.5
-                                    st_std = 1.0
+                                    st_median = 0.
+                                    st_std = 0.
                                     lcl = 0.
-                                    ucl = 1.
+                                    ucl = 0.
                                 self.beta_dict['%s_%s_%s' % (j, i, m)] = [j,
                                                                           i,
                                                                           m,
@@ -2152,15 +2152,15 @@ class simulation():
                 cum_sum_dict = {
                     'species': [],
                     'scenario': [],
-                    'mean_yearly_ent': [],
-                    'lcl_yearly_ent': [],
-                    'ucl_yearly_ent': [],
+                    'mean_yearly_entrainment': [],
+                    'lcl_yearly_entrainment': [],
+                    'ucl_yearly_entrainment': [],
                     '1_in_10_day_entrainment': [],
                     '1_in_100_day_entrainment': [],
                     '1_in_1000_day_entrainment': [],
-                    'mean_yearly_mort': [],
-                    'lcl_yearly_mort': [],
-                    'ucl_yearly_mort': [],
+                    'mean_yearly_mortality': [],
+                    'lcl_yearly_mortality': [],
+                    'ucl_yearly_mortality': [],
                     '1_in_10_day_mortality': [],
                     '1_in_100_day_mortality': [],
                     '1_in_1000_day_mortality': [],
@@ -2174,15 +2174,15 @@ class simulation():
                         daily_counts = day_dat.num_entrained.values
                         n_actual_days = len(daily_counts)
                         if n_actual_days == 0:
-                            cum_sum_dict['mean_yearly_ent'].append(0.)
-                            cum_sum_dict['lcl_yearly_ent'].append(0.)
-                            cum_sum_dict['ucl_yearly_ent'].append(0.)
+                            cum_sum_dict['mean_yearly_entrainment'].append(0.)
+                            cum_sum_dict['lcl_yearly_entrainment'].append(0.)
+                            cum_sum_dict['ucl_yearly_entrainment'].append(0.)
                             cum_sum_dict['1_in_10_day_entrainment'].append(0.)
                             cum_sum_dict['1_in_100_day_entrainment'].append(0.)
                             cum_sum_dict['1_in_1000_day_entrainment'].append(0.)
-                            cum_sum_dict['mean_yearly_mort'].append(0.)
-                            cum_sum_dict['lcl_yearly_mort'].append(0.)
-                            cum_sum_dict['ucl_yearly_mort'].append(0.)
+                            cum_sum_dict['mean_yearly_mortality'].append(0.)
+                            cum_sum_dict['lcl_yearly_mortality'].append(0.)
+                            cum_sum_dict['ucl_yearly_mortality'].append(0.)
                             cum_sum_dict['1_in_10_day_mortality'].append(0.)
                             cum_sum_dict['1_in_100_day_mortality'].append(0.)
                             cum_sum_dict['1_in_1000_day_mortality'].append(0.)
@@ -2199,15 +2199,15 @@ class simulation():
                         extreme_killed = {T: df['num_mortalities'].quantile(q) for T, q in quantile_levels.items()}
                         year_tots = df.groupby(['iteration'])[['num_entrained','num_mortalities']].sum()
                         summary = year_tots.apply(summarize_ci)
-                        cum_sum_dict['mean_yearly_ent'].append(summary.at['mean','num_entrained'])
-                        cum_sum_dict['lcl_yearly_ent'].append(summary.at['lower_95_CI','num_entrained'])
-                        cum_sum_dict['ucl_yearly_ent'].append(summary.at['upper_95_CI','num_entrained'])
+                        cum_sum_dict['mean_yearly_entrainment'].append(summary.at['mean','num_entrained'])
+                        cum_sum_dict['lcl_yearly_entrainment'].append(summary.at['lower_95_CI','num_entrained'])
+                        cum_sum_dict['ucl_yearly_entrainment'].append(summary.at['upper_95_CI','num_entrained'])
                         cum_sum_dict['1_in_10_day_entrainment'].append(extreme_entrained[10])
                         cum_sum_dict['1_in_100_day_entrainment'].append(extreme_entrained[100])
                         cum_sum_dict['1_in_1000_day_entrainment'].append(extreme_entrained[1000])
-                        cum_sum_dict['mean_yearly_mort'].append(summary.at['mean','num_mortalities'])
-                        cum_sum_dict['lcl_yearly_mort'].append(summary.at['lower_95_CI','num_mortalities'])
-                        cum_sum_dict['ucl_yearly_mort'].append(summary.at['upper_95_CI','num_mortalities'])
+                        cum_sum_dict['mean_yearly_mortality'].append(summary.at['mean','num_mortalities'])
+                        cum_sum_dict['lcl_yearly_mortality'].append(summary.at['lower_95_CI','num_mortalities'])
+                        cum_sum_dict['ucl_yearly_mortality'].append(summary.at['upper_95_CI','num_mortalities'])
                         cum_sum_dict['1_in_10_day_mortality'].append(extreme_killed[10])
                         cum_sum_dict['1_in_100_day_mortality'].append(extreme_killed[100])
                         cum_sum_dict['1_in_1000_day_mortality'].append(extreme_killed[1000])
@@ -2217,9 +2217,11 @@ class simulation():
                 self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict, orient='columns')
                 # Debug print shapes
                 logger.info("Beta DF shape: %s",self.beta_df.shape)
+                logger.info(self.beta_df.to_string(index=False))  # index=False if you want a cleaner output
                 logger.info("Daily Summary shape: %s",self.daily_summary.shape)
+                logger.info(self.daily_summary.to_string(index=False))  # index=False if you want a cleaner output
                 logger.info("Yearly Summary shape: %s",self.cum_sum.shape)
-                logger.info('yearly: %s',self.cum_sum)
+                logger.info(self.cum_sum.to_string(index=False))  # index=False if you want a cleaner output
     
                 # Optionally, write these DataFrames to Excel (if needed)
                 try:
