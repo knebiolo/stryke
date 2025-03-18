@@ -1748,6 +1748,7 @@ def generate_report(sim):
     add_section("Operating Scenarios", "/Operating Scenarios")
     add_section("Population", "/Population")
     logger.debug('finished basic data sections of report')
+    
     # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
     report_sections.append("<h2>Hydrograph Plots</h2>")
     if "/Hydrograph" in store.keys():
@@ -1801,6 +1802,7 @@ def generate_report(sim):
     else:
         report_sections.append("<p>No hydrograph data available.</p>")
     logger.debug('finished hydrograph')
+    
     # --- BETA DISTRIBUTIONS ---
     add_section("Beta Distributions", "/Beta_Distributions")
 
@@ -1851,12 +1853,10 @@ def generate_report(sim):
             # Use expected column keys; adjust if needed.
             if metric == 'entrained':
                 metric = 'entrainment'
-                abbv = 'ent'
-            else:
-                abbv = 'mort'
-            mean_val = row.get(f"mean_yearly_{abbv}", "N/A")
-            lcl_val = row.get(f"lcl_yearly_{abbv}", "N/A")
-            ucl_val = row.get(f"ucl_yearly_{abbv}", "N/A")
+
+            mean_val = row.get(f"mean_yearly_{metric}", "N/A")
+            lcl_val = row.get(f"lcl_yearly_{metric}", "N/A")
+            ucl_val = row.get(f"ucl_yearly_{metric}", "N/A")
             like10 = row.get(f"1_in_10_day_{metric}", "N/A")
             like100 = row.get(f"1_in_100_day_{metric}", "N/A")
             like1000 = row.get(f"1_in_1000_day_{metric}", "N/A")
