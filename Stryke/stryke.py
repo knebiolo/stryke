@@ -2222,11 +2222,16 @@ class simulation():
                 self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict, orient='columns')
                 # Debug print shapes
                 logger.info("Beta DF shape: %s",self.beta_df.shape)
-                logger.info(self.beta_df.to_string(index=False))  # index=False if you want a cleaner output
-                logger.info("Daily Summary shape: %s",self.daily_summary.shape)
+                logger.info("==== Yearly Summary ====")
+                logger.info(self.beta_df.to_string(index=False))
+                for i, row in self.beta_df.iterrows():
+                    logger.info(row.to_string())                
                 logger.info("Yearly Summary shape: %s",self.cum_sum.shape)
-                logger.info(self.cum_sum.to_string(index=False))  # index=False if you want a cleaner output
-    
+                logger.info("==== Yearly Summary ====")
+                logger.info(self.cum_sum.to_string(index=False))
+                for i, row in self.cum_sum.iterrows():
+                    logger.info(row.to_string())    
+                    
                 # Optionally, write these DataFrames to Excel (if needed)
                 try:
                     with pd.ExcelWriter(self.wks_dir, engine='openpyxl', mode='a') as writer:
