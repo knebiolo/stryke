@@ -1872,6 +1872,7 @@ def generate_report(sim):
                 if key == '/Unit_Parameters':
                     df['intake_vel'] = df.intake_vel * 0.3048
                     df['D'] = df.D * 0.3048
+                    df['H'] = df.H * 0.3048
                     df['Qopt'] = df.Qopt * 0.0283168
                     df['Qcap'] = df.Qcap * 0.0283168
                     df['B'] = df.B * 0.3048
