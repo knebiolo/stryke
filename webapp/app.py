@@ -1174,7 +1174,7 @@ def population():
             "length scale": "55.4757"
         },
         {
-            "name": " Etheostoma, Great Lakes, Met Fall & Winter",
+            "name": " Etheostoma, Great Lakes, Met Winter",
             "dist": "Pareto",
             "shape": "1.3824",
             "location": "0",
@@ -1184,6 +1184,18 @@ def population():
             "length shape": "0.0643",
             "length location": "-41.3359",
             "length scale": "46.2126"
+        },
+        {
+            "name": "Pomoxis, Great Lakes, Met Winter",
+            "dist": "Log Normal",
+            "shape": "1.7493",
+            "location": "0",
+            "scale": "0.0473",
+            "max_ent_rate": "4.77",
+            "occur_prob": "0.4032",
+            "length shape": "0.2192",
+            "length location": "-4.8473",
+            "length scale": "12.5246"
         },
         # ...
     ]
