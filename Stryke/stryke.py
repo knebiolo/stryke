@@ -996,210 +996,334 @@ class simulation():
         
             # return finished product and enjoy functionality of networkx
             self.graph = route
-  
+ 
     def movement(self,
                  location,
-                 status, 
-                 swim_speed, 
-                 graph, 
+                 status,
+                 swim_speed,
+                 graph,
                  intake_vel_dict,
-                 Q_dict, 
-                 op_order, 
+                 Q_dict,
+                 op_order,
                  cap_dict,
                  unit_fac_dict):
         """
         Simulates the movement of a fish through a hydroelectric project's
         infrastructure, considering operational conditions, the fish's swimming
-        capabilities, and environmental requirements.
+        capabilities, and operational sequencing.
         """
-        # print("\n--- Movement Function Called ---")
-        # print("Initial location:", location)
-        # print("Status:", status)
-        # print("Swim speed:", swim_speed)
-        # print("Q_dict:", Q_dict)
-        # print("op_order:", op_order)
-        # print("cap_dict:", cap_dict)
-        # print("unit_fac_dict:", unit_fac_dict)
-        
-        curr_Q = Q_dict['curr_Q']   # current discharge
-        min_Q_dict = Q_dict['min_Q']     # minimum operating discharge
-        sta_cap_dict = Q_dict['sta_cap'] # station capacity
-        env_Q_dict = Q_dict['env_Q']     # min environmental discharge 
-        bypass_Q_dict = Q_dict['bypass_Q'] # bypass discharge
+        curr_Q = Q_dict['curr_Q']
+        min_Q_dict = Q_dict['min_Q']
+        sta_cap_dict = Q_dict['sta_cap']
+        env_Q_dict = Q_dict['env_Q']
+        bypass_Q_dict = Q_dict['bypass_Q']
     
-        #print("Current Q:", curr_Q)
-        
-        if status == 1:
-            nbors = list(graph.neighbors(location))
-            #print("Neighbors of", location, ":", nbors)
-            
-            locs = []
-            probs = []
-            
-            if len(nbors) > 1:
-                # Diagnostic prints for neighbor checks
-                found_spill = np.char.find(nbors, "spill") >= 0
-                contains_U = np.char.find(nbors, "U") >= 0
-                # print("found_spill array:", found_spill)
-                # print("contains_U array:", contains_U)
-                
-                if np.any(contains_U):
-                    #print("Processing unit nodes based on contains_U")
-                    for i in nbors:
-                        #print("Processing neighbor:", i)
+        if status != 1:
+            return location  # Fish is dead
+    
+        nbors = list(graph.neighbors(location))
+        if not nbors:
+            return location
+    
+        locs = []
+        probs = []
+    
+        contains_U = np.char.find(nbors, 'U') >= 0
+        found_spill = np.char.find(nbors, 'spill') >= 0
+    
+        if np.any(contains_U):
+            for i in nbors:
+                if 'U' in i:
+                    # Resolve facility
+                    try:
+                        facility = unit_fac_dict[i]
+                    except KeyError:
                         try:
-                            facility = unit_fac_dict[i]
-                           # print("Facility from unit_fac_dict for", i, ":", facility)
-                        except Exception as e:
-                            #print("Could not get facility for", i, "from unit_fac_dict. Exception:", e)
-                            for j in nbors:
-                                if 'U' in j:
-                                    try:
-                                        facility = self.unit_params.at[j, 'Facility']
-                                        #print("Fallback facility for", j, ":", facility)
-                                    except Exception as ex:
-                                        logger.debug("Fallback failed for", j, "with exception:", ex)
-                                    continue
-                        sta_cap = sta_cap_dict[facility]
-                        min_Q = min_Q_dict[facility]
-                        env_Q = env_Q_dict[facility]
-                        bypass_Q = bypass_Q_dict[facility]
-                        #print("For facility", facility, "sta_cap:", sta_cap, "min_Q:", min_Q, "env_Q:", env_Q, "bypass_Q:", bypass_Q)
-                        
-                        if min_Q < curr_Q < sta_cap + bypass_Q:
-                            excess = curr_Q - (sta_cap + env_Q + bypass_Q)
-                            if excess >= 0:
-                                prod_Q = curr_Q - env_Q - bypass_Q - excess
-                            else:
-                                prod_Q = curr_Q - env_Q - bypass_Q
-                            #print("For", i, "prod_Q:", prod_Q)
-                            
-                            if i[0] == 'U':
-                                unit_cap = Q_dict[i]
-                                order = op_order[i]
-                                prev_units = []
-                                for u in op_order:
-                                    fac = unit_fac_dict[u]
-                                    if fac == facility:
-                                        if op_order[u] < order:
-                                            prev_units.append(u)
-                                #print("For", i, "prev_units:", prev_units)
-                                if len(prev_units) == 0:
-                                    if prod_Q >= Q_dict[i]:
-                                        u_Q = Q_dict[i]
-                                    else:
-                                        u_Q = prod_Q
-                                else:
-                                    prev_Q = sum(Q_dict[j] for j in prev_units)
-                                    if prev_Q >= prod_Q:
-                                        u_Q = 0.0
-                                    else:
-                                        u_Q = prod_Q - prev_Q
-                                        if u_Q > unit_cap:
-                                            u_Q = unit_cap
-                                #print("For", i, "u_Q:", u_Q)
-                                locs.append(i)
-                                prob_value = u_Q / (prod_Q + bypass_Q)
-                                probs.append(prob_value)
-                                #print("Appended probability for", i, ":", prob_value)
-                            else:
-                                locs.append(i)
-                                prob_value = bypass_Q / (prod_Q + bypass_Q)
-                                probs.append(prob_value)
-                                #print("Appended probability for bypass", i, ":", prob_value)
-                        elif curr_Q >= sta_cap + bypass_Q:
-                            excess = curr_Q - (sta_cap + bypass_Q + env_Q)
-                            #print("For", i, "excess:", excess)
-                            if i[0] == 'U':
-                                q_cap = cap_dict[i]
-                                locs.append(i)
-                                prob_value = q_cap / (sta_cap + bypass_Q)
-                                probs.append(prob_value)
-                                #print("Appended probability for", i, ":", prob_value)
-                            else:
-                                locs.append(i)
-                                prob_value = bypass_Q / (sta_cap + bypass_Q)
-                                probs.append(prob_value)
-                                #print("Appended probability for bypass", i, ":", prob_value)
-                elif np.any(found_spill):
-                    #print("Processing spill nodes")
-                    for i in nbors:
-                        if 'spill' in i:
-                            facilities = self.facility_params[self.facility_params.Spillway == i].index
-                            #print("Facilities for spill", i, ":", facilities)
-                    sta_cap = 0 
-                    min_Q = 0 
-                    env_Q = 0
-                    bypass_Q = 0
-                    for i in facilities:
-                        sta_cap_fac = sta_cap_dict[i]
-                        min_Q_fac =  min_Q_dict[i]
-                        env_Q_fac = env_Q_dict[i]
-                        bypass_Q_fac = bypass_Q_dict[i]
-                        sta_cap += sta_cap_fac
-                        min_Q += min_Q_fac
-                        env_Q += env_Q_fac
-                        bypass_Q += bypass_Q_fac
-                    #print("Aggregated for spill: sta_cap:", sta_cap, "min_Q:", min_Q, "env_Q:", env_Q, "bypass_Q:", bypass_Q)
-                    for i in nbors:
-                        if curr_Q <= min_Q:
-                            if 'spill' in i:
-                                locs.append(i)  
-                                probs.append(1.)
-                                #print("For", i, "appended prob 1 (curr_Q <= min_Q)")
-                            else:
-                                locs.append(i)
-                                probs.append(0.)
-                        elif curr_Q >= np.sum(list(sta_cap_dict.values())) + env_Q + bypass_Q:
-                            excess = curr_Q - np.sum(list(sta_cap_dict.values())) - bypass_Q - env_Q
-                            tot_spill = excess + env_Q
-                            p_spill = tot_spill / curr_Q
-                            if 'spill' in i:
-                                locs.append(i)  
-                                probs.append(p_spill)
-                                #print("For", i, "appended p_spill:", p_spill)
-                            else:
-                                locs.append(i)
-                                probs.append(1 - p_spill)
-                        elif curr_Q < np.sum(list(sta_cap_dict.values())) + env_Q + bypass_Q:
-                            p_env = env_Q / curr_Q
-                            if 'spill' in i:
-                                locs.append(i)  
-                                probs.append(p_env)
-                                #print("For", i, "appended p_env:", p_env)
-                            else:
-                                locs.append(i)
-                                probs.append(1 - p_env)
+                            facility = self.unit_params.at[i, 'Facility']
+                        except Exception:
+                            continue  # skip node if not found
+    
+                    sta_cap = sta_cap_dict.get(facility, 0.0)
+                    min_Q = min_Q_dict.get(facility, 0.0)
+                    env_Q = env_Q_dict.get(facility, 0.0)
+                    bypass_Q = bypass_Q_dict.get(facility, 0.0)
+    
+                    # Determine usable production flow
+                    if curr_Q > min_Q:
+                        excess = curr_Q - (sta_cap + env_Q + bypass_Q)
+                        prod_Q = max(curr_Q - env_Q - bypass_Q - max(excess, 0), 0.0)
+                    else:
+                        prod_Q = 0.0
+    
+                    # Reintroduce operation order logic
+                    unit_cap = Q_dict.get(i, 0.0)
+                    order = op_order[i]
+                    prev_units = [
+                        u for u in op_order
+                        if unit_fac_dict.get(u, None) == facility and op_order[u] < order
+                    ]
+                    prev_Q = sum(Q_dict.get(pu, 0.0) for pu in prev_units)
+    
+                    if prev_Q >= prod_Q:
+                        u_Q = 0.0  # Not enough flow left for this unit
+                    else:
+                        u_Q = min(prod_Q - prev_Q, unit_cap)
+    
+                    prob = u_Q / curr_Q if curr_Q > 0 else 0.0
+                    locs.append(i)
+                    probs.append(prob)
+    
+                else:  # Bypass path
+                    facility = unit_fac_dict.get(i, None)
+                    bypass_Q = bypass_Q_dict.get(facility, 0.0)
+                    prob = bypass_Q / curr_Q if curr_Q > 0 else 0.0
+                    locs.append(i)
+                    probs.append(prob)
+    
+        elif np.any(found_spill):
+            facilities = self.facility_params[self.facility_params.Spillway.isin(nbors)].index
+            total_sta_cap = sum(sta_cap_dict.get(f, 0.0) for f in facilities)
+            total_env_Q = sum(env_Q_dict.get(f, 0.0) for f in facilities)
+            total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities)
+    
+            for i in nbors:
+                if curr_Q <= min_Q_dict.get(i, 0.0):
+                    prob = 1.0 if 'spill' in i else 0.0
+                elif curr_Q >= total_sta_cap + total_env_Q + total_bypass_Q:
+                    spill_Q = curr_Q - total_sta_cap - total_bypass_Q
+                    prob = max(spill_Q / curr_Q, 0.0) if 'spill' in i else 1.0 - max(spill_Q / curr_Q, 0.0)
                 else:
-                    #print("Using edge weights for movement")
-                    for i in nbors:
-                        locs.append(i)
-                        edge_weight = graph[location][i]["weight"]
-                        probs.append(edge_weight)
-                        #print("For", i, "edge weight:", edge_weight)
-            elif len(nbors) == 1:
-                locs.append(nbors[0])
-                probs.append(1)
-                #print("Only one neighbor; locs:", locs, "probs:", probs)
-            else:
-                locs.append(location)
-                probs.append(1)
-                #print("No neighbors; locs:", locs, "probs:", probs)
-        
-            #print("Final locs list:", locs)
-            #print("Final probs list:", probs)
-            try:
-                new_loc = np.random.choice(locs, 1, p=probs)[0]
-                #print("Chosen new location:", new_loc)
-            except Exception as e:
-                #print('Problem with movement function during np.random.choice:', e)
-                new_loc = location
+                    p_env = total_env_Q / curr_Q if curr_Q > 0 else 0.0
+                    prob = p_env if 'spill' in i else 1.0 - p_env
+                locs.append(i)
+                probs.append(prob)
+    
         else:
-            #print("Fish is dead; remains at location.")
+            # Fallback: edge weights from graph
+            for i in nbors:
+                locs.append(i)
+                edge_weight = graph[location][i].get("weight", 1.0)
+                probs.append(edge_weight)
+    
+        # Normalize probabilities
+        probs = np.array(probs, dtype=float)
+        if probs.sum() > 0:
+            probs /= probs.sum()
+        else:
+            probs = np.ones(len(probs)) / len(probs)
+    
+        try:
+            new_loc = np.random.choice(locs, p=probs)
+        except Exception:
             new_loc = location
-            
-        #print("--- Movement Function End ---\n")
+    
         return new_loc
+
+ 
+    
+    # def movement(self,
+    #              location,
+    #              status, 
+    #              swim_speed, 
+    #              graph, 
+    #              intake_vel_dict,
+    #              Q_dict, 
+    #              op_order, 
+    #              cap_dict,
+    #              unit_fac_dict):
+    #     """
+    #     Simulates the movement of a fish through a hydroelectric project's
+    #     infrastructure, considering operational conditions, the fish's swimming
+    #     capabilities, and environmental requirements.
+    #     """
+    #     # print("\n--- Movement Function Called ---")
+    #     # print("Initial location:", location)
+    #     # print("Status:", status)
+    #     # print("Swim speed:", swim_speed)
+    #     # print("Q_dict:", Q_dict)
+    #     # print("op_order:", op_order)
+    #     # print("cap_dict:", cap_dict)
+    #     # print("unit_fac_dict:", unit_fac_dict)
+        
+    #     curr_Q = Q_dict['curr_Q']   # current discharge
+    #     min_Q_dict = Q_dict['min_Q']     # minimum operating discharge
+    #     sta_cap_dict = Q_dict['sta_cap'] # station capacity
+    #     env_Q_dict = Q_dict['env_Q']     # min environmental discharge 
+    #     bypass_Q_dict = Q_dict['bypass_Q'] # bypass discharge
+    
+    #     #print("Current Q:", curr_Q)
+        
+    #     if status == 1:
+    #         nbors = list(graph.neighbors(location))
+    #         #print("Neighbors of", location, ":", nbors)
+            
+    #         locs = []
+    #         probs = []
+            
+    #         if len(nbors) > 1:
+    #             # Diagnostic prints for neighbor checks
+    #             found_spill = np.char.find(nbors, "spill") >= 0
+    #             contains_U = np.char.find(nbors, "U") >= 0
+    #             # print("found_spill array:", found_spill)
+    #             # print("contains_U array:", contains_U)
+                
+    #             if np.any(contains_U):
+    #                 #print("Processing unit nodes based on contains_U")
+    #                 for i in nbors:
+    #                     #print("Processing neighbor:", i)
+    #                     try:
+    #                         facility = unit_fac_dict[i]
+    #                        # print("Facility from unit_fac_dict for", i, ":", facility)
+    #                     except Exception as e:
+    #                         #print("Could not get facility for", i, "from unit_fac_dict. Exception:", e)
+    #                         for j in nbors:
+    #                             if 'U' in j:
+    #                                 try:
+    #                                     facility = self.unit_params.at[j, 'Facility']
+    #                                     #print("Fallback facility for", j, ":", facility)
+    #                                 except Exception as ex:
+    #                                     logger.debug("Fallback failed for", j, "with exception:", ex)
+    #                                 continue
+    #                     sta_cap = sta_cap_dict[facility]
+    #                     min_Q = min_Q_dict[facility]
+    #                     env_Q = env_Q_dict[facility]
+    #                     bypass_Q = bypass_Q_dict[facility]
+    #                     #print("For facility", facility, "sta_cap:", sta_cap, "min_Q:", min_Q, "env_Q:", env_Q, "bypass_Q:", bypass_Q)
+                        
+    #                     if min_Q < curr_Q < sta_cap + bypass_Q:
+    #                         excess = curr_Q - (sta_cap + env_Q + bypass_Q)
+    #                         if excess >= 0:
+    #                             prod_Q = curr_Q - env_Q - bypass_Q - excess
+    #                         else:
+    #                             prod_Q = curr_Q - env_Q - bypass_Q
+    #                         #print("For", i, "prod_Q:", prod_Q)
+                            
+    #                         if i[0] == 'U':
+    #                             unit_cap = Q_dict[i]
+    #                             order = op_order[i]
+    #                             prev_units = []
+    #                             for u in op_order:
+    #                                 fac = unit_fac_dict[u]
+    #                                 if fac == facility:
+    #                                     if op_order[u] < order:
+    #                                         prev_units.append(u)
+    #                             #print("For", i, "prev_units:", prev_units)
+    #                             if len(prev_units) == 0:
+    #                                 if prod_Q >= Q_dict[i]:
+    #                                     u_Q = Q_dict[i]
+    #                                 else:
+    #                                     u_Q = prod_Q
+    #                             else:
+    #                                 prev_Q = sum(Q_dict[j] for j in prev_units)
+    #                                 if prev_Q >= prod_Q:
+    #                                     u_Q = 0.0
+    #                                 else:
+    #                                     u_Q = prod_Q - prev_Q
+    #                                     if u_Q > unit_cap:
+    #                                         u_Q = unit_cap
+    #                             #print("For", i, "u_Q:", u_Q)
+    #                             locs.append(i)
+    #                             prob_value = u_Q / (prod_Q + bypass_Q)
+    #                             probs.append(prob_value)
+    #                             #print("Appended probability for", i, ":", prob_value)
+    #                         else:
+    #                             locs.append(i)
+    #                             prob_value = bypass_Q / (prod_Q + bypass_Q)
+    #                             probs.append(prob_value)
+    #                             #print("Appended probability for bypass", i, ":", prob_value)
+    #                     elif curr_Q >= sta_cap + bypass_Q:
+    #                         excess = curr_Q - (sta_cap + bypass_Q + env_Q)
+    #                         #print("For", i, "excess:", excess)
+    #                         if i[0] == 'U':
+    #                             q_cap = cap_dict[i]
+    #                             locs.append(i)
+    #                             prob_value = q_cap / (sta_cap + bypass_Q)
+    #                             probs.append(prob_value)
+    #                             #print("Appended probability for", i, ":", prob_value)
+    #                         else:
+    #                             locs.append(i)
+    #                             prob_value = bypass_Q / (sta_cap + bypass_Q)
+    #                             probs.append(prob_value)
+    #                             #print("Appended probability for bypass", i, ":", prob_value)
+    #             elif np.any(found_spill):
+    #                 #print("Processing spill nodes")
+    #                 for i in nbors:
+    #                     if 'spill' in i:
+    #                         facilities = self.facility_params[self.facility_params.Spillway == i].index
+    #                         #print("Facilities for spill", i, ":", facilities)
+    #                 sta_cap = 0 
+    #                 min_Q = 0 
+    #                 env_Q = 0
+    #                 bypass_Q = 0
+    #                 for i in facilities:
+    #                     sta_cap_fac = sta_cap_dict[i]
+    #                     min_Q_fac =  min_Q_dict[i]
+    #                     env_Q_fac = env_Q_dict[i]
+    #                     bypass_Q_fac = bypass_Q_dict[i]
+    #                     sta_cap += sta_cap_fac
+    #                     min_Q += min_Q_fac
+    #                     env_Q += env_Q_fac
+    #                     bypass_Q += bypass_Q_fac
+    #                 #print("Aggregated for spill: sta_cap:", sta_cap, "min_Q:", min_Q, "env_Q:", env_Q, "bypass_Q:", bypass_Q)
+    #                 for i in nbors:
+    #                     if curr_Q <= min_Q:
+    #                         if 'spill' in i:
+    #                             locs.append(i)  
+    #                             probs.append(1.)
+    #                             #print("For", i, "appended prob 1 (curr_Q <= min_Q)")
+    #                         else:
+    #                             locs.append(i)
+    #                             probs.append(0.)
+    #                     elif curr_Q >= np.sum(list(sta_cap_dict.values())) + env_Q + bypass_Q:
+    #                         excess = curr_Q - np.sum(list(sta_cap_dict.values())) - bypass_Q - env_Q
+    #                         tot_spill = excess + env_Q
+    #                         p_spill = tot_spill / curr_Q
+    #                         if 'spill' in i:
+    #                             locs.append(i)  
+    #                             probs.append(p_spill)
+    #                             #print("For", i, "appended p_spill:", p_spill)
+    #                         else:
+    #                             locs.append(i)
+    #                             probs.append(1 - p_spill)
+    #                     elif curr_Q < np.sum(list(sta_cap_dict.values())) + env_Q + bypass_Q:
+    #                         p_env = env_Q / curr_Q
+    #                         if 'spill' in i:
+    #                             locs.append(i)  
+    #                             probs.append(p_env)
+    #                             #print("For", i, "appended p_env:", p_env)
+    #                         else:
+    #                             locs.append(i)
+    #                             probs.append(1 - p_env)
+    #             else:
+    #                 #print("Using edge weights for movement")
+    #                 for i in nbors:
+    #                     locs.append(i)
+    #                     edge_weight = graph[location][i]["weight"]
+    #                     probs.append(edge_weight)
+    #                     #print("For", i, "edge weight:", edge_weight)
+    #         elif len(nbors) == 1:
+    #             locs.append(nbors[0])
+    #             probs.append(1)
+    #             #print("Only one neighbor; locs:", locs, "probs:", probs)
+    #         else:
+    #             locs.append(location)
+    #             probs.append(1)
+    #             #print("No neighbors; locs:", locs, "probs:", probs)
+        
+    #         #print("Final locs list:", locs)
+    #         #print("Final probs list:", probs)
+    #         try:
+    #             new_loc = np.random.choice(locs, 1, p=probs)[0]
+    #             #print("Chosen new location:", new_loc)
+    #         except Exception as e:
+    #             #print('Problem with movement function during np.random.choice:', e)
+    #             new_loc = location
+    #     else:
+    #         #print("Fish is dead; remains at location.")
+    #         new_loc = location
+            
+    #     #print("--- Movement Function End ---\n")
+    #     return new_loc
 
 
     def speed (L,A,M):
