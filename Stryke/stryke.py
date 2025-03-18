@@ -2092,6 +2092,26 @@ class simulation():
                             .rename(columns={'survival_%s' % (max(self.moves)):'count'})
                         whole_summ = whole_proj_succ.merge(whole_proj_count)
                         whole_summ['prob'] = whole_summ['successes'] / whole_summ['count']
+                        
+                        # give a summary of whole project survival
+                        logger.info("==== Whole Project Survival Summary ====")
+
+                        overall_mean = whole_summ['prob'].mean()
+                        overall_min = whole_summ['prob'].min()
+                        overall_max = whole_summ['prob'].max()
+                        overall_std = whole_summ['prob'].std()
+                        
+                        logger.info("Overall survival probability across all days & iterations:")
+                        logger.info("  Mean = %.4f, Min = %.4f, Max = %.4f, Std Dev = %.4f",
+                                    overall_mean, overall_min, overall_max, overall_std)
+                        
+                        logger.info("Per-day survival probability summary:")
+                        per_day = whole_summ.groupby('day')['prob'].agg(['mean', 'min', 'max', 'std']).reset_index()
+                        
+                        for _, row in per_day.iterrows():
+                            logger.info("  Day %3d | Mean = %.4f, Min = %.4f, Max = %.4f, Std Dev = %.4f",
+                                        row['day'], row['mean'], row['min'], row['max'], row['std'])
+
                         try:
                             whole_params = beta.fit(whole_summ.prob.values)
                             whole_median = beta.median(whole_params[0], whole_params[1], whole_params[2], whole_params[3])
@@ -2100,6 +2120,27 @@ class simulation():
                                              loc=whole_params[2], scale=whole_params[3])
                             ucl = beta.ppf(0.975, a=whole_params[0], b=whole_params[1],
                                              loc=whole_params[2], scale=whole_params[3])
+                            
+                            logger.info("==== Whole Project Beta Distribution Summary (Survival Probability) ====")
+
+                            # Fit the beta distribution to survival probabilities
+                            whole_params = beta.fit(whole_summ['prob'].values)
+                            a, b, loc, scale = whole_params
+                            
+                            # Summary stats from the fitted distribution
+                            median = beta.median(a, b, loc=loc, scale=scale)
+                            std_dev = beta.std(a, b, loc=loc, scale=scale)
+                            lcl = beta.ppf(0.025, a=a, b=b, loc=loc, scale=scale)
+                            ucl = beta.ppf(0.975, a=a, b=b, loc=loc, scale=scale)
+                            
+                            # Log it cleanly
+                            logger.info("Fitted Beta distribution parameters:")
+                            logger.info("  alpha (a) = %.4f, beta (b) = %.4f, loc = %.4f, scale = %.4f", a, b, loc, scale)
+                            logger.info("Distribution summary:")
+                            logger.info("  Median survival probability = %.4f", median)
+                            logger.info("  Std deviation (spread)     = %.4f", std_dev)
+                            logger.info("  95%% CI from Beta fit       = [%.4f, %.4f]", lcl, ucl)
+                            
                             self.beta_dict['%s_%s_%s' % (j, i, 'whole')] = [j, i, 'whole', whole_median, whole_std, lcl, ucl]
                         except:
                             continue
@@ -2172,6 +2213,7 @@ class simulation():
                 }
                 for fishy in yearly_summary.species.unique():
                     for scen in yearly_summary.scenario.unique():
+                        logger.debug('summarizing %s in %s',fishy,scen)
                         idat = yearly_summary[(yearly_summary.species == fishy) & (yearly_summary.scenario == scen)]
                         cum_sum_dict['species'].append(fishy)
                         cum_sum_dict['scenario'].append(scen)
@@ -2195,14 +2237,21 @@ class simulation():
                         df = day_dat[['day','iteration','num_entrained','num_survived']]
                         if 'num_mortalities' not in df.columns:
                             df['num_mortalities'] = df['num_entrained'] - df['num_survived']
+                            
                         # Assuming bootstrap_mean_ci and summarize_ci are available
                         entrained_mean, entrained_lower, entrained_upper = bootstrap_mean_ci(df['num_entrained'])
                         killed_mean, killed_lower, killed_upper = bootstrap_mean_ci(df['num_mortalities'])
+                        
+                        # calculate extreme 1 in x day values
                         return_periods = [10, 100, 1000]
                         quantile_levels = {T: 1 - 1/T for T in return_periods}
                         extreme_entrained = {T: df['num_entrained'].quantile(q) for T, q in quantile_levels.items()}
                         extreme_killed = {T: df['num_mortalities'].quantile(q) for T, q in quantile_levels.items()}
+                        
+                        # calculate year total 
                         year_tots = df.groupby(['iteration'])[['num_entrained','num_mortalities']].sum()
+                        
+                        # summarize
                         summary = year_tots.apply(summarize_ci)
                         cum_sum_dict['mean_yearly_entrainment'].append(summary.at['mean','num_entrained'])
                         cum_sum_dict['lcl_yearly_entrainment'].append(summary.at['lower_95_CI','num_entrained'])
