@@ -1887,13 +1887,13 @@ def generate_report(sim):
             report_sections.append(f"<p>No {title} data available.</p>")
 
     # Basic sections
-    add_section("Nodes", "/Nodes")
-    add_section("Edges", "/Edges")
-    add_section("Unit Parameters", "/Unit_Parameters")
-    add_section("Facilities", "/Facilities")
-    add_section("Flow Scenarios", "/Flow Scenarios")
-    add_section("Operating Scenarios", "/Operating Scenarios")
-    add_section("Population", "/Population")
+    add_section("Nodes", "/Nodes", units)
+    add_section("Edges", "/Edges", units)
+    add_section("Unit Parameters", "/Unit_Parameters", units)
+    add_section("Facilities", "/Facilities", units)
+    add_section("Flow Scenarios", "/Flow Scenarios", units)
+    add_section("Operating Scenarios", "/Operating Scenarios", units)
+    add_section("Population", "/Population", units)
     logger.debug('finished basic data sections of report')
     
     # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
@@ -1953,7 +1953,7 @@ def generate_report(sim):
     logger.debug('finished hydrograph')
     
     # --- BETA DISTRIBUTIONS ---
-    add_section("Beta Distributions", "/Beta_Distributions")
+    add_section("Beta Distributions", "/Beta_Distributions", units)
 
     # --- YEARLY SUMMARY PANEL (Iteration-based) ---
     yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
