@@ -33,6 +33,11 @@ the entrainment rate estimate which are in units of fish per million cubic feet.
 # import dependencies
 import numpy as np
 import pandas as pd
+# Force pandas to show everything (all columns and rows)
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', None)  # Let it use full width
+pd.set_option('display.colheader_justify', 'left')
 import os
 import matplotlib
 matplotlib.use('Agg')
@@ -2219,7 +2224,6 @@ class simulation():
                 logger.info("Beta DF shape: %s",self.beta_df.shape)
                 logger.info(self.beta_df.to_string(index=False))  # index=False if you want a cleaner output
                 logger.info("Daily Summary shape: %s",self.daily_summary.shape)
-                logger.info(self.daily_summary.to_string(index=False))  # index=False if you want a cleaner output
                 logger.info("Yearly Summary shape: %s",self.cum_sum.shape)
                 logger.info(self.cum_sum.to_string(index=False))  # index=False if you want a cleaner output
     
