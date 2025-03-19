@@ -1378,6 +1378,54 @@ def population():
             "length scale": "421.6351"
         },
         {
+            "name": "Cyprinella, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "2.9356",
+            "location": "0",
+            "scale": "0.0008",
+            "max_ent_rate": "4.29",
+            "occur_prob": "0.6889",
+            "length shape": "0.2899",
+            "length location": "-6.0242",
+            "length scale": "10.3543"
+        },
+        {
+            "name": "Cyprinella, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "1.2126",
+            "location": "0",
+            "scale": "0.0218",
+            "max_ent_rate": "0.14",
+            "occur_prob": "0.6863",
+            "length shape": "0.0055",
+            "length location": "-522.4786",
+            "length scale": "528.356"
+        },
+        {
+            "name": "Cyprinus, Great Lakes, Met Spring & Summer",
+            "dist": "Log Normal",
+            "shape": "1.0631",
+            "location": "0",
+            "scale": "0.0033",
+            "max_ent_rate": "0.03",
+            "occur_prob": "0.1558",
+            "length shape": "0.696",
+            "length location": "-0.6124",
+            "length scale": "8.2879"
+        },
+        {
+            "name": "Cyprinus, Great Lakes, Met Fall",
+            "dist": "Log Normal",
+            "shape": "0.543",
+            "location": "0",
+            "scale": "0.004",
+            "max_ent_rate": "0.01",
+            "occur_prob": "0.3846",
+            "length shape": "0.4721",
+            "length location": "-4.168",
+            "length scale": "13.2867"
+        },
+        {
             "name": " Esox, Great Lakes, Met Fall & Winter",
             "dist": "Pareto",
             "shape": "0.6404",
