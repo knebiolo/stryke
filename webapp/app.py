@@ -1198,6 +1198,54 @@ def population():
             "length scale": "10.1348"
         },
         {
+            "name": "Amia, Great Lakes, Annual",
+            "dist": "Log Normal",
+            "shape": "1.2451",
+            "location": "0",
+            "scale": "0.0053",
+            "max_ent_rate": "0.06",
+            "occur_prob": "0.338",
+            "length shape": "0.8228",
+            "length location": "4.294",
+            "length scale": "4.9567"
+        },
+        {
+            "name": "Anguilla, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.5447",
+            "location": "0",
+            "scale": "0.0012",
+            "max_ent_rate": "0.11",
+            "occur_prob": "0.2381",
+            "length shape": "0.2774",
+            "length location": "-16.8846",
+            "length scale": "64.446"
+        },
+        {
+            "name": "Anguilla, Great Lakes, Met Summer",
+            "dist": "Pareto",
+            "shape": "0.415",
+            "location": "0",
+            "scale": "0.0019",
+            "max_ent_rate": "0.51",
+            "occur_prob": "0.6",
+            "length shape": "0.1795",
+            "length location": "-10.0737",
+            "length scale": "50.5949"
+        },
+        {
+            "name": "Anguilla, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "0.9227",
+            "location": "0",
+            "scale": "0.0056",
+            "max_ent_rate": "0.02",
+            "occur_prob": "0.1071",
+            "length shape": "9.2168",
+            "length location": "36.3711",
+            "length scale": "1.2944"
+        },
+        {
             "name": "Catostomus, Great Lakes, Met Winter",
             "dist": "Pareto",
             "shape": "0.5357",
@@ -1210,16 +1258,64 @@ def population():
             "length scale": "32.4136"
         },
         {
-            "name": "Noturus, Great Lakes, Met Fall & Winter",
+            "name": "Catostomus, Great Lakes, Met Spring",
             "dist": "Log Normal",
-            "shape": "1.0017",
+            "shape": "1.6709",
             "location": "0",
-            "scale": "0.0085",
-            "max_ent_rate": "0.13",
-            "occur_prob": "0.4032",
-            "length shape": "0.5009",
-            "length location": "-3.4597",
-            "length scale": "11.6064"
+            "scale": "0.0011",
+            "max_ent_rate": "2.01",
+            "occur_prob": "0.6383",
+            "length shape": "0.6587",
+            "length location": "-2.1796",
+            "length scale": "13.8869"
+        },
+        {
+            "name": "Catostomus, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "2.2178",
+            "location": "0",
+            "scale": "0.0832",
+            "max_ent_rate": "11.31",
+            "occur_prob": "0.6768",
+            "length shape": "0.6814",
+            "length location": "-0.6951",
+            "length scale": "3.3764"
+        },
+        {
+            "name": "Catostomus, Great Lakes, Met Fall",
+            "dist": "Weibull",
+            "shape": "0.396",
+            "location": "0",
+            "scale": "0.0591",
+            "max_ent_rate": "28.9",
+            "occur_prob": "0.7374",
+            "length shape": "0.133",
+            "length location": "-4.1585",
+            "length scale": "16.7352"
+        },
+        {
+            "name": "Chrosomus, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.6815",
+            "location": "0",
+            "scale": "0.0292",
+            "max_ent_rate": "3.57",
+            "occur_prob": "0.4632",
+            "length shape": "0.1572",
+            "length location": "-13.8922",
+            "length scale": "18.4307"
+        },
+        {
+            "name": "Coregonus, Great Lakes, Annual",
+            "dist": "Log Normal",
+            "shape": "0.8508",
+            "location": "0",
+            "scale": "0.0035",
+            "max_ent_rate": "0.01",
+            "occur_prob": "0.119",
+            "length shape": "0.3129",
+            "length location": "-4.0996",
+            "length scale": "10.1031"
         },
         {
             "name": "Culaea, Great Lakes, Met Winter",
@@ -1232,6 +1328,42 @@ def population():
             "length shape": "0.4749",
             "length location": "-1.6826",
             "length scale": "4.6771"
+        },
+        {
+            "name": "Culaea, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.4596",
+            "location": "0",
+            "scale": "0.0619",
+            "max_ent_rate": "3.99",
+            "occur_prob": "0.7885",
+            "length shape": "0.5086",
+            "length location": "-1.5036",
+            "length scale": "4.3853"
+        },
+        {
+            "name": "Culaea, Great Lakes, Met Summer",
+            "dist": "Weibull",
+            "shape": "1.1945",
+            "location": "0",
+            "scale": "0.0255",
+            "max_ent_rate": "0.1",
+            "occur_prob": "0.3684",
+            "length shape": "0.4617",
+            "length location": "-2.0154",
+            "length scale": "5.271"
+        },
+        {
+            "name": "Culaea, Great Lakes, Met Fall",
+            "dist": "Weibull",
+            "shape": "0.7098",
+            "location": "0",
+            "scale": "0.0397",
+            "max_ent_rate": "0.22",
+            "occur_prob": "0.3333",
+            "length shape": "0.2715",
+            "length location": "-6.0649",
+            "length scale": "10.2824"
         },
         {
             "name": "Cyprinella, Great Lakes, Met Fall & Winter",
@@ -1366,6 +1498,18 @@ def population():
             "length scale": "12.5858"
         },
         {
+            "name": "Noturus, Great Lakes, Met Fall & Winter",
+            "dist": "Log Normal",
+            "shape": "1.0017",
+            "location": "0",
+            "scale": "0.0085",
+            "max_ent_rate": "0.13",
+            "occur_prob": "0.4032",
+            "length shape": "0.5009",
+            "length location": "-3.4597",
+            "length scale": "11.6064"
+        },
+        {
             "name": "Notropis, Great Lakes, Met Winter",
             "dist": "Pareto",
             "shape": "0.9849",
@@ -1377,7 +1521,6 @@ def population():
             "length location": "-1153.8089",
             "length scale": "1160.4858"
         },
-        
         {
             "name": "Oncorhynchus, Great Lakes, Met Winter",
             "dist": "Weibull",
