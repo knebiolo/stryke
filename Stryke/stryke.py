@@ -53,8 +53,8 @@ from scipy.stats import beta
 import xlrd
 import networkx as nx
 from networkx.readwrite import json_graph
-from Stryke.hydrofunctions import hydrofunctions as hf
-#import hydrofunctions as hf
+#from Stryke.hydrofunctions import hydrofunctions as hf
+import hydrofunctions as hf
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
@@ -887,7 +887,14 @@ class simulation():
                     logger.debug ('Problem with a priori survival function')
     
             else:
-                #TODO add impingement logic, bring 
+                param_dict = u_param_dict[route]
+
+                #TODO add impingement logic, 
+                ''' impingement is a function of head width, rack spacing, 
+                critical swim speed, and intake velocity, essentially, fish that 
+                are too wide to fit through the rack, but too slow to escape the
+                intake velocity are impinged'''
+                # assemble the impingement variables
                 
                 #TODO add in barotrauma logic
                 # print (u_param_dict)
@@ -895,7 +902,6 @@ class simulation():
                 # print (f'route: {route}')
 
 
-                param_dict = u_param_dict[route]
                 # if survival is assessed at a Kaplan turbine:
                 if surv_fun == 'Kaplan':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
@@ -1772,12 +1778,13 @@ class simulation():
         # flow per day in relation to million cubic METERS
         Mm3 = Mft3 * 35.31469989
         
-        metric_units = ["cms","CMS"]
-        if output_units == 'metric':
-            daily_rate = Mm3
-            ent_rate = ent_rate / 35.31469989
-        else: 
-            daily_rate = Mft3
+        daily_rate = Mft3 # we convert hydrograph to cfs on import, no need to convert
+        # metric_units = ["cms","CMS"]
+        # if output_units == 'metric':
+        #     daily_rate = Mm3
+        #     ent_rate = ent_rate / 35.31469989
+        # else: 
+        #     daily_rate = Mft3
 
         # calcualte sample size
         return np.round(daily_rate * ent_rate,0)[0]
@@ -2094,14 +2101,14 @@ class simulation():
                                 self.hdf.flush()
     
                                 if self.output_units == 'metric':
-                                    curr_Q = curr_Q * 0.02831683199881
+                                    curr_Q_report = curr_Q * 0.02831683199881
                                 daily_row_dict = {
                                     'species': ['{:50}'.format(spc)],
                                     'scenario': ['{:50}'.format(scenario)],
                                     'season': ['{:50}'.format(season)],
                                     'iteration': [np.int64(i)],
                                     'day': [pd.to_datetime(day)],
-                                    'flow': [np.float64(curr_Q)],
+                                    'flow': [np.float64(curr_Q_report)],
                                     'pop_size': [np.int64(len(fishes))]
                                 }
                                 # Identify state and survival columns.
@@ -2145,6 +2152,8 @@ class simulation():
                                              append=True)
                                 self.hdf.flush()
                             else:
+                                if self.output_units == 'metric':
+                                    curr_Q_report = curr_Q * 0.02831683199881
                                 #print(f"No fish present on day {day} (occurrence check failed)", flush=True)
                                 daily_row_dict = {
                                     'species': ['{:50}'.format(spc)],
@@ -2152,7 +2161,7 @@ class simulation():
                                     'season': ['{:50}'.format(season)],
                                     'iteration': [np.int64(i)],
                                     'day': [pd.to_datetime(day)],
-                                    'flow': [np.float64(curr_Q)],
+                                    'flow': [np.float64(curr_Q_report)],
                                     'pop_size': [np.int64(0)],
                                     'num_entrained': [np.int64(0)],
                                     'num_survived': [np.int64(0)]
