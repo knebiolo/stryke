@@ -55,11 +55,16 @@ import networkx as nx
 from networkx.readwrite import json_graph
 #from Stryke.hydrofunctions import hydrofunctions as hf
 import hydrofunctions as hf
+#from Stryke import barotrauma
+import barotrauma
+#from Stryke.barotrauma import baro_surv_prob
+from barotrauma import baro_surv_prob
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
 import math
 from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r, ks_2samp, nbinom, norm
+from scipy import constants
 import h5py
 #import tables
 from numpy.random import default_rng
@@ -264,7 +269,7 @@ class simulation():
                                          sheet_name = 'Unit Params', 
                                          header = 0, 
                                          index_col = None,
-                                         usecols = "B:T",
+                                         usecols = "B:X",
                                          skiprows = 4)
         self.unit_params.set_index('Unit',inplace = True)
         
@@ -334,7 +339,7 @@ class simulation():
                                  sheet_name = 'Population',
                                  header = 0,
                                  index_col = None,
-                                 usecols = "B:S", 
+                                 usecols = "B:V", 
                                  skiprows = 11)
                     
         # create output HDF file
@@ -827,6 +832,80 @@ class simulation():
     
         return 1 - (p_strike * length)
     
+    def barotrauma(self,discharge,K,ps_diameter,ps_length,v_head,fish_depth,h_D,h_2, beta_0, beta_1):
+        """
+        Calculates the pressure differential to produce a survival probability 
+        as fish pass from an acclimated depth in the impoundment, through the
+        facility, and into the draft tube.
+        
+        It is assumed the highest pressure experienced by a fish occurs at the 
+        end of the penstock at the guide vanes just before it enters the turbine
+        and the lowest pressure (nearly atmospheric) is experienced by the fish 
+        as it enters the draft tube after exiting the turbine runner.
+        
+        Parameters:
+        - discharge (float): (m^3/s)
+        - K (float): absolute roughness of the penstock material (mm) See table from Miller 1996.
+        - ps_diameter (float): penstock diameter (m)
+        - ps_length (float): penstock length, or length from intake to outflow? (m)
+        - v_head (float): velocity head at turbine inlet (m/s)
+        - fish_depth (array): a value for fish acclimation depth (m)
+        - h_D (float): submergence depth of the draft tube outlet (m) assumed to be 2m
+        - h_2 (float): elevation head at the downstream point (m)
+        - beta_0 (float): regression coefficent
+        - beta_1 (float): regression coefficient
+        
+        Returns:
+        - endpoint (array): an array of survival probabilities for each fish depth
+        """
+        
+        # calc penstock area from diameter input
+        a = np.pi * (ps_diameter/2)**2
+        
+        # Either the spreadsheet inputs are imperial, or they get converted to
+        # imperial in __init__. Therefore, they must always be converted to metric
+        # for barotrauma math.   
+        
+        # convert imperial input units to metric for calcs
+        discharge = discharge * 0.02831683199881 # cfs to cms
+        a = a * 0.092903                         # sq ft to sq m
+        ps_diameter = ps_diameter * 0.3048       # ft to m
+        ps_length = ps_length * 0.3048           # ft to m
+        v_head = v_head * 0.02831683199881       # cfs to cms
+        fish_depth = fish_depth * 0.3048       # ft to m
+        h_D = h_D * 0.3048                       # ft to m
+        h_2 = h_2 * 0.3048                       # ft to m
+        
+        # calculate velocities
+        # if flow is different at input/outflow, probably pass v_1 and v_2 through the function instead
+        v_1 = barotrauma.calc_v(discharge,a)
+        v_2 = barotrauma.calc_v(discharge,a)
+        
+        # calculate friction for total head loss
+        dynamic_viscosity = 0.0010016 # for water @ 20C
+        density = 998.2 # kg/m^3 for water @ 20C
+        kinematic_viscosity = barotrauma.calc_k_viscosity(dynamic_viscosity, density)
+        friction = barotrauma.calc_friction(K, ps_diameter, v_1, kinematic_viscosity)
+        
+        # calculate total head loss
+        head_loss = barotrauma.calc_h_loss(friction, ps_length, ps_diameter, v_1)
+        
+        # calculate pressure at p2
+        p_atm = constants.atm
+        p_2 = barotrauma.calc_p_2(p_atm, density, h_D)
+        
+        # calculate presure at p1
+        p_1 = barotrauma.calc_p_1(p_2, fish_depth, h_2, density, v_1, v_2, head_loss)
+        
+        # calculate pressure ratio
+        p_ratio = p_1/p_2
+        
+        # calculate survival rate
+        endpoint = baro_surv_prob(p_ratio, beta_0, beta_1)
+
+        return endpoint
+        
+    
     def node_surv_rate(self,length,status,surv_fun,route,surv_dict,u_param_dict):
         """
         Calculates the survival probability of a fish passing through a node in 
@@ -896,31 +975,63 @@ class simulation():
                 intake velocity are impinged'''
                 # assemble the impingement variables
                 
-                #TODO add in barotrauma logic
-                # print (u_param_dict)
-                # print (f'route is a {type(route)}')
-                # print (f'route: {route}')
-
-
                 # if survival is assessed at a Kaplan turbine:
                 if surv_fun == 'Kaplan':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
-                    prob = self.Kaplan(length, param_dict)
+                    strike_prob = self.Kaplan(length, param_dict)
     
                 # if survival is assessed at a Propeller turbine:
                 elif surv_fun == 'Propeller':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
-                    prob = self.Propeller(length, param_dict)
+                    strike_prob = self.Propeller(length, param_dict)
     
                 # if survival is assessed at a Francis turbine:
                 elif surv_fun == 'Francis':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
-                    prob = self.Francis(length, param_dict)
+                    strike_prob = self.Francis(length, param_dict)
     
                 # if survival is assessed at a turbine in pump mode:
                 elif surv_fun == 'Pump':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
-                    prob = self.Pump(length, param_dict)
+                    strike_prob = self.Pump(length, param_dict)
+                    
+                # assess barotrauma survival
+
+                #if not np.isnan(self.pop['beta_0']).item() or not np.isnan(self.pop['beta_1']).item(): # fish is affected by barotrauma
+                if all(not np.isnan(self.pop[key]).item() for key in ['vertical_habitat', 'beta_0', 'beta_1']) and \
+                    all(not np.isnan(self.unit_params[key]).item() for key in ['fb_depth', 'ps_length', 'roughness', 'submergence_depth', 'elevation_head']):
+                
+                    # get fish depth
+                    vertical_habitat_value = self.pop['vertical_habitat'].item()
+                    if vertical_habitat_value == 'Pelagic':
+                        d_1 = 0.01
+                        d_2 = 0.79
+                    elif vertical_habitat_value == 'Benthic':
+                        d_1 = 0.8
+                        d_2 = 1
+                    else:
+                        d_1 = 0.01
+                        d_2 = 1
+                    depth_1 = self.unit_params['fb_depth'][route] * d_1
+                    depth_2 = self.unit_params['fb_depth'][route] * d_2
+                    
+                    baro_prob = self.barotrauma(self.unit_params['Qopt'][route], # discharge - is this another place?
+                                                self.unit_params['roughness'][route], # K - roughness value
+                                                self.unit_params['D'][route], # penstock diameter
+                                                self.unit_params['ps_length'][route], # penstock length
+                                                self.unit_params['intake_vel'][route], # velocity head at turbine inlet
+                                                np.random.uniform(depth_1,depth_2,1), # fish depths unifrom random within depth range
+                                                self.unit_params['submergence_depth'][route], # submergence depth of the draft tube outlet
+                                                self.unit_params['elevation_head'][route], # elevation head at the downstream point
+                                                self.pop['beta_0'].item(),
+                                                self.pop['beta_1'].item())
+                    
+                    # survival probability considering blade strike and barotrauma
+                    prob = strike_prob * baro_prob
+
+                else: # "no immediate mortality was observed over the tested range"
+                    prob = strike_prob
+                    
             try:
                 return np.float32(prob)
             except:

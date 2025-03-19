@@ -169,7 +169,7 @@ To implement a desktop entrainment study, Stryke will need data describing river
 
 >**_NOTE:_** Stryke will not overwrite output tabs in the spreadsheet interface. Therefore ensure that the input spreadsheet does not contain tabs of 'beta fit', 'daily summary' and 'yearly summary' before running a new simulation. After running a simulation it is advisable to save the input file with output tabs so that simulation parameters and outputs are contained in a single file and subsequent simulations should start with different spreadsheets.
 
-The input spreadsheet and this ReadMe are in the ornder in which parameters should be entered.  You will note that the spreadsheet makes use of pull down lists for ease of data entry and for maintaining consistent naming conventions across individual sheets.  
+The input spreadsheet and this ReadMe are in the order in which parameters should be entered.  You will note that the spreadsheet makes use of pull down lists for ease of data entry and for maintaining consistent naming conventions across individual sheets.  
 
 ## Flow Scenarios
 
@@ -199,7 +199,7 @@ For projects in the United States, Stryke utilizes the Python library 'Hydrofunc
 | Field           | Data Type |                                             Comment                                           |
 |-----------------|-----------|-----------------------------------------------------------------------------------------------|
 |Date             |DateTime   |(required) Excel formatted data, on import into stryke all date formats converted to YYYY-MM-DD format |
-|Discahrge        |Float      |(required) daily average discharge in CMS or CFS                                               |
+|Discharge        |Float      |(required) daily average discharge in CMS or CFS                                               |
 
 ![hydrology tab](https://github.com/knebiolo/stryke/blob/master/pics/hydrology_tab.jpg)
 
@@ -231,6 +231,8 @@ The unit parameters tab contains measurable properties of the project's turbines
 |H                  |Float      |(required) Hydraulic head (ft)                                                                 |
 |RPM                |Float      |(required) runner revolutions per minute at maximum efficiency                                 |
 |D                  |Float      |(required - Kaplan, Propeller) runner diameter (ft)                                            |
+|fb_depth           |Float      |(required for barotrauma calculation) forebay depth, or depth of water body the fish will be in before the facility (ft)  |                                                      
+|ps_length          |Float      |(required for barotrauma calculation) penstock length (ft)                                            |
 |$\eta$             |Float      |(required - Francis) turbine efficiency (%)                                                    |
 |N                  |Integer    |(required) number of blades (Kaplan and Propeller) or buckets (Francis)                        |
 |Qopt               |Float      |(required) most efficient discharge (cfs)                                                      |
@@ -241,12 +243,14 @@ The unit parameters tab contains measurable properties of the project's turbines
 |D1                 |Float      |(required - Francis) diameter of runner at inlet (ft)                                          |
 |D2                 |Float      |(required - Francis) diameter of runner at outlet (ft)                                         |
 |$\lambda$          |Float      |(required) blade strike to mortality correlation factor, not all strikes result in death (USFWS recommends 0.2)|
-|roughness          |Float      |(requirded) - roughness coefficient of penstock for head loss calculation when calculating acclimation pressure 
+|roughness          |Float      |(required for barotrauma calculation) - roughness coefficient of penstock for head loss calculation when calculating acclimation pressure. See material roughness values table from Miller 1996 in the Data folder. |
+|submergence_depth  |Float      |(required for barotrauma calculation) submergence depth of draft tube outlet (ft)                                     |
+|elevation_head     |Float      |(required for barotrauma calculation) elevation head at the downstream point (ft)                                     |
 
 
 ## Operating Scenarios
 
-The **Operating Scenarios** tab tells Stryke how to simulate powerhouse operations.  Every season and unit combination must be represented in this table.  For run-of-river facilities, it is assumed that the facility will run 24/7, whereas a peaking facility or pumped storage faclity will run for a different amount of hours every day as demand dictates.  The Scenario, Faclity, and Unit fields are pull downs to ensure consistent naming conventions across inputs.  
+The **Operating Scenarios** tab tells Stryke how to simulate powerhouse operations.  Every season and unit combination must be represented in this table.  For run-of-river facilities, it is assumed that the facility will run 24/7, whereas a peaking facility or pumped storage facility will run for a different amount of hours every day as demand dictates.  The Scenario, Facility, and Unit fields are pull downs to ensure consistent naming conventions across inputs.  
 
 | Field           | Data Type |                                             Comment                                           |
 |-----------------|-----------|-----------------------------------------------------------------------------------------------|
@@ -255,9 +259,9 @@ The **Operating Scenarios** tab tells Stryke how to simulate powerhouse operatio
 |Unit             |String     |(required) turbine unit ID, every turbine in the study gets a unique ID                        |
 |Hours            |Integer    |(not required) number of hours facility runs every day; if pumped storage or peaking, leave blank    |
 |Prob_Not_Op      |Float      |(not required) Binomial probability of facility is not operating                               |
-|shape            |String     |(not required) Scipy Log Normal shape parameter for distribuiton describing hours operated     |
-|location         |Floatg     |(not required) Scipy Log Normal location parameter for distribuiton describing hours operated  |
-|scale            |String     |(not required) Scipy Log Normal scale parameter  for distribuiton describing hours operated    |
+|shape            |String     |(not required) Scipy Log Normal shape parameter for distribution describing hours operated     |
+|location         |Float      |(not required) Scipy Log Normal location parameter for distribution describing hours operated  |
+|scale            |String     |(not required) Scipy Log Normal scale parameter  for distribution describing hours operated    |
 
 The setup for run-of-river facilities is below:
 ![run of river op scen](https://github.com/knebiolo/stryke/assets/61742537/4b81099f-8d9c-428f-a56e-73be2e2189ee)
@@ -279,7 +283,7 @@ The next two tabs, **Nodes** and **Edges**, describe the migratory network simul
 |Surv_Fun           |String     |(required) the type of survival function applied at this node, must be 'a-priori' or a Unit ID |
 |Survival           |Float      |(required) a-prior determined survival rate, if node is a Unit leave 0                         |
 
-The following picture decpicts the correct set up for a simple 3-unit run-of-river impact assessment.
+The following picture depicts the correct set up for a simple 3-unit run-of-river impact assessment.
 
 ![nodesx](https://github.com/knebiolo/stryke/assets/61742537/0f1dec29-939e-4c05-8c91-1efbcbea8319)
 
@@ -297,7 +301,7 @@ The following depicts the correct set up for the same, simple 3-unit run-of-rive
 
 ## Population
 
-The population tab is the most complex and can be set up for anadromous or resident species.  When assessing impact for resident species, entrainment is expressed as a rate (fish per million cubic feet), where the number of fish simulated per day is a function of the river discharge.  You can define entrainment rates with your own empirical data, or you can fit them to observations from the EPRI entrainment database, which is inlcuded with Stryke.  Entrainment rates can be simulated with a Log Normal, Weibull, or Pareto distribution.  For more information and tips for fitting distributions, see the documentation.  The maximum entrainment rate (max_ent_rate) is the largest entrainment rate observed.  Given that each of these distributions are heavy tailed, the maximum simulated entrainment rate can be very large.  Stryke limits the maximum simulated entrainment rate to 1 magnitude larger than the largest observation.  Entrainment events are episodic in nature, and it is not likely that there will be an entrainment event every day.  Occurence probability (occur_prob) is the probability of entraining fish of a species on any particular day. Stryke first simulates presence, and if fish are present Stryke simulates an entrainment rate.  This entrainment rate is then multiplied by the daily river discharge, and thus a simulated population is created.  Once there is a sample population, Stryke simulates fish lengths for each individual in the population.  The EPRI entrainment database also supplies information on fish lengths, which Stryke fits a log normal distribution to.  The last field required for resident species assessment, caudal_AR is the aspect ratio of the caudal fin.  Stryke implements a model developed from Sambalay 1990 that regresses swimming performance as a function of fish length and caudal fin aspect ratio.  Swim speed is critical for impingement/entrainment analysis because fish must be able to escape intake velocities.  Unfortunately, many swim speed studies that calculate a critical swimming speed, do so for adults.  Critical swimming speeds for adults are likely larger than juveniles, which make up a considerable proportion of individual observations in the EPRI entrainment dataset.  Therefore a length based function was desired.   
+The population tab is the most complex and can be set up for anadromous or resident species.  When assessing impact for resident species, entrainment is expressed as a rate (fish per million cubic feet), where the number of fish simulated per day is a function of the river discharge.  You can define entrainment rates with your own empirical data, or you can fit them to observations from the EPRI entrainment database, which is included with Stryke.  Entrainment rates can be simulated with a Log Normal, Weibull, or Pareto distribution.  For more information and tips for fitting distributions, see the documentation.  The maximum entrainment rate (max_ent_rate) is the largest entrainment rate observed.  Given that each of these distributions are heavy tailed, the maximum simulated entrainment rate can be very large.  Stryke limits the maximum simulated entrainment rate to 1 magnitude larger than the largest observation.  Entrainment events are episodic in nature, and it is not likely that there will be an entrainment event every day.  Occurrence probability (occur_prob) is the probability of entraining fish of a species on any particular day. Stryke first simulates presence, and if fish are present Stryke simulates an entrainment rate.  This entrainment rate is then multiplied by the daily river discharge, and thus a simulated population is created.  Once there is a sample population, Stryke simulates fish lengths for each individual in the population.  The EPRI entrainment database also supplies information on fish lengths, which Stryke fits a log normal distribution to.  The last field required for resident species assessment, caudal_AR is the aspect ratio of the caudal fin.  Stryke implements a model developed from Sambalay 1990 that regresses swimming performance as a function of fish length and caudal fin aspect ratio.  Swim speed is critical for impingement/entrainment analysis because fish must be able to escape intake velocities.  Unfortunately, many swim speed studies that calculate a critical swimming speed, do so for adults.  Critical swimming speeds for adults are likely larger than juveniles, which make up a considerable proportion of individual observations in the EPRI entrainment dataset.  Therefore a length based function was desired.   
 
 | Field             | Data Type |                                             Comment                                           |
 |-------------------|-----------|-----------------------------------------------------------------------------------------------|
@@ -306,21 +310,24 @@ The population tab is the most complex and can be set up for anadromous or resid
 |Season             |String     |(required) hydrologic season, must be related to a season on the Operating Scenarios tab       |
 |Starting Population|Integer    |(not required) number of starting fish in the simulation (for anadromous mode)                 |
 |(Ent. Event) shape |Float      |(not required) shape parameter describing daily entrainment event                              |
-|(Ent. Event) location |Float      |(not required) location parameter describing daiy entrainment event                         |
+|(Ent. Event) location |Float      |(not required) location parameter describing daily entrainment event                        |
 |(Ent. Event) scale |Float      |(not required) scale parameter describing daily entrainment event.                             |
 |dist               |String     |(not required) Distribution type describing daily entrainment event, must be one of (Log Normal, Weibull or Pareto) |
 |max_ent_rate       |Float      |(not required) maximum entrainment event measured in fish per million cubic feet.              |
-|occur_prob         |Float      |(not required) occurence probability                                                           |
+|occur_prob         |Float      |(not required) occurrence probability                                                          |
 |iterations         |Integer    |(required) number of simulation runs                                                           |
+|vertical_habitat   |String     |(required for barotrauma calculation) 'Pelagic' or 'Benthic' habitat type specified via cell dropdown.                    |
 |Length_mean        |Float      |(not required) mean length (for anadromous mode)                                               |
 |Length_sd          |Float      |(not required) standard deviation of length (for anadromous mode)                              |
-|caudal_AR          |Float      |(not required) caudal fin aspect ratio, used in calculatio of swim speed.  See Sambalay 1990   |
+|caudal_AR          |Float      |(not required) caudal fin aspect ratio, used in calculation of swim speed.  See Sambalay 1990  |
+|beta_0             |Float      |(required for barotrauma calculation) beta 0 value for barotrauma calculation, see barotrauma values table from Pflugrath 2021 in the Data folder. |
+|beta_1             |Float      |(required for barotrauma calculation) beta 1 value for barotrauma calculation, see barotrauma values table from Pflugrath 2021 in the Data folder. |                                            
 |(Length) shape     |Float      |(not required) log normal shape parameter describing length of fish in population              |
 |(Length) location  |Float      |(not required) log normal location parameter describing length of fish                         |
 |(Length) shape     |Float      |(not required) log normal shape parameter describing length of fish                            |
 
 ![population](https://github.com/knebiolo/stryke/assets/61742537/ede729f8-4edf-4278-951b-b52aa4ad4238)
-Note: The following columns have been hidden: Starting Popualtion, Length_mean, Length_sd, and caudal_AR.  The remaining columns depict a resident species set up. 
+Note: The following columns have been hidden: Starting Population, Length_mean, Length_sd, and caudal_AR.  The remaining columns depict a resident species set up. 
 
 
 ## Simulation Outputs
