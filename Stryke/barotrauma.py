@@ -84,7 +84,7 @@ def calc_h_loss(f, ps_l, ps_d, v):
     g = scipy.constants.g
     
     # calculate velocity head
-    v_head = ((v_1**v_1)/2*g)
+    v_head = ((v*v)/2*g)
     
     # calculate head loss
     h_loss = f*(ps_l/ps_d)*v_head
