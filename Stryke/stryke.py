@@ -1017,7 +1017,7 @@ class simulation():
                     
                     baro_prob = self.barotrauma(self.unit_params['Qopt'][route], # discharge - is this another place?
                                                 self.unit_params['roughness'][route], # K - roughness value
-                                                self.unit_params['D'][route], # penstock diameter
+                                                self.unit_params['ps_D'][route], # penstock diameter
                                                 self.unit_params['ps_length'][route], # penstock length
                                                 self.unit_params['intake_vel'][route], # velocity head at turbine inlet
                                                 np.random.uniform(depth_1,depth_2,1), # fish depths unifrom random within depth range
