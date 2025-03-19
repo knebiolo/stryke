@@ -468,10 +468,10 @@ class simulation():
             self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
 
         
-        # 9. Unit Conversion.
-        if data_dict.get("units_system", "imperial") == "metric":
-            if hasattr(self, "input_hydrograph_df") and self.input_hydrograph_df is not None and "DAvgFlow_prorate" in self.input_hydrograph_df.columns:
-                self.input_hydrograph_df["DAvgFlow_prorate"] *= 35.3147
+        # # 9. Unit Conversion.
+        # if data_dict.get("units_system", "imperial") == "metric":
+        #     if hasattr(self, "input_hydrograph_df") and self.input_hydrograph_df is not None and "DAvgFlow_prorate" in self.input_hydrograph_df.columns:
+        #         self.input_hydrograph_df["DAvgFlow_prorate"] *= 35.3147
         
         
         # 10. Create HDF5 file and store DataFrames.

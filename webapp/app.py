@@ -1426,6 +1426,18 @@ def population():
             "length scale": "13.2867"
         },
         {
+            "name": "Dorosoma, Great Lakes, Met Spring and Summer",
+            "dist": "Pareto",
+            "shape": "0.2606",
+            "location": "0",
+            "scale": "0.0007",
+            "max_ent_rate": "27.72",
+            "occur_prob": "0.5",
+            "length shape": "0.0643",
+            "length location": "-31.8162",
+            "length scale": "44.8908"
+        },
+        {
             "name": " Esox, Great Lakes, Met Fall & Winter",
             "dist": "Pareto",
             "shape": "0.6404",
