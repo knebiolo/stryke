@@ -1450,6 +1450,30 @@ def population():
             "length scale": "55.4757"
         },
         {
+            "name": " Esox, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.3744",
+            "location": "0",
+            "scale": "0.0132",
+            "max_ent_rate": "0.52",
+            "occur_prob": "0.4414",
+            "length shape": "0.3667",
+            "length location": "-5.3217",
+            "length scale": "30.9049"
+        },
+        {
+            "name": " Esox, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "1.6164",
+            "location": "0",
+            "scale": "0.0177",
+            "max_ent_rate": "0.4",
+            "occur_prob": "0.5528",
+            "length shape": "0.3435",
+            "length location": "-3.6442",
+            "length scale": "12.8822"
+        },
+        {
             "name": " Etheostoma, Great Lakes, Met Winter",
             "dist": "Pareto",
             "shape": "1.3824",
@@ -1460,7 +1484,7 @@ def population():
             "length shape": "0.0643",
             "length location": "-41.3359",
             "length scale": "46.2126"
-        },
+        },    
         {
             "name": "Lepomis, Great Lakes, Met Winter",
             "dist": "Log Normal",
