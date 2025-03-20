@@ -136,7 +136,7 @@ def calc_p_1(p_2, h_1, h_2, density, v_1, v_2, h_loss):
     
     return p_1
 
-def barotrauma_surv_prob(p_ratio, beta_0, beta_1):
+def baro_surv_prob(p_ratio, beta_0, beta_1):
     """
     Calculates the barotrauma-related survival probablilty using a biological
     response model.
