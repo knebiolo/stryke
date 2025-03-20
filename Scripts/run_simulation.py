@@ -19,9 +19,9 @@ wks = 'Input_Spreadsheet_v250304.xlsx'
 
 wks_dir = os.path.join(ws,wks)
 
-with simulation(ws,wks, output_name = 'new_sheet_alpha') as sim:
-    sim.run()
-    sim.summary()
-    sim.close()
+sim = simulation(ws,'new_sheet_alpha', wks)
+sim.run()
+sim.summary()
+sim.close()
 
 

@@ -151,7 +151,7 @@ def baro_surv_prob(p_ratio, beta_0, beta_1):
                                      mortality)
     """
     
-    endpoint = np.exp(beta_0 + beta_1 * p_ratio) / (1 + np.exp(beta_0 + beta_1 * p_ratio))
+    endpoint = np.exp(beta_0 + beta_1 * np.log(p_ratio)) / (1 + np.exp(beta_0 + beta_1 * np.log(p_ratio)))
     
     return endpoint
     
