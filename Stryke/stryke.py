@@ -1008,7 +1008,7 @@ class simulation():
                 # assess barotrauma survival
 
                 #if not np.isnan(self.pop['beta_0']).item() or not np.isnan(self.pop['beta_1']).item(): # fish is affected by barotrauma
-                if all(not np.isnan(self.pop[key]).item() for key in ['vertical_habitat', 'beta_0', 'beta_1']) and \
+                if all(not np.isnan(self.pop[key]).item() for key in ['beta_0', 'beta_1']) and \
                     all(not np.isnan(self.unit_params[key]).item() for key in ['fb_depth', 'ps_length', 'roughness', 'submergence_depth', 'elevation_head']):
                 
                     # get fish depth
@@ -1948,8 +1948,8 @@ class simulation():
             units.append(unit)
             op_order_dict[unit] = row['op_order']
             rack_spacing = self.facility_params.at[row['Facility'],'Rack Spacing']
-            if np.isnan(rack_spacing):
-                rack_spacing = 2 /12.
+            # if np.isnan(rack_spacing):
+            #     rack_spacing = 2 /12.
             
             if runner_type == 'Kaplan':
                 param_dict = {'H': float(row['H']),
