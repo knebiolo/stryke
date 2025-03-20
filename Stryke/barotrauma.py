@@ -156,61 +156,61 @@ def barotrauma_surv_prob(p_ratio, beta_0, beta_1):
     return endpoint
     
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     
-    # calculate the pressure ratio  given a vector of depths where fish start
-    # and facility information
+#     # calculate the pressure ratio  given a vector of depths where fish start
+#     # and facility information
     
-    # inputs: 
-    #     q: discharge (m^3/s)
-    #     a: cross sectional areas (m^2)
-    #     K: absolute roughness (mm)
-    #     ps_d: penstock diameter (m)
-    #     v: flow velocity (m/s)
-    #     f_d: flow depth  (m)
-    #     ps_l: penstock length (m)
-    #     v_head: velocity head at turbine inlet (m/s)
-    #     h_D: submergence depth of draft tube outlet (m)
-    #     h_2: elevation head at the downstream point (m?)
+#     # inputs: 
+#     #     q: discharge (m^3/s)
+#     #     a: cross sectional areas (m^2)
+#     #     K: absolute roughness (mm)
+#     #     ps_d: penstock diameter (m)
+#     #     v: flow velocity (m/s)
+#     #     f_d: flow depth  (m)
+#     #     ps_l: penstock length (m)
+#     #     v_head: velocity head at turbine inlet (m/s)
+#     #     h_D: submergence depth of draft tube outlet (m)
+#     #     h_2: elevation head at the downstream point (m?)
         
-    # calc velocities
-    q = 1
-    a = 0.5
-    v_1 = calc_v(q, a)
-    v_2 = calc_v(q, a)
+#     # calc velocities
+#     q = 1
+#     a = 0.5
+#     v_1 = calc_v(q, a)
+#     v_2 = calc_v(q, a)
     
-    # calculate friction for total head loss
-    K = 0.025 # absolute friction for new, smooth steel pipe
-    ps_d = 0.8
-    f_d = 2
-    d_viscosity = 0.0010016 # @ 20C
-    density = 998.2 # kg/m^3
-    k_v = calc_k_viscosity(d_viscosity, density)
-    f = calc_friction(K, ps_d, v_1, f_d, k_v)
-    print(f"friction factor = {f:0.04f}")
+#     # calculate friction for total head loss
+#     K = 0.025 # absolute friction for new, smooth steel pipe
+#     ps_d = 0.8
+#     f_d = 2
+#     d_viscosity = 0.0010016 # @ 20C
+#     density = 998.2 # kg/m^3
+#     k_v = calc_k_viscosity(d_viscosity, density)
+#     f = calc_friction(K, ps_d, v_1, f_d, k_v)
+#     print(f"friction factor = {f:0.04f}")
     
-    # calculate total head loss
-    ps_l = 40
-    v_head = 2
-    h_loss = calc_h_loss(f, ps_l, ps_d, v_head)
+#     # calculate total head loss
+#     ps_l = 40
+#     v_head = 2
+#     h_loss = calc_h_loss(f, ps_l, ps_d, v_head)
     
-    # calculate pressure at p2
-    p_atm = scipy.constants.atm
-    h_D = 5
-    p_2 = calc_p_2(p_atm, density, h_D)
+#     # calculate pressure at p2
+#     p_atm = scipy.constants.atm
+#     h_D = 5
+#     p_2 = calc_p_2(p_atm, density, h_D)
     
-    # calculate pressure at p1
-    h_2 = -10
-    depths = np.array([0.5, 6, 3, 27, 8.498, -9.33])
-    print(f"depths = {depths}")
-    p_1 = calc_p_1(p_2, depths, h_2, density, v_1, v_2, h_loss)
+#     # calculate pressure at p1
+#     h_2 = -10
+#     depths = np.array([0.5, 6, 3, 27, 8.498, -9.33])
+#     print(f"depths = {depths}")
+#     p_1 = calc_p_1(p_2, depths, h_2, density, v_1, v_2, h_loss)
     
-    # pressure ratio
-    p_ratio = p_1 / p_2
-    print(f"pressure ratios = {p_ratio}")
+#     # pressure ratio
+#     p_ratio = p_1 / p_2
+#     print(f"pressure ratios = {p_ratio}")
 
-    # calculate mortality endpoint P(X)
-    beta_0 = -1.132
-    beta_1 = 0.450
-    endpoint = barotrauma_surv_prob(p_ratio, beta_0, beta_1)
-    print(f"survival probability = {endpoint}")
+#     # calculate mortality endpoint P(X)
+#     beta_0 = -1.132
+#     beta_1 = 0.450
+#     endpoint = barotrauma_surv_prob(p_ratio, beta_0, beta_1)
+#     print(f"survival probability = {endpoint}")
