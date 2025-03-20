@@ -979,7 +979,7 @@ class simulation():
                 are too wide to fit through the rack, but too slow to escape the
                 intake velocity are impinged, and we assume impingement is death'''
                 intake_vel = param_dict['intake_vel']
-                rack_spacing = param_dict['Rack Spacing']
+                rack_spacing = param_dict['rack_spacing']
                 if length/10. > rack_spacing and u_crit < intake_vel:
                     imp_surv_prob = 0.
                 else:
