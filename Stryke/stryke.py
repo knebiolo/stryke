@@ -1973,10 +1973,10 @@ class simulation():
                 scen_months = [scen_months]
             
             ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario'] == scenario]
-            print(f"Scenario {scen}: Operating scenarios extracted.", flush=True)
+#            print(f"Scenario {scen}: Operating scenarios extracted.", flush=True)
     
             species = self.pop[self.pop['Scenario'] == scenario].Species.unique()
-            print(f"Scenario {scen}: Species identified: {species}", flush=True)
+#            print(f"Scenario {scen}: Species identified: {species}", flush=True)
             
             # Create hydrograph for this scenario.
             if self.discharge_type == 'hydrograph':
@@ -1984,13 +1984,13 @@ class simulation():
             else:
                 fixed_discharge = scen_df.iat[0, scen_df.columns.get_loc('Flow')]
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df, fixed_discharge=fixed_discharge)
-            print(f"Completed Discharge Scenario {scen} Setup using a {self.discharge_type} flow", flush=True)
+#            print(f"Completed Discharge Scenario {scen} Setup using a {self.discharge_type} flow", flush=True)
 
             for spc in species:
-                print(f"Starting species {spc} scenario {scen}", flush=True)
+#                print(f"Starting species {spc} scenario {scen}", flush=True)
                 spc_dat = self.pop[(self.pop['Scenario'] == scenario) & (self.pop.Species == spc)]
                 if spc_dat.empty:
-                    print(f"No population data for species {spc} in scenario {scenario}", flush=True)
+#                    print(f"No population data for species {spc} in scenario {scenario}", flush=True)
                     continue
                 
                 #logger.info('Working on spcies %s',spc)
@@ -2011,20 +2011,20 @@ class simulation():
                 if math.isnan(occur_prob):
                     occur_prob = 1.0
     
-                print(f"Species parameters for {species_name}:", flush=True)
-                print(f"  s: {s}, len_loc: {len_loc}, len_scale: {len_scale}", flush=True)
-                print(f"  Mean length: {mean_len}, SD: {sd_len}", flush=True)
-                print(f"  Iterations: {iterations}, Occurrence probability: {occur_prob}", flush=True)
+#                print(f"Species parameters for {species_name}:", flush=True)
+#                 print(f"  s: {s}, len_loc: {len_loc}, len_scale: {len_scale}", flush=True)
+#                 print(f"  Mean length: {mean_len}, SD: {sd_len}", flush=True)
+#                 print(f"  Iterations: {iterations}, Occurrence probability: {occur_prob}", flush=True)
     
                 spc_length = pd.DataFrame()
     
                 for i in np.arange(0, iterations, 1):
                     #logger.info('Building Q-Dict')
-                    print(f"Starting iteration {i} for species {spc}", flush=True)
+#                    print(f"Starting iteration {i} for species {spc}", flush=True)
                     for flow_row in flow_df.iterrows():
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
                         day = flow_row[1]['datetimeUTC']
-                        print(f"Flow row - Day: {day}, Current Q: {curr_Q}", flush=True)
+#                        print(f"Flow row - Day: {day}, Current Q: {curr_Q}", flush=True)
     
                         # Build Q_dict.
                         Q_dict = {'curr_Q': curr_Q}
@@ -2061,48 +2061,48 @@ class simulation():
                             sta_cap[fac] += unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
                         #logger.debug ('cycled through units, added to q-dict')
                         Q_dict['sta_cap'] = sta_cap
-                        print("Q_dict and sta_cap built:", flush=True)
-                        print("  Q_dict:", Q_dict, flush=True)
-                        print("  sta_cap:", sta_cap, flush=True)
+                        # print("Q_dict and sta_cap built:", flush=True)
+                        # print("  Q_dict:", Q_dict, flush=True)
+                        # print("  sta_cap:", sta_cap, flush=True)
                         #logger.debug ('bout to start daily hours')
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
-                        print(f"Total hours: {tot_hours}", flush=True)
+ #                       print(f"Total hours: {tot_hours}", flush=True)
                         #logger.info('Q-Dict Built')
                         
                         if np.any(tot_hours > 0):
                             presence_seed = np.random.uniform(0, 1)
-                            print(f"Presence seed: {presence_seed}", flush=True)
+#                            print(f"Presence seed: {presence_seed}", flush=True)
                             if occur_prob >= presence_seed:
                                 if math.isnan(spc_dat.iat[0, spc_dat.columns.get_loc('shape')]):
                                     n = int(spc_dat.iat[0, spc_dat.columns.get_loc('Fish')])
                                 else:
                                     n = self.population_sim(self.output_units, spc_dat, curr_Q)
-                                print(f"Calculated number of fish (n): {n}", flush=True)
+#                               print(f"Calculated number of fish (n): {n}", flush=True)
                                 if int(n) == 0:
                                     n = 1
-                                    print("n adjusted to 1 because initial value was 0", flush=True)
+#                                   print("n adjusted to 1 because initial value was 0", flush=True)
     
                                 try:
                                     if not math.isnan(s):
-                                        print("Generating population using lognorm.rvs", flush=True)
-                                        print(f"  Parameters: s={s}, len_loc={len_loc}, len_scale={len_scale}, n={int(n)}", flush=True)
+                                        # print("Generating population using lognorm.rvs", flush=True)
+                                        # print(f"  Parameters: s={s}, len_loc={len_loc}, len_scale={len_scale}, n={int(n)}", flush=True)
                                         population = np.abs(lognorm.rvs(s, len_loc, len_scale, int(n), random_state=rng))
                                         population = np.where(population > 150, 150, population)
                                         population = population * 0.0328084  # convert cm to feet
                                     else:
                                         print("Generating population using normal distribution", flush=True)
                                         population = np.abs(np.random.normal(mean_len, sd_len, int(n))) / 12.0
-                                    print(f"Population of {len(population)} created for species {species_name} on day {day}", flush=True)
+                                    # print(f"Population of {len(population)} created for species {species_name} on day {day}", flush=True)
                                 except Exception as e:
-                                    print("Error generating population for species", species_name, flush=True)
-                                    print(f"Parameters: s={s}, len_loc={len_loc}, len_scale={len_scale}, n={n}", flush=True)
-                                    print("Exception:", e, flush=True)
+                                    # print("Error generating population for species", species_name, flush=True)
+                                    # print(f"Parameters: s={s}, len_loc={len_loc}, len_scale={len_scale}, n={n}", flush=True)
+                                    # print("Exception:", e, flush=True)
                                     continue
     
                                 try:
                                     U_crit_val = spc_dat.iat[0, spc_dat.columns.get_loc('U_crit')]
                                 except Exception as e:
-                                    print("Error retrieving U_crit for species", species_name, flush=True)
+#                                    print("Error retrieving U_crit for species", species_name, flush=True)
                                     U_crit_val = 0
                                 swim_speed = np.repeat(U_crit_val, len(population))
                                 #logger.info('Population estimated')
@@ -2130,7 +2130,7 @@ class simulation():
                                         'population': np.float32(population),
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
-                                print(f"Fish DataFrame created with {len(fishes)} rows", flush=True)
+#                                print(f"Fish DataFrame created with {len(fishes)} rows", flush=True)
                                 #logger.info('Starting movement')
 
                                 # Process movement and survival for each movement step.
@@ -2149,19 +2149,19 @@ class simulation():
                                     try:
                                         surv_fun = v_surv_fun(current_location, self.surv_fun_dict)
                                     except Exception as e:
-                                        print("Error vectorizing survival function for locations:", current_location, flush=True)
-                                        print("Survival function dictionary:", self.surv_fun_dict, flush=True)
-                                        print("Exception:", e, flush=True)
+                                        # print("Error vectorizing survival function for locations:", current_location, flush=True)
+                                        # print("Survival function dictionary:", self.surv_fun_dict, flush=True)
+                                        # print("Exception:", e, flush=True)
                                         surv_fun = np.repeat("a priori", len(current_location))
                                     
                                     dice = np.random.uniform(0.0, 1.0, int(n))
-                                    print("Debug - Node survival rates:", flush=True)
-                                    print(f"  Population: {population}", flush=True)
-                                    print(f"  Status: {status_arr}", flush=True)
-                                    print(f"  Survival function: {surv_fun}", flush=True)
-                                    print(f"  Location: {current_location}", flush=True)
-                                    print(f"  Survival dict: {surv_dict}", flush=True)
-                                    print(f"  Unit param dict: {u_param_dict}", flush=True)
+                                    # print("Debug - Node survival rates:", flush=True)
+                                    # print(f"  Population: {population}", flush=True)
+                                    # print(f"  Status: {status_arr}", flush=True)
+                                    # print(f"  Survival function: {surv_fun}", flush=True)
+                                    # print(f"  Location: {current_location}", flush=True)
+                                    # print(f"  Survival dict: {surv_dict}", flush=True)
+                                    # print(f"  Unit param dict: {u_param_dict}", flush=True)
     
                                     v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[5,6])
                                     rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
@@ -2181,7 +2181,7 @@ class simulation():
                                         
                                 #logger.info('Finished movement')
     
-                                print("Movement successfully simulated for iteration", i, flush=True)
+#                                print("Movement successfully simulated for iteration", i, flush=True)
                                 max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
                                 fishes.to_hdf(self.hdf,
                                               key=f'simulations/{scen}/{spc}',
@@ -2249,7 +2249,7 @@ class simulation():
                                     curr_Q_report = curr_Q * 0.02831683199881
                                 else:
                                     curr_Q_report = curr_Q
-                                print(f"No fish present on day {day} (occurrence check failed)", flush=True)
+#                                print(f"No fish present on day {day} (occurrence check failed)", flush=True)
                                 daily_row_dict = {
                                     'species': ['{:50}'.format(spc)],
                                     'scenario': ['{:50}'.format(scenario)],
