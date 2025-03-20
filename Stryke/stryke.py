@@ -1037,7 +1037,8 @@ class simulation():
                                                 self.pop['beta_1'].item())
                     
                     # survival probability considering blade strike and barotrauma
-                    baro_surv_prob = 1. - baro_prob
+                    #baro_surv_prob = 1. - baro_prob
+                    baro_surv_prob = baro_prob
 
                 else: # "no immediate mortality was observed over the tested range"
                     baro_surv_prob = 1.
