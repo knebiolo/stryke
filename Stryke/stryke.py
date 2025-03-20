@@ -55,7 +55,7 @@ import networkx as nx
 from networkx.readwrite import json_graph
 #from Stryke.hydrofunctions import hydrofunctions as hf
 import hydrofunctions as hf
-from .barotrauma import baro_surv_prob
+from .barotrauma import baro_surv_prob, calc_v, calc_k_viscosity, calc_friction, calc_h_loss, calc_p_2, calc_p_1
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
@@ -878,24 +878,24 @@ class simulation():
         
         # calculate velocities
         # if flow is different at input/outflow, probably pass v_1 and v_2 through the function instead
-        v_1 = barotrauma.calc_v(discharge,a)
-        v_2 = barotrauma.calc_v(discharge,a)
+        v_1 = calc_v(discharge,a)
+        v_2 = calc_v(discharge,a)
         
         # calculate friction for total head loss
         dynamic_viscosity = 0.0010016 # for water @ 20C
         density = 998.2 # kg/m^3 for water @ 20C
-        kinematic_viscosity = barotrauma.calc_k_viscosity(dynamic_viscosity, density)
-        friction = barotrauma.calc_friction(K, ps_diameter, v_1, kinematic_viscosity)
+        kinematic_viscosity = calc_k_viscosity(dynamic_viscosity, density)
+        friction = calc_friction(K, ps_diameter, v_1, kinematic_viscosity)
         
         # calculate total head loss
-        head_loss = barotrauma.calc_h_loss(friction, ps_length, ps_diameter, v_1)
+        head_loss = calc_h_loss(friction, ps_length, ps_diameter, v_1)
         
         # calculate pressure at p2
         p_atm = constants.atm
-        p_2 = barotrauma.calc_p_2(p_atm, density, h_D)
+        p_2 = calc_p_2(p_atm, density, h_D)
         
         # calculate presure at p1
-        p_1 = barotrauma.calc_p_1(p_2, fish_depth, h_2, density, v_1, v_2, head_loss)
+        p_1 = calc_p_1(p_2, fish_depth, h_2, density, v_1, v_2, head_loss)
         
         # calculate pressure ratio
         p_ratio = p_1/p_2
