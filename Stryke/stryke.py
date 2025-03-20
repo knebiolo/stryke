@@ -1960,7 +1960,7 @@ class simulation():
                               'Qopt': float(row['Qopt']),
                               '_lambda': float(row['lambda']),
                               'intake_vel':float(row['intake_vel']),
-                              'rack_spacing':float(row['Rack Spacing'])}
+                              'rack_spacing':float(rack_spacing)}
                 u_param_dict[unit] = param_dict
             elif runner_type == 'Propeller':
                 param_dict = {'H': float(row['H']),
@@ -1972,7 +1972,7 @@ class simulation():
                               'Qper': row['Qper'],
                               '_lambda': float(row['lambda']),
                               'intake_vel':float(row['intake_vel']),
-                              'rack_spacing':float(row['Rack Spacing'])}
+                              'rack_spacing':float(rack_spacing)}
                 u_param_dict[unit] = param_dict
             elif runner_type == 'Francis':
                 param_dict = {'H': float(row['H']),
@@ -1987,7 +1987,7 @@ class simulation():
                               'B': float(row['B']),
                               '_lambda': float(row['lambda']),
                               'intake_vel':float(row['intake_vel']),
-                              'rack_spacing':float(row['Rack Spacing'])}
+                              'rack_spacing':float(rack_spacing)}
                 u_param_dict[unit] = param_dict
         #("Completed unit parameters setup.", flush=True)
     
