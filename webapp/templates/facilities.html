@@ -166,6 +166,7 @@
                         </div>
                     </div>
 
+                    <!-- Discharge and Rack Spacing Row -->
                     <div class="form-row">
                         <div>
                             <label for="min_op_flow_${i}">
@@ -196,7 +197,18 @@
                             </label>
                             <input type="number" name="bypass_flow_${i}" id="bypass_flow_${i}" step="any" value="0">
                         </div>
+
+                        <div>
+                            <label for="rack_spacing_${i}">
+                                Rack Spacing:
+                                <span class="tooltip">?
+                                    <span class="tooltip-text">Enter rack spacing as a float in millimeters (mm).</span>
+                                </span>
+                            </label>
+                            <input type="number" step="any" name="rack_spacing_${i}" id="rack_spacing_${i}" placeholder="mm">
+                        </div>
                     </div>
+
 
                     <div>
                         <label for="spillway_${i}">
