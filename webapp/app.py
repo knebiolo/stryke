@@ -810,14 +810,12 @@ def unit_parameters():
 
         # Convert merged rows to a list of dictionaries.
         unit_parameters_raw = list(rows.values())
-        # Save raw data for reporting purposes.
         session['unit_parameters_raw'] = unit_parameters_raw
 
         # Create a DataFrame from the raw unit parameters.
         df_units = pd.DataFrame(unit_parameters_raw)
         
-        # Rename columns to match the Excel sheet expected by Stryke.
-        # Adjust these keys if your form uses different names.
+        # Update rename_map to include the new barotrauma fields.
         rename_map = {
             "facility": "Facility",  # if applicable; often auto-filled
             "unit": "Unit",          # if applicable; might be generated automatically
@@ -836,50 +834,148 @@ def unit_parameters():
             "D1": "D1",
             "D2": "D2",
             "lambda": "lambda",
-            "roughness": "roughness"
+            "roughness": "roughness",
+            # New fields for barotrauma:
+            "fb_depth": "fb_depth",                  # forebay depth
+            "ps_D": "ps_D",                          # penstock diameter
+            "ps_length": "ps_length",                # penstock length
+            "submergence_depth": "submergence_depth",# submergence depth of draft tube
+            "elevation_head": "elevation_head"        # elevation head at downstream point
         }
         df_units.rename(columns=rename_map, inplace=True)
         
         # Retrieve the user's unit system.
         units = session.get('units', 'metric')
         
-        # If units are metric, convert the appropriate fields to imperial.
-        # Conversion factors: meters -> feet: multiply by 3.28084; m³/s -> ft³/s: multiply by 35.31469989.
+        # Convert appropriate fields if using metric units.
         if units == 'metric':
-            conv_length = 3.28084  # For fields measured in meters
-            conv_flow = 35.31469989  # For fields measured in m³/s
+            conv_length = 3.28084  # meters to feet
+            conv_flow = 35.31469989  # m³/s to ft³/s
 
-            # List of columns to convert from meters to feet.
-            length_fields = ["intake_vel", "H", "D", "B", "D1", "D2"]
-            # List of columns to convert from m³/s to ft³/s.
+            # Update length_fields to include the new fields (assuming they are measured in meters).
+            length_fields = ["intake_vel", "H", "D", "B", "D1", "D2",
+                             "fb_depth", "ps_D", "ps_length", "submergence_depth", "elevation_head"]
             flow_fields = ["Qopt", "Qcap"]
 
             for col in length_fields:
                 if col in df_units.columns:
-                    # Convert to numeric and multiply by conversion factor.
                     df_units[col] = pd.to_numeric(df_units[col], errors='coerce') * conv_length
 
             for col in flow_fields:
                 if col in df_units.columns:
                     df_units[col] = pd.to_numeric(df_units[col], errors='coerce') * conv_flow
 
-        # Assume unit_params is your DataFrame containing the unit parameters
+        # Save the DataFrame as CSV.
         unit_params_path = os.path.join(session['proj_dir'], 'unit_params.csv')
         df_units.to_csv(unit_params_path, index=False)
         
-        # Store only the file path in the session
         session['unit_params_file'] = unit_params_path
-        # Save the converted DataFrame into session in JSON-serializable format.
-        #session['unit_parameters_dataframe'] = df_units.to_json(orient='records')
-        #session['unit_parameters'] = df_units.to_dict(orient='records')
-        
-        # Debug print the flow scenario DataFrame.
+
         print("DEBUG: Unit Parameters DataFrame:")
         print(df_units, flush=True)
         
         flash("Unit parameters saved successfully!")
         return redirect(url_for('operating_scenarios'))
     return render_template('unit_parameters.html')
+
+# @app.route('/unit_parameters', methods=['GET', 'POST'])
+# def unit_parameters():
+#     if request.method == 'POST':
+#         print("Received form data:")
+#         for key, value in request.form.items():
+#             print(f"{key} : {value}")
+
+#         # Merge form data into rows (each row represents one unit's parameters)
+#         rows = {}
+#         for key, value in request.form.items():
+#             parts = key.rsplit('_', 1)
+#             if len(parts) != 2:
+#                 continue
+#             field_name, row_id = parts
+#             # Remove any trailing underscore and digits from field_name
+#             clean_field_name = re.sub(r'_\d+$', '', field_name)
+#             print(f"Key: {key} split into clean_field_name: {clean_field_name} and row_id: {row_id}")
+#             if row_id.isdigit():
+#                 if row_id not in rows:
+#                     rows[row_id] = {}
+#                 rows[row_id][clean_field_name] = value
+
+#         print("Merged rows:")
+#         for row_id, data in rows.items():
+#             print(f"Row {row_id}: {data}")
+
+#         # Convert merged rows to a list of dictionaries.
+#         unit_parameters_raw = list(rows.values())
+#         # Save raw data for reporting purposes.
+#         session['unit_parameters_raw'] = unit_parameters_raw
+
+#         # Create a DataFrame from the raw unit parameters.
+#         df_units = pd.DataFrame(unit_parameters_raw)
+        
+#         # Rename columns to match the Excel sheet expected by Stryke.
+#         # Adjust these keys if your form uses different names.
+#         rename_map = {
+#             "facility": "Facility",  # if applicable; often auto-filled
+#             "unit": "Unit",          # if applicable; might be generated automatically
+#             "type": "Runner Type",
+#             "velocity": "intake_vel",
+#             "order": "op_order",
+#             "H": "H",
+#             "RPM": "RPM",
+#             "D": "D",
+#             "efficiency": "ada",
+#             "N": "N",
+#             "Qopt": "Qopt",
+#             "Qcap": "Qcap",
+#             "B": "B",
+#             "iota": "iota",
+#             "D1": "D1",
+#             "D2": "D2",
+#             "lambda": "lambda",
+#             "roughness": "roughness"
+#         }
+#         df_units.rename(columns=rename_map, inplace=True)
+        
+#         # Retrieve the user's unit system.
+#         units = session.get('units', 'metric')
+        
+#         # If units are metric, convert the appropriate fields to imperial.
+#         # Conversion factors: meters -> feet: multiply by 3.28084; m³/s -> ft³/s: multiply by 35.31469989.
+#         if units == 'metric':
+#             conv_length = 3.28084  # For fields measured in meters
+#             conv_flow = 35.31469989  # For fields measured in m³/s
+
+#             # List of columns to convert from meters to feet.
+#             length_fields = ["intake_vel", "H", "D", "B", "D1", "D2"]
+#             # List of columns to convert from m³/s to ft³/s.
+#             flow_fields = ["Qopt", "Qcap"]
+
+#             for col in length_fields:
+#                 if col in df_units.columns:
+#                     # Convert to numeric and multiply by conversion factor.
+#                     df_units[col] = pd.to_numeric(df_units[col], errors='coerce') * conv_length
+
+#             for col in flow_fields:
+#                 if col in df_units.columns:
+#                     df_units[col] = pd.to_numeric(df_units[col], errors='coerce') * conv_flow
+
+#         # Assume unit_params is your DataFrame containing the unit parameters
+#         unit_params_path = os.path.join(session['proj_dir'], 'unit_params.csv')
+#         df_units.to_csv(unit_params_path, index=False)
+        
+#         # Store only the file path in the session
+#         session['unit_params_file'] = unit_params_path
+#         # Save the converted DataFrame into session in JSON-serializable format.
+#         #session['unit_parameters_dataframe'] = df_units.to_json(orient='records')
+#         #session['unit_parameters'] = df_units.to_dict(orient='records')
+        
+#         # Debug print the flow scenario DataFrame.
+#         print("DEBUG: Unit Parameters DataFrame:")
+#         print(df_units, flush=True)
+        
+#         flash("Unit parameters saved successfully!")
+#         return redirect(url_for('operating_scenarios'))
+#     return render_template('unit_parameters.html')
 
 @app.route('/operating_scenarios', methods=['GET', 'POST'])
 def operating_scenarios():
@@ -1749,6 +1845,10 @@ def population():
         scenario = request.form.get('scenario')
         simulate_choice = request.form.get('simulateChoice')
         iterations = request.form.get('iterations')
+        # Retrieve new fields from the form.
+        vertical_habitat = request.form.get('vertical_habitat')
+        beta_0 = request.form.get('beta_0')
+        beta_1 = request.form.get('beta_1')
 
         pop_data = {
             "Species": species_name,
@@ -1765,6 +1865,11 @@ def population():
         def safe_float(val):
             try: return float(val)
             except: return None
+
+        # Add them to your population data dictionary.
+        pop_data["vertical_habitat"] = vertical_habitat
+        pop_data["beta_0"] = safe_float(beta_0)
+        pop_data["beta_1"] = safe_float(beta_1)
 
         units = session.get('units', 'metric')
         
@@ -1888,11 +1993,13 @@ def population():
 
         expected_columns = [
             "Species", "Common Name", "Scenario", "Iterations", "Fish",
+            "vertical_habitat", "beta_0", "beta_1",
             "shape", "location", "scale",
             "max_ent_rate", "occur_prob",
             "Length_mean", "Length_sd", "U_crit",
             "length shape", "length location", "length scale"
         ]
+
         for col in expected_columns:
             if col not in df_population.columns:
                 df_population[col] = None
@@ -1908,6 +2015,9 @@ def population():
             "Scenario": "Scenario",
             "Iterations": "Iterations",
             "Fish": "Fish",
+            "vertical_habitat": "Vertical Habitat",
+            "beta_0": "Beta 0",
+            "beta_1": "Beta 1",
             "shape": "Empirical Shape",
             "location": "Empirical Location",
             "scale": "Empirical Scale",
@@ -1920,6 +2030,7 @@ def population():
             "length location": "Length Location",
             "length scale": "Length Scale"
         }
+
         df_population_summary = df_population.rename(columns=summary_column_mapping)
         session['population_dataframe_for_summary'] = df_population_summary.to_json(orient='records')
 
@@ -2463,7 +2574,7 @@ def generate_report(sim):
         if yearly_df is None or yearly_df.empty:
             return "<p>No yearly summary data available.</p>"
         row = yearly_df.iloc[0]  # Only one row expected
-        panel_html = "<h2>Yearly Summary (Iteration-based)</h2>"
+        panel_html = "<h2>Seasonal Summary (by Iteration)</h2>"
         for metric in ["entrainment", "mortality"]:
             if metric == 'entrainment':
                 metric = 'entrained'

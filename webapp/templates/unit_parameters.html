@@ -276,6 +276,56 @@
                                 </span>
                             </span>
                         </th>
+                        <th>
+                            Forebay Depth 
+                            <span class="tooltip">?
+                                <span class="tooltip-text">
+                                    Parameter: Forebay Depth<br>
+                                    Data Type: Float<br>
+                                    Default: (none)
+                                </span>
+                            </span>
+                        </th>
+                        <th>
+                            Penstock Diameter 
+                            <span class="tooltip">?
+                                <span class="tooltip-text">
+                                    Parameter: Penstock Diameter<br>
+                                    Data Type: Float<br>
+                                    Default: (none)
+                                </span>
+                            </span>
+                        </th>
+                        <th>
+                            Penstock Length 
+                            <span class="tooltip">?
+                                <span class="tooltip-text">
+                                    Parameter: Penstock Length<br>
+                                    Data Type: Float<br>
+                                    Default: (none)
+                                </span>
+                            </span>
+                        </th>
+                        <th>
+                            Submergence Depth 
+                            <span class="tooltip">?
+                                <span class="tooltip-text">
+                                    Parameter: Submergence Depth of Draft Tube<br>
+                                    Data Type: Float<br>
+                                    Default: (none)
+                                </span>
+                            </span>
+                        </th>
+                        <th>
+                            Elevation Head 
+                            <span class="tooltip">?
+                                <span class="tooltip-text">
+                                    Parameter: Elevation Head at Downstream Point<br>
+                                    Data Type: Float<br>
+                                    Default: (none)
+                                </span>
+                            </span>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -370,6 +420,32 @@
                             <td>
                                 <input type="number" step="any" name="roughness_{{ outer_index }}_{{ i }}" placeholder="Roughness" value="0.025" title="Roughness">
                             </td>
+                            <!-- Forebay Depth -->
+                            <td>
+                                <input type="number" step="any" name="fb_depth_{{ outer_index }}_{{ i }}" placeholder="Forebay Depth"
+                                title="{% if session.units=='imperial' %}Forebay depth (ft){% else %}Forebay depth (m){% endif %}">
+                            </td>
+                            <!-- Penstock Diameter -->
+                            <td>
+                                <input type="number" step="any" name="ps_D_{{ outer_index }}_{{ i }}" placeholder="Penstock Diameter"
+                                title="{% if session.units=='imperial' %}Penstock diameter (ft){% else %}Penstock diameter (m){% endif %}">
+                            </td>
+                            <!-- Penstock Length -->
+                            <td>
+                                <input type="number" step="any" name="ps_length_{{ outer_index }}_{{ i }}" placeholder="Penstock Length"
+                                title="{% if session.units=='imperial' %}Penstock length (ft){% else %}Penstock length (m){% endif %}">
+                            </td>
+                            <!-- Submergence Depth -->
+                            <td>
+                                <input type="number" step="any" name="submergence_depth_{{ outer_index }}_{{ i }}" placeholder="Submergence Depth"
+                                title="{% if session.units=='imperial' %}Submergence depth (ft){% else %}Submergence depth (m){% endif %}">
+                            </td>
+                            <!-- Elevation Head -->
+                            <td>
+                                <input type="number" step="any" name="elevation_head_{{ outer_index }}_{{ i }}" placeholder="Elevation Head"
+                                title="{% if session.units=='imperial' %}Elevation head (ft){% else %}Elevation head (m){% endif %}">
+                            </td>
+
                         </tr>
                         {% endfor %}
                     {% endfor %}
@@ -464,6 +540,11 @@
                 { name: "D2_new_", placeholder: "D2", titleImperial: "Runner diameter at exit (ft)", titleMetric: "Runner diameter at exit (m)", francisOnly: true },
                 { name: "lambda_new_", placeholder: "λ", value: "0.2", title: "Lambda correlation factor" },
                 { name: "roughness_new_", placeholder: "Roughness", value: "0.025", title: "Roughness" }
+                { name: "fb_depth_new_", placeholder: "Forebay Depth", titleImperial: "Forebay depth (ft)", titleMetric: "Forebay depth (m)" },
+                { name: "ps_D_new_", placeholder: "Penstock Diameter", titleImperial: "Penstock diameter (ft)", titleMetric: "Penstock diameter (m)" },
+                { name: "ps_length_new_", placeholder: "Penstock Length", titleImperial: "Penstock length (ft)", titleMetric: "Penstock length (m)" },
+                { name: "submergence_depth_new_", placeholder: "Submergence Depth", titleImperial: "Submergence depth (ft)", titleMetric: "Submergence depth (m)" },
+                { name: "elevation_head_new_", placeholder: "Elevation Head", titleImperial: "Elevation head (ft)", titleMetric: "Elevation head (m)" }
             ];
 
             for (var j = 0; j < fields.length; j++) {

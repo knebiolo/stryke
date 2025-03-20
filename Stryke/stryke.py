@@ -55,10 +55,7 @@ import networkx as nx
 from networkx.readwrite import json_graph
 #from Stryke.hydrofunctions import hydrofunctions as hf
 import hydrofunctions as hf
-#from Stryke import barotrauma
-import barotrauma
-#from Stryke.barotrauma import baro_surv_prob
-from barotrauma import baro_surv_prob
+from .barotrauma import baro_surv_prob
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
@@ -425,9 +422,12 @@ class simulation():
         if "unit_parameters_file" in data_dict:
             self.unit_params = read_csv_if_exists(
                 data_dict["unit_parameters_file"],
-                numeric_cols=['B', 'D', 'D1', 'D2', 'H', 'N', 'Qcap', 'Qopt',
-                              'RPM', 'ada', 'intake_vel', 'iota', 'lambda',
-                              'op_order', 'roughness'],
+                numeric_cols=[
+                    'B', 'D', 'D1', 'D2', 'H', 'N', 'Qcap', 'Qopt',
+                    'RPM', 'ada', 'intake_vel', 'iota', 'lambda',
+                    'op_order', 'roughness',
+                    'fb_depth', 'ps_D', 'ps_length', 'submergence_depth', 'elevation_head'
+                ],
                 index_col="Unit_Name"
             )
             if self.unit_params is not None:
@@ -435,7 +435,7 @@ class simulation():
                 self.unit_params.set_index('Unit_Name', inplace=True)
         elif "unit_parameters" in data_dict:
             self.unit_params = to_dataframe(data_dict["unit_parameters"])
-        
+
         # 4. Facilities.
         if "facilities" in data_dict:
             self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
@@ -904,9 +904,15 @@ class simulation():
         endpoint = baro_surv_prob(p_ratio, beta_0, beta_1)
 
         return endpoint
-        
-    
-    def node_surv_rate(self,length,status,surv_fun,route,surv_dict,u_param_dict):
+
+    def node_surv_rate(self,
+                       length,
+                       u_crit,
+                       status,
+                       surv_fun,
+                       route,
+                       surv_dict,
+                       u_param_dict):
         """
         Calculates the survival probability of a fish passing through a node in 
         the migratory network, taking into account the type of hydraulic structure 
@@ -968,32 +974,36 @@ class simulation():
             else:
                 param_dict = u_param_dict[route]
 
-                #TODO add impingement logic, 
-                ''' impingement is a function of head width, rack spacing, 
-                critical swim speed, and intake velocity, essentially, fish that 
+                ''' Impingement is a function of head width, rack spacing, 
+                critical swim speed, and intake velocity.  Essentially, fish that 
                 are too wide to fit through the rack, but too slow to escape the
-                intake velocity are impinged'''
-                # assemble the impingement variables
-                
+                intake velocity are impinged, and we assume impingement is death'''
+                intake_vel = param_dict['intake_vel']
+                rack_spacing = param_dict['Rack Spacing']
+                if length/10. > rack_spacing and u_crit < intake_vel:
+                    imp_surv_prob = 0.
+                else:
+                    imp_surv_prob = 1.
+
                 # if survival is assessed at a Kaplan turbine:
                 if surv_fun == 'Kaplan':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
-                    strike_prob = self.Kaplan(length, param_dict)
+                    strike_surv_prob = self.Kaplan(length, param_dict)
     
                 # if survival is assessed at a Propeller turbine:
                 elif surv_fun == 'Propeller':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
-                    strike_prob = self.Propeller(length, param_dict)
+                    strike_surv_prob = self.Propeller(length, param_dict)
     
                 # if survival is assessed at a Francis turbine:
                 elif surv_fun == 'Francis':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
-                    strike_prob = self.Francis(length, param_dict)
+                    strike_surv_prob = self.Francis(length, param_dict)
     
                 # if survival is assessed at a turbine in pump mode:
                 elif surv_fun == 'Pump':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
-                    strike_prob = self.Pump(length, param_dict)
+                    strike_surv_prob = self.Pump(length, param_dict)
                     
                 # assess barotrauma survival
 
@@ -1027,11 +1037,12 @@ class simulation():
                                                 self.pop['beta_1'].item())
                     
                     # survival probability considering blade strike and barotrauma
-                    prob = strike_prob * baro_prob
+                    baro_surv_prob = 1. - baro_prob
 
                 else: # "no immediate mortality was observed over the tested range"
-                    prob = strike_prob
+                    baro_surv_prob = 1.
                     
+                prob = imp_surv_prob * strike_surv_prob * baro_surv_prob
             try:
                 return np.float32(prob)
             except:
@@ -1936,6 +1947,9 @@ class simulation():
             intake_vel_dict[unit] = row['intake_vel']
             units.append(unit)
             op_order_dict[unit] = row['op_order']
+            rack_spacing = self.facility_params.at[row['Facility'],'Rack Spacing']
+            if np.isnan(rack_spacing):
+                rack_spacing = 2 /12.
             
             if runner_type == 'Kaplan':
                 param_dict = {'H': float(row['H']),
@@ -1944,7 +1958,9 @@ class simulation():
                               'ada': float(row['ada']),
                               'N': float(row['N']),
                               'Qopt': float(row['Qopt']),
-                              '_lambda': float(row['lambda'])}
+                              '_lambda': float(row['lambda']),
+                              'intake_vel':float(row['intake_vel']),
+                              'rack_spacing':float(row['Rack Spacing'])}
                 u_param_dict[unit] = param_dict
             elif runner_type == 'Propeller':
                 param_dict = {'H': float(row['H']),
@@ -1954,7 +1970,9 @@ class simulation():
                               'N': float(row['N']),
                               'Qopt': float(row['Qopt']),
                               'Qper': row['Qper'],
-                              '_lambda': float(row['lambda'])}
+                              '_lambda': float(row['lambda']),
+                              'intake_vel':float(row['intake_vel']),
+                              'rack_spacing':float(row['Rack Spacing'])}
                 u_param_dict[unit] = param_dict
             elif runner_type == 'Francis':
                 param_dict = {'H': float(row['H']),
@@ -1967,7 +1985,9 @@ class simulation():
                               'D1': float(row['D1']),
                               'D2': float(row['D2']),
                               'B': float(row['B']),
-                              '_lambda': float(row['lambda'])}
+                              '_lambda': float(row['lambda']),
+                              'intake_vel':float(row['intake_vel']),
+                              'rack_spacing':float(row['Rack Spacing'])}
                 u_param_dict[unit] = param_dict
         #("Completed unit parameters setup.", flush=True)
     
@@ -2023,10 +2043,15 @@ class simulation():
                 s = spc_dat.iat[0, spc_dat.columns.get_loc('length shape')]
                 len_loc = spc_dat.iat[0, spc_dat.columns.get_loc('length location')]
                 len_scale = spc_dat.iat[0, spc_dat.columns.get_loc('length scale')]
+                
+                # extract length in ft
                 mean_len = spc_dat.iat[0, spc_dat.columns.get_loc('Length_mean')]
                 sd_len = spc_dat.iat[0, spc_dat.columns.get_loc('Length_sd')]
+                
+                # get other variables
                 species_name = spc_dat.iat[0, spc_dat.columns.get_loc('Species')]
                 iterations = spc_dat.iat[0, spc_dat.columns.get_loc('Iterations')]
+                u_crit = spc_dat.iat[0, spc_dat.columns.get_loc('U_crit')]
                 occur_prob = spc_dat.iat[0, spc_dat.columns.get_loc('occur_prob')]
                 if math.isnan(occur_prob):
                     occur_prob = 1.0
@@ -2183,8 +2208,8 @@ class simulation():
                                     # print(f"  Survival dict: {surv_dict}", flush=True)
                                     # print(f"  Unit param dict: {u_param_dict}", flush=True)
     
-                                    v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[4,5])
-                                    rates = v_surv_rate(population, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
+                                    v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[5,6])
+                                    rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
                                     survival = np.where(dice <= rates, 1, 0)
     
                                     if k < max(self.moves):
@@ -2252,8 +2277,8 @@ class simulation():
                                 daily_row_dict['num_entrained'] = total_entrained
                                 daily_row_dict['num_survived'] = total_survived_entrained
     
-                                logger.debug("Total fish: %d | Entrained: %d | Survived entrainment: %d",
-                                             len(fishes), total_entrained, total_survived_entrained)    
+                                # logger.debug("Total fish: %d | Entrained: %d | Survived entrainment: %d",
+                                #              len(fishes), total_entrained, total_survived_entrained)    
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 daily.to_hdf(self.hdf,
@@ -2527,11 +2552,6 @@ class simulation():
                 self.cum_sum = pd.DataFrame.from_dict(cum_sum_dict, orient='columns')
                 # Debug print shapes
                 logger.info("Beta DF shape: %s",self.beta_df.shape)
-                logger.info("==== Yearly Summary ====")
-                logger.info(self.beta_df.to_string(index=False))
-                for i, row in self.beta_df.iterrows():
-                    logger.info(row.to_string())                
-                logger.info("Yearly Summary shape: %s",self.cum_sum.shape)
                 summary = self.cum_sum.iloc[0]
                 
                 logger.info("==== Yearly Summary (Entrainment & Mortality Statistics) ====")

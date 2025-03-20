@@ -250,6 +250,32 @@
         </div>
       </div>
       
+      <div class="flex-row">
+        <div>
+          <label for="vertical_habitat">Vertical Habitat 
+            <span class="tooltip" title="Select vertical habitat preference: Pelagic or Benthic">[?]</span>
+          </label>
+          <select id="vertical_habitat" name="vertical_habitat" required>
+            <option value="">--Select Option--</option>
+            <option value="Pelagic">Pelagic</option>
+            <option value="Benthic">Benthic</option>
+          </select>
+        </div>
+        <div>
+          <label for="beta_0">Beta 0 
+            <span class="tooltip" title="Logistic regression intercept parameter">[?]</span>
+          </label>
+          <input type="number" step="any" id="beta_0" name="beta_0" placeholder="Enter Beta 0" required>
+        </div>
+        <div>
+          <label for="beta_1">Beta 1 
+            <span class="tooltip" title="Logistic regression slope parameter">[?]</span>
+          </label>
+          <input type="number" step="any" id="beta_1" name="beta_1" placeholder="Enter Beta 1" required>
+        </div>
+      </div>
+      
+      
       <hr>
       
       <!-- Simulation Choice -->
