@@ -61,7 +61,7 @@ import requests
 #import geopandas as gp
 import statsmodels.api as sm
 import math
-from scipy.stats import pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r, ks_2samp, nbinom, norm
+from scipy.stats import beta, pareto, genextreme, genpareto, lognorm, weibull_min, gumbel_r, ks_2samp, nbinom, norm
 from scipy import constants
 import h5py
 #import tables
@@ -1044,7 +1044,11 @@ class simulation():
                 else: # "no immediate mortality was observed over the tested range"
                     baro_surv_prob = 1.
                     
-                prob = imp_surv_prob * strike_surv_prob * baro_surv_prob
+                # incoporate latent mortality
+                latent_survival = beta.rvs(1.02, 0.371, size=1)
+                
+                # calculate turbine survival estimate
+                prob = imp_surv_prob * strike_surv_prob * baro_surv_prob * latent_survival
             try:
                 return np.float32(prob)
             except:
