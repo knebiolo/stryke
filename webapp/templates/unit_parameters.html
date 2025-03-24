@@ -108,11 +108,14 @@
           {% set outer_index = loop.index0 %}
           {% set num_units = session.facility_units[facility.Facility] %}
           {% for i in range(1, num_units + 1) %}
-          <details class="unit-accordion">
+          <details class="unit-accordion" id="unit-{{ outer_index }}-{{ i }}">
             <summary>
               Facility: {{ facility.Facility }} &nbsp; | &nbsp; Unit: {{ i }}
             </summary>
             <div class="accordion-content">
+              {% if i > 1 %}
+              <button type="button" onclick="copyFromPrevious({{ outer_index }}, {{ i }})">Copy from previous unit</button>
+              {% endif %}
               
               <!-- Table 1: Basic Unit Parameters -->
               <table class="mini-table">
@@ -426,6 +429,7 @@
   </div>
   
   <script>
+    // Existing function to enable/disable Francis-only fields
     function updateRow(selectElem) {
       var accordion = selectElem.closest("details");
       var fields = accordion.querySelectorAll(".francis-only");
@@ -440,6 +444,39 @@
           field.style.backgroundColor = "#e0e0e0";
         });
       }
+    }
+    
+    // New function to copy parameters from the previous unit
+    function copyFromPrevious(outerIndex, currentUnit) {
+      var prevUnit = currentUnit - 1;
+      var currentAccordion = document.getElementById("unit-" + outerIndex + "-" + currentUnit);
+      var prevAccordion = document.getElementById("unit-" + outerIndex + "-" + prevUnit);
+      if (!prevAccordion) {
+        alert("Previous unit not found.");
+        return;
+      }
+      // Select all input and select elements within the current accordion
+      var currentFields = currentAccordion.querySelectorAll("input, select");
+      currentFields.forEach(function(field) {
+        // Skip copying for Facility and Unit fields (they are read-only)
+        if (field.name.indexOf("Facility_") === 0 || field.name.indexOf("unit_") === 0) {
+          return;
+        }
+        // Construct the corresponding field name in the previous unit
+        var nameParts = field.name.split("_");
+        // Replace the last part (unit number) with the previous unit number
+        nameParts[nameParts.length - 1] = prevUnit;
+        var prevFieldName = nameParts.join("_");
+        // Find the corresponding field in the previous accordion
+        var prevField = prevAccordion.querySelector('[name="' + prevFieldName + '"]');
+        if (prevField) {
+          field.value = prevField.value;
+          // If it's a select element, also update the selected index
+          if (field.tagName.toLowerCase() === "select") {
+            field.selectedIndex = prevField.selectedIndex;
+          }
+        }
+      });
     }
   </script>
 </body>
