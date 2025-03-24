@@ -432,6 +432,7 @@ class simulation():
                 ],
                 index_col="Unit_Name"
             )
+            self.unit_params['elevation_head'] = self.unit_params.submergence_depth
             if self.unit_params is not None:
                 self.unit_params['Unit_Name'] = self.unit_params.Facility + ' - Unit ' + self.unit_params.Unit.astype('str')
                 self.unit_params.set_index('Unit_Name', inplace=True)
