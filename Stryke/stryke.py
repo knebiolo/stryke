@@ -1047,6 +1047,7 @@ class simulation():
                 # incoporate latent mortality
                 latent_survival = beta.rvs(1.02, 0.371, size=1)
                 
+                
                 # calculate turbine survival estimate
                 prob = imp_surv_prob * strike_surv_prob * baro_surv_prob * latent_survival
             try:
