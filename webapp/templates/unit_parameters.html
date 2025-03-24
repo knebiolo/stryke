@@ -1,308 +1,446 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Unit Parameters</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f7f7f7;
-            margin: 20px;
-        }
-        .container {
-            max-width: 1800px;
-            margin: auto;
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .nav-link {
-            margin-bottom: 15px;
-            display: inline-block;
-        }
-        h1 {
-            color: #0056b3;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-        }
-        th, td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: center;
-        }
-        th {
-            background: #e0e0e0;
-        }
-        .tooltip {
-            margin-left: 5px;
-            font-weight: bold;
-            cursor: help;
-            text-decoration: underline;
-        }
-        .tooltip-text {
-            display: none;
-            position: absolute;
-            background: #333;
-            color: #fff;
-            padding: 5px;
-            border-radius: 4px;
-            font-size: 12px;
-            width: 300px;
-            z-index: 1000;
-        }
-        .tooltip:hover .tooltip-text {
-            display: inline-block;
-        }
-        input, select {
-            width: 100%;
-            padding: 4px;
-            box-sizing: border-box;
-        }
-        button {
-            padding: 10px 15px;
-            background: #007BFF;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-right: 10px;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Unit Parameters</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      margin: 20px;
+    }
+    .container {
+      max-width: 1800px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .nav-link {
+      margin-bottom: 15px;
+      display: inline-block;
+    }
+    h1 {
+      color: #0056b3;
+    }
+    .tooltip {
+      margin-left: 5px;
+      font-weight: bold;
+      cursor: help;
+      text-decoration: underline;
+    }
+    .tooltip-text {
+      display: none;
+      position: absolute;
+      background: #333;
+      color: #fff;
+      padding: 5px;
+      border-radius: 4px;
+      font-size: 12px;
+      width: 300px;
+      z-index: 1000;
+    }
+    .tooltip:hover .tooltip-text {
+      display: inline-block;
+    }
+    input, select {
+      width: 100%;
+      padding: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 15px;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .unit-accordion {
+      margin-bottom: 1em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 0.5em;
+    }
+    .unit-accordion summary {
+      font-weight: bold;
+      cursor: pointer;
+      margin-bottom: 0.5em;
+    }
+    .accordion-content {
+      margin-top: 0.5em;
+    }
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1em;
+    }
+    .mini-table th {
+      background: #f0f0f0;
+      width: 40%;
+      text-align: left;
+      padding: 6px;
+    }
+    .mini-table td {
+      border: 1px solid #ccc;
+      padding: 6px;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <a href="{{ url_for('index') }}" class="nav-link">Home</a>
-        <h1>Unit Parameters</h1>
-        <p class="instructions">
-            On this page, you’ll provide details for each turbine unit within your 
-            selected generating station(s). For example, you’ll specify the 
-            runner type, flow capacity, intake velocity, and other relevant fields. 
-            If you’re unsure about the units hover over the little info icons 
-            for more guidance. Once you finish entering these parameters, click 
-            “Save Unit Parameters” to move on to the next step.  
-        </p>
-        <form method="post">
-          {% if session.facilities_data is defined and session.facility_units is defined %}
-            {% for facility in session.facilities_data %}
-              {% set outer_index = loop.index0 %}
-              {% set num_units = session.facility_units[facility.Facility] %}
-              {% for i in range(1, num_units + 1) %}
-              <details class="unit-accordion">
-                <summary>
-                  Facility: {{ facility.Facility }} &nbsp; | &nbsp; Unit: {{ i }}
-                </summary>
-                <div class="accordion-content">
-                  <!-- First mini-table -->
-                  <table class="mini-table">
-                    <tr>
-                      <th>Facility</th>
-                      <td>
-                        <input type="text" name="Facility_{{ outer_index }}_{{ i }}" value="{{ facility.Facility }}" readonly>
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Unit</th>
-                      <td>
-                        <input type="number" name="unit_{{ outer_index }}_{{ i }}" value="{{ i }}" readonly>
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Runner Type</th>
-                      <td>
-                        <select name="type_{{ outer_index }}_{{ i }}" onchange="updateRow(this)">
-                          <option value="Francis" selected>Francis</option>
-                          <option value="Kaplan">Kaplan</option>
-                          <option value="Propeller">Propeller</option>
-                        </select>
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Intake Velocity</th>
-                      <td>
-                        <input type="number" step="any" name="velocity_{{ outer_index }}_{{ i }}" placeholder="Intake Velocity">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Operation Order</th>
-                      <td>
-                        <input type="number" name="order_{{ outer_index }}_{{ i }}" value="1">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Hydraulic Head (H)</th>
-                      <td>
-                        <input type="number" step="any" name="H_{{ outer_index }}_{{ i }}" placeholder="H">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>RPM</th>
-                      <td>
-                        <input type="number" step="any" name="RPM_{{ outer_index }}_{{ i }}" placeholder="RPM">
-                      </td>
-                    </tr>
-                  </table>
-                  <!-- Second mini-table -->
-                  <table class="mini-table">
-                    <tr>
-                      <th>D (Runner Dia.)</th>
-                      <td>
-                        <input type="number" step="any" name="D_{{ outer_index }}_{{ i }}" placeholder="D">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Runner Efficiency (η)</th>
-                      <td>
-                        <input type="number" step="any" name="efficiency_{{ outer_index }}_{{ i }}" placeholder="η">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>N (Blades/Buckets)</th>
-                      <td>
-                        <input type="number" name="N_{{ outer_index }}_{{ i }}" placeholder="N">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Qopt</th>
-                      <td>
-                        <input type="number" step="any" name="Qopt_{{ outer_index }}_{{ i }}" placeholder="Qopt">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Qcap</th>
-                      <td>
-                        <input type="number" step="any" name="Qcap_{{ outer_index }}_{{ i }}" placeholder="Qcap">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>B (Francis only)</th>
-                      <td>
-                        <input type="number" step="any" name="B_{{ outer_index }}_{{ i }}" placeholder="B" class="francis-only">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>iota (Francis only)</th>
-                      <td>
-                        <input type="number" step="any" name="iota_{{ outer_index }}_{{ i }}" placeholder="iota" value="1.1" class="francis-only">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>D1 (Francis only)</th>
-                      <td>
-                        <input type="number" step="any" name="D1_{{ outer_index }}_{{ i }}" placeholder="D1" class="francis-only">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>D2 (Francis only)</th>
-                      <td>
-                        <input type="number" step="any" name="D2_{{ outer_index }}_{{ i }}" placeholder="D2" class="francis-only">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>λ (Lambda)</th>
-                      <td>
-                        <input type="number" step="any" name="lambda_{{ outer_index }}_{{ i }}" placeholder="λ" value="0.2">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Roughness</th>
-                      <td>
-                        <input type="number" step="any" name="roughness_{{ outer_index }}_{{ i }}" placeholder="Roughness" value="0.025">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Forebay Depth</th>
-                      <td>
-                        <input type="number" step="any" name="fb_depth_{{ outer_index }}_{{ i }}" placeholder="Forebay Depth">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Penstock Diameter</th>
-                      <td>
-                        <input type="number" step="any" name="ps_D_{{ outer_index }}_{{ i }}" placeholder="Penstock Diameter">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Penstock Length</th>
-                      <td>
-                        <input type="number" step="any" name="ps_length_{{ outer_index }}_{{ i }}" placeholder="Penstock Length">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Submergence Depth</th>
-                      <td>
-                        <input type="number" step="any" name="submergence_depth_{{ outer_index }}_{{ i }}" placeholder="Submergence Depth">
-                      </td>
-                    </tr>
-                    <tr>
-                      <th>Elevation Head</th>
-                      <td>
-                        <input type="number" step="any" name="elevation_head_{{ outer_index }}_{{ i }}" placeholder="Elevation Head">
-                      </td>
-                    </tr>
-                  </table>
-                </div>
-              </details>
-              {% endfor %}
-            {% endfor %}
-          {% endif %}
-          <button type="submit">Save Unit Parameters</button>
-        </form>
-
-        <script>
-          function updateRow(selectElem) {
-            var accordion = selectElem.closest("details");
-            var fields = accordion.querySelectorAll(".francis-only");
-            if (selectElem.value === "Francis") {
-              fields.forEach(function(field) {
-                field.disabled = false;
-                field.style.backgroundColor = "";
-              });
-            } else {
-              fields.forEach(function(field) {
-                field.disabled = true;
-                field.style.backgroundColor = "#e0e0e0";
-              });
-            }
-          }
-        </script>
-        
-        <style>
-          .unit-accordion {
-            margin-bottom: 1em;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 0.5em;
-          }
-          .unit-accordion summary {
-            font-weight: bold;
-            cursor: pointer;
-            margin-bottom: 0.5em;
-          }
-          .accordion-content {
-            margin-top: 0.5em;
-          }
-          .mini-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 1em;
-          }
-          .mini-table th {
-            background: #f0f0f0;
-            width: 40%;
-            text-align: left;
-            padding: 6px;
-          }
-          .mini-table td {
-            border: 1px solid #ccc;
-            padding: 6px;
-          }
-        </style>
+  <div class="container">
+    <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+    <h1>Unit Parameters</h1>
+    <p class="instructions">
+      On this page, you’ll provide details for each turbine unit within your 
+      selected generating station(s). For example, you’ll specify the runner type, flow capacity, intake velocity, and other relevant fields.
+      If you’re unsure about the units, hover over the little info icons for more guidance.
+      Once you finish entering these parameters, click “Save Unit Parameters” to move on to the next step.
+    </p>
+    <form method="post">
+      {% if session.facilities_data is defined and session.facility_units is defined %}
+        {% for facility in session.facilities_data %}
+          {% set outer_index = loop.index0 %}
+          {% set num_units = session.facility_units[facility.Facility] %}
+          {% for i in range(1, num_units + 1) %}
+          <details class="unit-accordion">
+            <summary>
+              Facility: {{ facility.Facility }} &nbsp; | &nbsp; Unit: {{ i }}
+            </summary>
+            <div class="accordion-content">
+              
+              <!-- Table 1: Basic Unit Parameters -->
+              <table class="mini-table">
+                <tr>
+                  <th>
+                    Facility
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Facility Name<br>Data Type: String<br>Default: Auto-filled from project
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="text" name="Facility_{{ outer_index }}_{{ i }}" value="{{ facility.Facility }}" readonly>
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Unit
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Unit Number<br>Data Type: Integer<br>Default: Sequential number
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" name="unit_{{ outer_index }}_{{ i }}" value="{{ i }}" readonly>
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Runner Type
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Runner Type<br>Data Type: String (Francis, Kaplan, Propeller)<br>Default: Francis
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <select name="type_{{ outer_index }}_{{ i }}" onchange="updateRow(this)">
+                      <option value="Francis" selected>Francis</option>
+                      <option value="Kaplan">Kaplan</option>
+                      <option value="Propeller">Propeller</option>
+                    </select>
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Intake Velocity
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Intake Velocity<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="velocity_{{ outer_index }}_{{ i }}" placeholder="Intake Velocity">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Operation Order
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Operation Order<br>Data Type: Integer<br>Default: 1
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" name="order_{{ outer_index }}_{{ i }}" value="1">
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Table 2: Franke Parameters -->
+              <table class="mini-table">
+                <tr>
+                  <th>
+                    Hydraulic Head (H)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Hydraulic Head<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="H_{{ outer_index }}_{{ i }}" placeholder="H">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    RPM
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Revolutions per Minute<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="RPM_{{ outer_index }}_{{ i }}" placeholder="RPM">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    D (Runner Dia.)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Runner Diameter<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="D_{{ outer_index }}_{{ i }}" placeholder="D">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Runner Efficiency (η)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Runner Efficiency<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="efficiency_{{ outer_index }}_{{ i }}" placeholder="η">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    N (Blades/Buckets)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Number of Blades/Buckets<br>Data Type: Integer<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" name="N_{{ outer_index }}_{{ i }}" placeholder="N">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Qopt
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Optimal Discharge<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="Qopt_{{ outer_index }}_{{ i }}" placeholder="Qopt">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Qcap
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Hydraulic Capacity<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="Qcap_{{ outer_index }}_{{ i }}" placeholder="Qcap">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    B (Francis only)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Runner Height<br>Data Type: Float<br>Default: (none)<br>(Only for Francis)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="B_{{ outer_index }}_{{ i }}" placeholder="B" class="francis-only">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    iota (Francis only)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Exit Swirl (iota)<br>Data Type: Float<br>Default: 1.1<br>(Only for Francis)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="iota_{{ outer_index }}_{{ i }}" placeholder="iota" value="1.1" class="francis-only">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    D1 (Francis only)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Runner Diameter at Inlet<br>Data Type: Float<br>Default: (none)<br>(Only for Francis)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="D1_{{ outer_index }}_{{ i }}" placeholder="D1" class="francis-only">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    D2 (Francis only)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Runner Diameter at Exit<br>Data Type: Float<br>Default: (none)<br>(Only for Francis)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="D2_{{ outer_index }}_{{ i }}" placeholder="D2" class="francis-only">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    λ (Lambda)
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Lambda Correlation Factor<br>Data Type: Float<br>Default: 0.2
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="lambda_{{ outer_index }}_{{ i }}" placeholder="λ" value="0.2">
+                  </td>
+                </tr>
+              </table>
+              
+              <!-- Table 3: Barotrauma Parameters -->
+              <table class="mini-table">
+                <tr>
+                  <th>
+                    Penstock Diameter
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Penstock Diameter<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="ps_D_{{ outer_index }}_{{ i }}" placeholder="Penstock Diameter">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Penstock Length
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Penstock Length<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="ps_length_{{ outer_index }}_{{ i }}" placeholder="Penstock Length">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Forebay Depth
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Forebay Depth<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="fb_depth_{{ outer_index }}_{{ i }}" placeholder="Forebay Depth">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Submergence Depth
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Submergence Depth of Draft Tube<br>Data Type: Float<br>Default: (none)
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="submergence_depth_{{ outer_index }}_{{ i }}" placeholder="Submergence Depth">
+                  </td>
+                </tr>
+                <tr>
+                  <th>
+                    Roughness
+                    <span class="tooltip">?
+                      <span class="tooltip-text">
+                        Parameter: Roughness<br>Data Type: Float<br>Default: 0.025
+                      </span>
+                    </span>
+                  </th>
+                  <td>
+                    <input type="number" step="any" name="roughness_{{ outer_index }}_{{ i }}" placeholder="Roughness" value="0.025">
+                  </td>
+                </tr>
+              </table>
+              
+            </div>
+          </details>
+          {% endfor %}
+        {% endfor %}
+      {% endif %}
+      <button type="submit">Save Unit Parameters</button>
+    </form>
+  </div>
+  
+  <script>
+    function updateRow(selectElem) {
+      var accordion = selectElem.closest("details");
+      var fields = accordion.querySelectorAll(".francis-only");
+      if (selectElem.value === "Francis") {
+        fields.forEach(function(field) {
+          field.disabled = false;
+          field.style.backgroundColor = "";
+        });
+      } else {
+        fields.forEach(function(field) {
+          field.disabled = true;
+          field.style.backgroundColor = "#e0e0e0";
+        });
+      }
+    }
+  </script>
 </body>
 </html>
