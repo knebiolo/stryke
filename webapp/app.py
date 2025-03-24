@@ -2752,7 +2752,7 @@ def generate_report(sim):
     <body>
         <div class="container">
             {final_html}
-            <a href="/download_report" class="download-link">Download Report</a>
+            <a href="/download_report_zip" class="download-link">Download Report</a>
         </div>
     </body>
     </html>
@@ -2779,19 +2779,26 @@ def download_report():
 
 @app.route('/download_report_zip')
 def download_report_zip():
-
     proj_dir = session.get('proj_dir')
     if not proj_dir:
         return "<h1>Session missing proj_dir</h1>", 500
 
-    report_path = os.path.join(proj_dir, "simulation_report.html")
-    if not os.path.exists(report_path):
-        return f"<h1>Report not found: {report_path}</h1>", 404
+    if not os.path.exists(proj_dir):
+        return f"<h1>Project directory not found: {proj_dir}</h1>", 404
 
     zip_path = os.path.join(proj_dir, "simulation_report.zip")
-    # Create a zip archive containing the report
+
+    # Create a zip archive containing all files in the project directory
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        zipf.write(report_path, arcname="simulation_report.html")
+        for root, dirs, files in os.walk(proj_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Avoid adding the zip file itself if it already exists in the directory
+                if os.path.abspath(file_path) == os.path.abspath(zip_path):
+                    continue
+                # The arcname makes the path inside the zip relative to the project directory
+                arcname = os.path.relpath(file_path, start=proj_dir)
+                zipf.write(file_path, arcname=arcname)
 
     # Send the zip file for download
     return send_file(zip_path, as_attachment=True, attachment_filename="simulation_report.zip")
