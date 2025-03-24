@@ -89,517 +89,220 @@
             “Save Unit Parameters” to move on to the next step.  
         </p>
         <form method="post">
-            <table id="unit_parameters_table">
-                <thead>
+          {% if session.facilities_data is defined and session.facility_units is defined %}
+            {% for facility in session.facilities_data %}
+              {% set outer_index = loop.index0 %}
+              {% set num_units = session.facility_units[facility.Facility] %}
+              {% for i in range(1, num_units + 1) %}
+              <details class="unit-accordion">
+                <summary>
+                  Facility: {{ facility.Facility }} &nbsp; | &nbsp; Unit: {{ i }}
+                </summary>
+                <div class="accordion-content">
+                  <!-- First mini-table -->
+                  <table class="mini-table">
                     <tr>
-                        <th>
-                            Fac.
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Facility Name<br>
-                                    Data Type: String<br>
-                                    Default: Auto-filled from project
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Unit
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Unit Number<br>
-                                    Data Type: Integer<br>
-                                    Default: Sequential number
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Type
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Runner Type<br>
-                                    Data Type: String (Francis, Kaplan, Propeller)<br>
-                                    Default: Francis
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Int. Vel.
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Intake Velocity<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Op. Ord.
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Operation Order<br>
-                                    Data Type: Integer<br>
-                                    Default: 1
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            H
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Hydraulic Head<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            RPM
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Revolutions per Minute<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            D
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Runner Diameter<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Eff. (η)
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Runner Efficiency<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            N
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Number of Blades/Buckets<br>
-                                    Data Type: Integer<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Qopt
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Optimal Discharge<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Qcap
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Hydraulic Capacity<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            B
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Runner Height<br>
-                                    Data Type: Float<br>
-                                    Default: (none)<br>
-                                    (Only for Francis)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            iota
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Exit Swirl (iota)<br>
-                                    Data Type: Float<br>
-                                    Default: 1.1<br>
-                                    (Only for Francis)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            D1
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Runner Diameter at Inlet<br>
-                                    Data Type: Float<br>
-                                    Default: (none)<br>
-                                    (Only for Francis)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            D2
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Runner Diameter at Exit<br>
-                                    Data Type: Float<br>
-                                    Default: (none)<br>
-                                    (Only for Francis)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            λ
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Lambda Correlation Factor<br>
-                                    Data Type: Float<br>
-                                    Default: 0.2
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Rough.
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Roughness<br>
-                                    Data Type: Float<br>
-                                    Default: 0.025
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Fb. Depth
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Forebay Depth<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Ps. Dia.
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Penstock Diameter<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Ps. Len.
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Penstock Length<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Sub. Depth
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Submergence Depth of Draft Tube<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
-                        <th>
-                            Elev. Head
-                            <span class="tooltip">?
-                                <span class="tooltip-text">
-                                    Parameter: Elevation Head at Downstream Point<br>
-                                    Data Type: Float<br>
-                                    Default: (none)
-                                </span>
-                            </span>
-                        </th>
+                      <th>Facility</th>
+                      <td>
+                        <input type="text" name="Facility_{{ outer_index }}_{{ i }}" value="{{ facility.Facility }}" readonly>
+                      </td>
                     </tr>
-                </thead>
-                <tbody>
-                    <!-- Table rows go here -->
-
-
-                <tbody>
-                {# Auto-generated rows based on facilities_data and facility_units stored in session #}
-                {% if session.facilities_data is defined and session.facility_units is defined %}
-                    {% for facility in session.facilities_data %}
-                        {% set outer_index = loop.index0 %}
-                        {% set num_units = session.facility_units[facility.Facility] %}
-                        {% for i in range(1, num_units + 1) %}
-                        <tr>
-                            <!-- Facility and Unit (auto-filled, read-only) -->
-                            <td>
-                                <input type="text" name="Facility_{{ outer_index }}_{{ i }}" value="{{ facility.Facility }}" readonly>
-                            </td>
-                            <td>
-                                <input type="number" name="unit_{{ outer_index }}_{{ i }}" value="{{ i }}" readonly>
-                            </td>
-                            <!-- Runner Type (interactive) -->
-                            <td>
-                                <select name="type_{{ outer_index }}_{{ i }}" onchange="updateRow(this)">
-                                    <option value="Francis" selected>Francis</option>
-                                    <option value="Kaplan">Kaplan</option>
-                                    <option value="Propeller">Propeller</option>
-                                </select>
-                            </td>
-                            <!-- Intake Velocity -->
-                            <td>
-                                <input type="number" step="any" name="velocity_{{ outer_index }}_{{ i }}" placeholder="Intake Velocity"
-                                title="{% if session.units=='imperial' %}Feet per second{% else %}Meters per second{% endif %}">
-                            </td>
-                            <!-- Operation Order -->
-                            <td>
-                                <input type="number" name="order_{{ outer_index }}_{{ i }}" value="1">
-                            </td>
-                            <!-- H (Hydraulic Head) -->
-                            <td>
-                                <input type="number" step="any" name="H_{{ outer_index }}_{{ i }}" placeholder="H"
-                                title="{% if session.units=='imperial' %}Hydraulic head (ft){% else %}Hydraulic head (m){% endif %}">
-                            </td>
-                            <!-- RPM -->
-                            <td>
-                                <input type="number" step="any" name="RPM_{{ outer_index }}_{{ i }}" placeholder="RPM" title="Revolutions per Minute">
-                            </td>
-                            <!-- D (Runner Diameter) -->
-                            <td>
-                                <input type="number" step="any" name="D_{{ outer_index }}_{{ i }}" placeholder="D"
-                                title="{% if session.units=='imperial' %}Runner diameter (ft){% else %}Runner diameter (m){% endif %}">
-                            </td>
-                            <!-- Runner Efficiency (η) -->
-                            <td>
-                                <input type="number" step="any" name="efficiency_{{ outer_index }}_{{ i }}" placeholder="η" title="Runner Efficiency (%)">
-                            </td>
-                            <!-- N (Number of blades/buckets) -->
-                            <td>
-                                <input type="number" name="N_{{ outer_index }}_{{ i }}" placeholder="N" title="Number of blades or buckets">
-                            </td>
-                            <!-- Qopt -->
-                            <td>
-                                <input type="number" step="any" name="Qopt_{{ outer_index }}_{{ i }}" placeholder="Qopt"
-                                title="{% if session.units=='imperial' %}Optimal Discharge (ft³/s){% else %}Optimal Discharge (m³/s){% endif %}">
-                            </td>
-                            <!-- Qcap -->
-                            <td>
-                                <input type="number" step="any" name="Qcap_{{ outer_index }}_{{ i }}" placeholder="Qcap"
-                                title="{% if session.units=='imperial' %}Hydraulic capacity (ft³/s){% else %}Hydraulic capacity (m³/s){% endif %}">
-                            </td>
-                            <!-- B (only for Francis) -->
-                            <td>
-                                <input type="number" step="any" name="B_{{ outer_index }}_{{ i }}" placeholder="B"
-                                title="{% if session.units=='imperial' %}Runner height (ft){% else %}Runner height (m){% endif %}" class="francis-only">
-                            </td>
-                            <!-- iota (only for Francis; default 1.1) -->
-                            <td>
-                                <input type="number" step="any" name="iota_{{ outer_index }}_{{ i }}" placeholder="iota" value="1.1"
-                                title="Exit swirl, Franke et al. suggest 1.1" class="francis-only">
-                            </td>
-                            <!-- D1 (only for Francis) -->
-                            <td>
-                                <input type="number" step="any" name="D1_{{ outer_index }}_{{ i }}" placeholder="D1"
-                                title="{% if session.units=='imperial' %}Runner diameter at inlet (ft){% else %}Runner diameter at inlet (m){% endif %}" class="francis-only">
-                            </td>
-                            <!-- D2 (only for Francis) -->
-                            <td>
-                                <input type="number" step="any" name="D2_{{ outer_index }}_{{ i }}" placeholder="D2"
-                                title="{% if session.units=='imperial' %}Runner diameter at exit (ft){% else %}Runner diameter at exit (m){% endif %}" class="francis-only">
-                            </td>
-                            <!-- Lambda (λ) -->
-                            <td>
-                                <input type="number" step="any" name="lambda_{{ outer_index }}_{{ i }}" placeholder="λ" value="0.2" title="Lambda correlation factor">
-                            </td>
-                            <!-- Roughness -->
-                            <td>
-                                <input type="number" step="any" name="roughness_{{ outer_index }}_{{ i }}" placeholder="Roughness" value="0.025" title="Roughness">
-                            </td>
-                            <!-- Forebay Depth -->
-                            <td>
-                                <input type="number" step="any" name="fb_depth_{{ outer_index }}_{{ i }}" placeholder="Forebay Depth"
-                                title="{% if session.units=='imperial' %}Forebay depth (ft){% else %}Forebay depth (m){% endif %}">
-                            </td>
-                            <!-- Penstock Diameter -->
-                            <td>
-                                <input type="number" step="any" name="ps_D_{{ outer_index }}_{{ i }}" placeholder="Penstock Diameter"
-                                title="{% if session.units=='imperial' %}Penstock diameter (ft){% else %}Penstock diameter (m){% endif %}">
-                            </td>
-                            <!-- Penstock Length -->
-                            <td>
-                                <input type="number" step="any" name="ps_length_{{ outer_index }}_{{ i }}" placeholder="Penstock Length"
-                                title="{% if session.units=='imperial' %}Penstock length (ft){% else %}Penstock length (m){% endif %}">
-                            </td>
-                            <!-- Submergence Depth -->
-                            <td>
-                                <input type="number" step="any" name="submergence_depth_{{ outer_index }}_{{ i }}" placeholder="Submergence Depth"
-                                title="{% if session.units=='imperial' %}Submergence depth (ft){% else %}Submergence depth (m){% endif %}">
-                            </td>
-                            <!-- Elevation Head -->
-                            <td>
-                                <input type="number" step="any" name="elevation_head_{{ outer_index }}_{{ i }}" placeholder="Elevation Head"
-                                title="{% if session.units=='imperial' %}Elevation head (ft){% else %}Elevation head (m){% endif %}">
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% endfor %}
-                {% endif %}
-                </tbody>
-            </table>
-            <button type="button" onclick="addRow()">Add New Row</button>
-            <button type="submit">Save Unit Parameters</button>
+                    <tr>
+                      <th>Unit</th>
+                      <td>
+                        <input type="number" name="unit_{{ outer_index }}_{{ i }}" value="{{ i }}" readonly>
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Runner Type</th>
+                      <td>
+                        <select name="type_{{ outer_index }}_{{ i }}" onchange="updateRow(this)">
+                          <option value="Francis" selected>Francis</option>
+                          <option value="Kaplan">Kaplan</option>
+                          <option value="Propeller">Propeller</option>
+                        </select>
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Intake Velocity</th>
+                      <td>
+                        <input type="number" step="any" name="velocity_{{ outer_index }}_{{ i }}" placeholder="Intake Velocity">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Operation Order</th>
+                      <td>
+                        <input type="number" name="order_{{ outer_index }}_{{ i }}" value="1">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Hydraulic Head (H)</th>
+                      <td>
+                        <input type="number" step="any" name="H_{{ outer_index }}_{{ i }}" placeholder="H">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>RPM</th>
+                      <td>
+                        <input type="number" step="any" name="RPM_{{ outer_index }}_{{ i }}" placeholder="RPM">
+                      </td>
+                    </tr>
+                  </table>
+                  <!-- Second mini-table -->
+                  <table class="mini-table">
+                    <tr>
+                      <th>D (Runner Dia.)</th>
+                      <td>
+                        <input type="number" step="any" name="D_{{ outer_index }}_{{ i }}" placeholder="D">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Runner Efficiency (η)</th>
+                      <td>
+                        <input type="number" step="any" name="efficiency_{{ outer_index }}_{{ i }}" placeholder="η">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>N (Blades/Buckets)</th>
+                      <td>
+                        <input type="number" name="N_{{ outer_index }}_{{ i }}" placeholder="N">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Qopt</th>
+                      <td>
+                        <input type="number" step="any" name="Qopt_{{ outer_index }}_{{ i }}" placeholder="Qopt">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Qcap</th>
+                      <td>
+                        <input type="number" step="any" name="Qcap_{{ outer_index }}_{{ i }}" placeholder="Qcap">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>B (Francis only)</th>
+                      <td>
+                        <input type="number" step="any" name="B_{{ outer_index }}_{{ i }}" placeholder="B" class="francis-only">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>iota (Francis only)</th>
+                      <td>
+                        <input type="number" step="any" name="iota_{{ outer_index }}_{{ i }}" placeholder="iota" value="1.1" class="francis-only">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>D1 (Francis only)</th>
+                      <td>
+                        <input type="number" step="any" name="D1_{{ outer_index }}_{{ i }}" placeholder="D1" class="francis-only">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>D2 (Francis only)</th>
+                      <td>
+                        <input type="number" step="any" name="D2_{{ outer_index }}_{{ i }}" placeholder="D2" class="francis-only">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>λ (Lambda)</th>
+                      <td>
+                        <input type="number" step="any" name="lambda_{{ outer_index }}_{{ i }}" placeholder="λ" value="0.2">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Roughness</th>
+                      <td>
+                        <input type="number" step="any" name="roughness_{{ outer_index }}_{{ i }}" placeholder="Roughness" value="0.025">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Forebay Depth</th>
+                      <td>
+                        <input type="number" step="any" name="fb_depth_{{ outer_index }}_{{ i }}" placeholder="Forebay Depth">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Penstock Diameter</th>
+                      <td>
+                        <input type="number" step="any" name="ps_D_{{ outer_index }}_{{ i }}" placeholder="Penstock Diameter">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Penstock Length</th>
+                      <td>
+                        <input type="number" step="any" name="ps_length_{{ outer_index }}_{{ i }}" placeholder="Penstock Length">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Submergence Depth</th>
+                      <td>
+                        <input type="number" step="any" name="submergence_depth_{{ outer_index }}_{{ i }}" placeholder="Submergence Depth">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>Elevation Head</th>
+                      <td>
+                        <input type="number" step="any" name="elevation_head_{{ outer_index }}_{{ i }}" placeholder="Elevation Head">
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+              </details>
+              {% endfor %}
+            {% endfor %}
+          {% endif %}
+          <button type="submit">Save Unit Parameters</button>
         </form>
-    </div>
 
-    <script>
-        // Function to update the row based on runner type selection.
-        function updateRow(selectElem) {
-            var row = selectElem.closest("tr");
-            var fields = row.querySelectorAll(".francis-only");
+        <script>
+          function updateRow(selectElem) {
+            var accordion = selectElem.closest("details");
+            var fields = accordion.querySelectorAll(".francis-only");
             if (selectElem.value === "Francis") {
-                fields.forEach(function(field) {
-                    field.disabled = false;
-                    field.style.backgroundColor = "";
-                });
+              fields.forEach(function(field) {
+                field.disabled = false;
+                field.style.backgroundColor = "";
+              });
             } else {
-                fields.forEach(function(field) {
-                    field.disabled = true;
-                    field.style.backgroundColor = "#e0e0e0";
-                });
+              fields.forEach(function(field) {
+                field.disabled = true;
+                field.style.backgroundColor = "#e0e0e0";
+              });
             }
-        }
-
-        // Function to dynamically add a new row.
-        function addRow() {
-            var table = document.getElementById("unit_parameters_table").getElementsByTagName('tbody')[0];
-            var rowCount = table.rows.length;
-            var row = table.insertRow(-1);
-
-            // For new rows, we allow selection of facility from available ones (from session data passed as JSON)
-            var facilities = {{ session.facilities_data|tojson }};
-            
-            // Facility dropdown cell (disabled as it should be non-interactive)
-            var cell0 = row.insertCell(0);
-            var facilitySelect = document.createElement("select");
-            facilitySelect.name = "Facility_new_" + rowCount;
-            facilitySelect.disabled = true;
-            for (var i = 0; i < facilities.length; i++) {
-                var option = document.createElement("option");
-                option.value = facilities[i].Facility;
-                option.text = facilities[i].Facility;
-                facilitySelect.appendChild(option);
-            }
-            cell0.appendChild(facilitySelect);
-
-            // Unit cell (read-only)
-            var cell1 = row.insertCell(1);
-            var unitInput = document.createElement("input");
-            unitInput.type = "number";
-            unitInput.name = "unit_new_" + rowCount;
-            unitInput.value = "1";
-            unitInput.readOnly = true;
-            cell1.appendChild(unitInput);
-
-            // Runner type cell (interactive)
-            var cell2 = row.insertCell(2);
-            var runnerSelect = document.createElement("select");
-            runnerSelect.name = "type_new_" + rowCount;
-            runnerSelect.onchange = function() { updateRow(this); };
-            var types = ["Francis", "Kaplan", "Propeller"];
-            types.forEach(function(type) {
-                var opt = document.createElement("option");
-                opt.value = type;
-                opt.text = type;
-                runnerSelect.appendChild(opt);
-            });
-            cell2.appendChild(runnerSelect);
-
-            // Set default to Francis so fields below are enabled by default.
-            runnerSelect.value = "Francis";
-
-            // Array of remaining fields for the new row.
-            var fields = [
-                { name: "velocity_new_", placeholder: "Intake Velocity", titleImperial: "Feet per second", titleMetric: "Meters per second" },
-                { name: "order_new_", placeholder: "Operation Order", value: "1" },
-                { name: "H_new_", placeholder: "H", titleImperial: "Hydraulic head (ft)", titleMetric: "Hydraulic head (m)" },
-                { name: "RPM_new_", placeholder: "RPM", title: "Revolutions per Minute" },
-                { name: "D_new_", placeholder: "D", titleImperial: "Runner diameter (ft)", titleMetric: "Runner diameter (m)" },
-                { name: "efficiency_new_", placeholder: "η", title: "Runner Efficiency (%)" },
-                { name: "N_new_", placeholder: "N", title: "Number of blades or buckets" },
-                { name: "Qopt_new_", placeholder: "Qopt", titleImperial: "Optimal Discharge (ft³/s)", titleMetric: "Optimal Discharge (m³/s)" },
-                { name: "Qcap_new_", placeholder: "Qcap", titleImperial: "Hydraulic capacity (ft³/s)", titleMetric: "Hydraulic capacity (m³/s)" },
-                { name: "B_new_", placeholder: "B", titleImperial: "Runner height (ft)", titleMetric: "Runner height (m)", francisOnly: true },
-                { name: "iota_new_", placeholder: "iota", value: "1.1", title: "Exit swirl, Franke et al. suggest 1.1", francisOnly: true },
-                { name: "D1_new_", placeholder: "D1", titleImperial: "Runner diameter at inlet (ft)", titleMetric: "Runner diameter at inlet (m)", francisOnly: true },
-                { name: "D2_new_", placeholder: "D2", titleImperial: "Runner diameter at exit (ft)", titleMetric: "Runner diameter at exit (m)", francisOnly: true },
-                { name: "lambda_new_", placeholder: "λ", value: "0.2", title: "Lambda correlation factor" },
-                { name: "roughness_new_", placeholder: "Roughness", value: "0.025", title: "Roughness" }
-                { name: "fb_depth_new_", placeholder: "Forebay Depth", titleImperial: "Forebay depth (ft)", titleMetric: "Forebay depth (m)" },
-                { name: "ps_D_new_", placeholder: "Penstock Diameter", titleImperial: "Penstock diameter (ft)", titleMetric: "Penstock diameter (m)" },
-                { name: "ps_length_new_", placeholder: "Penstock Length", titleImperial: "Penstock length (ft)", titleMetric: "Penstock length (m)" },
-                { name: "submergence_depth_new_", placeholder: "Submergence Depth", titleImperial: "Submergence depth (ft)", titleMetric: "Submergence depth (m)" },
-                { name: "elevation_head_new_", placeholder: "Elevation Head", titleImperial: "Elevation head (ft)", titleMetric: "Elevation head (m)" }
-            ];
-
-            for (var j = 0; j < fields.length; j++) {
-                var cell = row.insertCell(j + 3);
-                if (fields[j].name.indexOf("type_new_") === 0) {
-                    continue;
-                }
-                if (fields[j].hasOwnProperty("francisOnly") && fields[j].francisOnly === true) {
-                    var input = document.createElement("input");
-                    input.type = "number";
-                    input.step = "any";
-                    input.name = fields[j].name + rowCount;
-                    input.placeholder = fields[j].placeholder;
-                    if(fields[j].value) {
-                        input.value = fields[j].value;
-                    }
-                    if(fields[j].titleImperial && fields[j].titleMetric) {
-                        input.title = {% if session.units=='imperial' %}"{0}"{% else %}"{1}"{% endif %}.replace("{0}", fields[j].titleImperial).replace("{1}", fields[j].titleMetric);
-                    } else if(fields[j].title) {
-                        input.title = fields[j].title;
-                    }
-                    input.classList.add("francis-only");
-                    cell.appendChild(input);
-                } else if(fields[j].type && fields[j].type === "select") {
-                    var select = document.createElement("select");
-                    select.name = fields[j].name + rowCount;
-                    fields[j].options.forEach(function(optVal) {
-                        var opt = document.createElement("option");
-                        opt.value = optVal;
-                        opt.text = optVal;
-                        select.appendChild(opt);
-                    });
-                    cell.appendChild(select);
-                } else {
-                    var input = document.createElement("input");
-                    input.type = "number";
-                    input.step = "any";
-                    input.name = fields[j].name + rowCount;
-                    input.placeholder = fields[j].placeholder;
-                    if(fields[j].value) {
-                        input.value = fields[j].value;
-                    }
-                    if(fields[j].titleImperial && fields[j].titleMetric) {
-                        input.title = {% if session.units=='imperial' %}"{0}"{% else %}"{1}"{% endif %}.replace("{0}", fields[j].titleImperial).replace("{1}", fields[j].titleMetric);
-                    } else if(fields[j].title) {
-                        input.title = fields[j].title;
-                    }
-                    cell.appendChild(input);
-                }
-            }
-            updateRow(runnerSelect);
-        }
-    </script>
+          }
+        </script>
+        
+        <style>
+          .unit-accordion {
+            margin-bottom: 1em;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 0.5em;
+          }
+          .unit-accordion summary {
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 0.5em;
+          }
+          .accordion-content {
+            margin-top: 0.5em;
+          }
+          .mini-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1em;
+          }
+          .mini-table th {
+            background: #f0f0f0;
+            width: 40%;
+            text-align: left;
+            padding: 6px;
+          }
+          .mini-table td {
+            border: 1px solid #ccc;
+            padding: 6px;
+          }
+        </style>
 </body>
 </html>
