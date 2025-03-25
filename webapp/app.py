@@ -2007,7 +2007,7 @@ def population():
         expected_columns = [
             "Species", "Common Name", "Scenario", "Iterations", "Fish",
             "vertical_habitat", "beta_0", "beta_1",
-            "shape", "location", "scale",
+            "dist","shape", "location", "scale",
             "max_ent_rate", "occur_prob",
             "Length_mean", "Length_sd", "U_crit",
             "length shape", "length location", "length scale"
