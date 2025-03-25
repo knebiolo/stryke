@@ -2212,11 +2212,14 @@ def run_simulation_in_background_custom(data_dict, log_queue):
 
 @app.route('/run_simulation', methods=['POST'])
 def run_simulation():
+   
+    pop_csv_path = session['population_csv_path']
+    pop_df = pd.read_csv(pop_csv_path)
     data_dict = {
         "facilities": session.get("facilities_data"),
         "unit_parameters_file": session.get("unit_params_file"),
         "operating_scenarios_file": session.get("op_scen_file"),
-        "population": session.get("population_dataframe_for_sim"),
+        "population": pop_df,
         "flow_scenarios": session.get("flow_scenario"),
         "hydrograph_file": session.get("hydrograph_file"),
         "graph_data": session.get("simulation_graph"),
