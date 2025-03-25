@@ -1091,7 +1091,7 @@ def save_graph():
 
     graph_data = request.get_json()
     session['raw_graph_data'] = graph_data
-
+    logger.debug('graph data acquired')
     summary_nodes = []
     simulation_nodes = {}  # Use node_id as the key
     summary_edges = []
@@ -1104,7 +1104,6 @@ def save_graph():
         label = data.get("label", node_id)
         surv_fun = data.get("surv_fun", "default")
         survival_rate = data.get("survival_rate", None)
-
         # Swap the ID with Location
         summary_nodes.append({
             "ID": label,         # Use label as the ID
@@ -1119,7 +1118,8 @@ def save_graph():
             "Surv_Fun": surv_fun,
             "Survival": survival_rate
         }
-
+    logger.debug('Nodes found')
+    
     edges = graph_data.get("elements", {}).get("edges", [])
     for edge in edges:
         data = edge.get("data", {})
@@ -1135,6 +1135,7 @@ def save_graph():
 
         simulation_edges.append((source, target, {"weight": weight}))
 
+    logger.debug('edges created')
     # Build the NetworkX graph
     G = nx.DiGraph()
     for node_id, attrs in simulation_nodes.items():
