@@ -2042,6 +2042,13 @@ def population():
             "length scale": "Length Scale"
         }
         
+        proj_dir = session.get("proj_dir", "/tmp")  # Or your configured project directory
+        pop_csv_path = os.path.join(proj_dir, "population_params.csv")
+        df_population_summary.to_csv(pop_csv_path, index=False)
+        session['population_csv_path'] = pop_csv_path
+        print("Saved population parameters to file:", pop_csv_path, flush=True)
+
+        
         df_population_summary = df_population.rename(columns=summary_column_mapping)
         session['population_dataframe_for_summary'] = df_population_summary.to_json(orient='records')
         
@@ -2324,15 +2331,23 @@ def model_setup_summary():
 
     # --- Other Data ---
     facilities_data = session.get('facilities_data', [])
-    population_data_raw = session.get("population_dataframe_for_summary", [])
-    print ("populatoin data exists:", population_data_raw, flush = True)
-    try:
-        population_parameters = json.loads(population_data_raw)
-    except Exception as e:
-        print("Error decoding population data:", e, flush=True)
-        population_parameters = []
-    if isinstance(population_parameters, dict):
-        population_parameters = [population_parameters]
+    population_parameters = []
+    if 'population_csv_path' in session:
+        pop_csv_path = session['population_csv_path']
+        print("Found population CSV file in session:", pop_csv_path, flush=True)
+        if os.path.exists(pop_csv_path):
+            try:
+                df_pop = pd.read_csv(pop_csv_path)
+                population_parameters = df_pop.to_dict(orient='records')
+                print("Loaded population parameters from file:", population_parameters, flush=True)
+            except Exception as e:
+                print("Error reading population CSV file:", e, flush=True)
+        else:
+            print("Population CSV file not found on disk:", pop_csv_path, flush=True)
+    else:
+        print("No population CSV file key in session.", flush=True)
+
+
     
 
     simulation_graph = session.get('simulation_graph', {})
