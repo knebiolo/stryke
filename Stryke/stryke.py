@@ -1961,7 +1961,11 @@ class simulation():
         # Iterate over each flow scenario.
         for scen in self.flow_scenarios:
             #print(f"Starting scenario {scen} now", flush=True)
-            scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
+            logger.debug('start assessing scenario ', scen)
+            try:
+                scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
+            except Exception:
+                logger.warning('Scenario not in flow scenarios dataframe')
             scen_num = scen_df.iat[0, scen_df.columns.get_loc('Scenario Number')]
             season = scen_df.iat[0, scen_df.columns.get_loc('Season')]
             scenario = scen_df.iat[0, scen_df.columns.get_loc('Scenario')]
@@ -1977,11 +1981,13 @@ class simulation():
                 scen_months = list(map(int, month_list))
             else:
                 scen_months = [scen_months]
-            
-            ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario'] == scenario]
+            try:
+                ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario'] == scenario]
+            except Exception:
+                logger.warning('Scenario not in operating scenarios')
 #            print(f"Scenario {scen}: Operating scenarios extracted.", flush=True)
-    
-            species = self.pop[self.pop['Scenario'] == scenario].Species.unique()
+            
+            species = self.pop.Species.unique() #[self.pop['Scenario'] == scenario].Species.unique()
 #            print(f"Scenario {scen}: Species identified: {species}", flush=True)
             
             # Create hydrograph for this scenario.

@@ -2147,7 +2147,8 @@ def model_setup_summary():
 
 
     simulation_graph = session.get('simulation_graph', {})
-
+    print ('Loaded simulation graph:', simulation_graph, flush = True)
+    
     summary_data = {
         "Facilities": facilities_data,
         "Unit Parameters": unit_parameters,
@@ -2173,6 +2174,7 @@ def model_setup_summary():
     print ('model setup summary complete', flush = True)
 
 def run_simulation_in_background_custom(data_dict, log_queue):
+    print ('Data dictionary made it:', data_dict, flush = True)
     try:
         sys.stdout = QueueStream(log_queue)  # Send print/logs to frontend
         user_sim_folder = data_dict['proj_dir']
