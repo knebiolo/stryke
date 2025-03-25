@@ -2324,7 +2324,8 @@ def model_setup_summary():
 
     # --- Other Data ---
     facilities_data = session.get('facilities_data', [])
-    population_data_raw = session.get("population_dataframe_for_summary", "[]")
+    population_data_raw = session.get("population_dataframe_for_summary", [])
+    print ("populatoin data exists:", population_data_raw, flush = True)
     try:
         population_parameters = json.loads(population_data_raw)
     except Exception as e:
