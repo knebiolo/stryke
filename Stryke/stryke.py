@@ -1746,7 +1746,7 @@ class simulation():
                     for idx, row in fac_units.iterrows():
                         # Assume each unit row has a unique identifier in a column (e.g., 'Unit')
                         # If ops_df has a matching row for each unit, you can merge or filter by that identifier.
-                        logger.debug('working on unit %s', row['Unit'])
+                        #logger.debug('working on unit %s', row['Unit'])
                         # For example, if ops_df has a 'Unit' column:
                         unit_ops = ops_df[ops_df.Unit == row['Unit']]#[ops_df.Unit == idx
                         if unit_ops.empty:
