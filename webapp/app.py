@@ -261,50 +261,50 @@ def upload_simulation():
                            simulation_results=simulation_results,
                            output_filename=output_filename)
 
-@app.route('/download_zip')
-def download_zip():
-    user_sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
+# @app.route('/download_zip')
+# def download_zip():
+#     user_sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
 
-    # Remove any old zip files.
-    for fname in os.listdir(user_sim_folder):
-        if fname.endswith(".zip"):
-            old_path = os.path.join(user_sim_folder, fname)
-            try:
-                os.remove(old_path)
-                print(f"Removed old ZIP: {old_path}")
-            except Exception as e:
-                print(f"Error removing old ZIP {old_path}: {e}")
+#     # Remove any old zip files.
+#     for fname in os.listdir(user_sim_folder):
+#         if fname.endswith(".zip"):
+#             old_path = os.path.join(user_sim_folder, fname)
+#             try:
+#                 os.remove(old_path)
+#                 print(f"Removed old ZIP: {old_path}")
+#             except Exception as e:
+#                 print(f"Error removing old ZIP {old_path}: {e}")
 
-    # Create a new ZIP file.
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    zip_filename = f"simulation_results_{timestamp}.zip"
-    zip_filepath = os.path.join(user_sim_folder, zip_filename)
-    print(f"Creating ZIP file: {zip_filepath}")
+#     # Create a new ZIP file.
+#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#     zip_filename = f"simulation_results_{timestamp}.zip"
+#     zip_filepath = os.path.join(user_sim_folder, zip_filename)
+#     print(f"Creating ZIP file: {zip_filepath}")
 
-    try:
-        with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for file_name in os.listdir(user_sim_folder):
-                # Skip files with these extensions (adjust as needed).
-                if file_name.endswith((".hdf", ".h5", ".zip")):
-                    continue
-                file_path = os.path.join(user_sim_folder, file_name)
-                if os.path.isfile(file_path):
-                    try:
-                        zipf.write(file_path, arcname=file_name)
-                        print(f"Added to ZIP: {file_name}")
-                    except Exception as e:
-                        print(f"Skipping file {file_name} => {e}")
-        print(f"ZIP file successfully created: {zip_filepath}")
-    except Exception as e:
-        print(f"Error creating ZIP file: {e}")
-        flash("Failed to create ZIP file.")
-        return redirect(url_for('some_error_page'))
+#     try:
+#         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+#             for file_name in os.listdir(user_sim_folder):
+#                 # Skip files with these extensions (adjust as needed).
+#                 if file_name.endswith((".hdf", ".h5", ".zip")):
+#                     continue
+#                 file_path = os.path.join(user_sim_folder, file_name)
+#                 if os.path.isfile(file_path):
+#                     try:
+#                         zipf.write(file_path, arcname=file_name)
+#                         print(f"Added to ZIP: {file_name}")
+#                     except Exception as e:
+#                         print(f"Skipping file {file_name} => {e}")
+#         print(f"ZIP file successfully created: {zip_filepath}")
+#     except Exception as e:
+#         print(f"Error creating ZIP file: {e}")
+#         flash("Failed to create ZIP file.")
+#         return redirect(url_for('some_error_page'))
 
-    if os.path.exists(zip_filepath):
-        return send_file(zip_filepath, as_attachment=True)
-    else:
-        flash("ZIP file not found.")
-        return redirect(url_for('some_error_page'))
+#     if os.path.exists(zip_filepath):
+#         return send_file(zip_filepath, as_attachment=True)
+#     else:
+#         flash("ZIP file not found.")
+#         return redirect(url_for('some_error_page'))
 
 from flask import Response, stream_with_context
 
@@ -1909,7 +1909,7 @@ def population():
                     Ucrit_val = float(Ucrit_input)
                     Ucrit_ft = Ucrit_val * 3.28084 if units == 'metric' else Ucrit_val
                 except Exception as e:
-                    #print("Ucrit conversion failed for input '{}': {}".format(Ucrit_input, e), flush=True)
+                    print("Ucrit conversion failed for input '{}': {}".format(Ucrit_input, e), flush=True)
             pop_data["U_crit"] = Ucrit_ft
             
             # If “modeled”
