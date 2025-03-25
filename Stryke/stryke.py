@@ -1901,7 +1901,7 @@ class simulation():
         op_order_dict = {}
         q_cap_dict = {}
         unit_fac_dict = {}
-        logger.debug('building unit dictionaries')
+        #logger.debug('building unit dictionaries')
         #print("Setting up unit parameters...", flush=True)
         for index, row in self.unit_params.iterrows():
             unit = index
@@ -1960,11 +1960,11 @@ class simulation():
             # Use the Location field as key (assuming ID equals Location).
             surv_dict[row['Location']] = row['Survival']
         #print("Survival dictionary created:", surv_dict, flush=True)
-        logger.debug('iterate over scenarios')
+        #logger.debug('iterate over scenarios')
         # Iterate over each flow scenario.
         for scen in self.flow_scenarios:
             #print(f"Starting scenario {scen} now", flush=True)
-            logger.debug('start assessing scenario')
+            #logger.debug('start assessing scenario')
             try:
                 scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
             except Exception:
@@ -2000,7 +2000,7 @@ class simulation():
                 fixed_discharge = scen_df.iat[0, scen_df.columns.get_loc('Flow')]
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df, fixed_discharge=fixed_discharge)
 #            print(f"Completed Discharge Scenario {scen} Setup using a {self.discharge_type} flow", flush=True)
-            logger.debug('iterate over species')
+            #logger.debug('iterate over species')
             for spc in species:
 #                print(f"Starting species {spc} scenario {scen}", flush=True)
                 spc_dat = self.pop[(self.pop['Scenario'] == scenario) & (self.pop.Species == spc)]
@@ -2032,7 +2032,7 @@ class simulation():
 #                 print(f"  Iterations: {iterations}, Occurrence probability: {occur_prob}", flush=True)
     
                 spc_length = pd.DataFrame()
-                logger.debug('now iterate over the iterations!')
+                #logger.debug('now iterate over the iterations!')
                 for i in np.arange(0, iterations, 1):
                     #logger.info('Building Q-Dict')
 #                    print(f"Starting iteration {i} for species {spc}", flush=True)
@@ -2356,11 +2356,11 @@ class simulation():
                         overall_max = whole_summ['prob'].max()
                         overall_std = whole_summ['prob'].std()
                         
-                        logger.info("Overall survival probability across all days & iterations:")
-                        logger.info("  Mean = %.4f, Min = %.4f, Max = %.4f, Std Dev = %.4f",
-                                    overall_mean, overall_min, overall_max, overall_std)
+                        # logger.info("Overall survival probability across all days & iterations:")
+                        # logger.info("  Mean = %.4f, Min = %.4f, Max = %.4f, Std Dev = %.4f",
+                        #            overall_mean, overall_min, overall_max, overall_std)
                         
-                        logger.info("Per-day survival probability summary:")
+                        #logger.info("Per-day survival probability summary:")
                         per_day = whole_summ.groupby('day')['prob'].agg(['mean', 'min', 'max', 'std']).reset_index()
                         
                         # for _, row in per_day.iterrows():
@@ -2392,7 +2392,7 @@ class simulation():
                             logger.info("Fitted Beta distribution parameters:")
                             logger.info("  alpha (a) = %.4f, beta (b) = %.4f, loc = %.4f, scale = %.4f", a, b, loc, scale)
                             logger.info("Distribution summary:")
-                            logger.info("  Median survival probability = %.4f", median)
+                            logger.info("  Mean survival probability = %.4f", median)
                             logger.info("  Std deviation (spread)     = %.4f", std_dev)
                             logger.info("  95%% CI from Beta fit       = [%.4f, %.4f]", lcl, ucl)
                             
