@@ -2001,7 +2001,9 @@ def population():
         # Build DataFrame with standardized keys
         import pandas as pd
         df_population = pd.DataFrame([pop_data])
-        logger.debug('population data of length %s created',len(df_population.len))
+        
+        logger.debug('population data of length %s created',len(df_population))
+        
         expected_columns = [
             "Species", "Common Name", "Scenario", "Iterations", "Fish",
             "vertical_habitat", "beta_0", "beta_1",
