@@ -2042,13 +2042,11 @@ def population():
             "length scale": "Length Scale"
         }
         
-
-        
- 
-        
         df_population_summary = df_population.rename(columns=summary_column_mapping)
         session['population_dataframe_for_summary'] = df_population_summary.to_json(orient='records')
-        proj_dir = session.get("proj_dir")  # Or your configured project directory
+        
+        proj_dir = session["proj_dir"]  # Or your configured project directory
+        print ('project directory:', proj_dir, flush = True)
         pop_csv_path = os.path.join(proj_dir, "population_params.csv")
         df_population_summary.to_csv(pop_csv_path, index=False)   
         session['population_csv_path'] = pop_csv_path
@@ -2142,8 +2140,6 @@ def model_setup_summary():
         print("No population CSV file key in session.", flush=True)
         population_parameters = session['population_data_for_sim']
 
-
-    
 
     simulation_graph = session.get('simulation_graph', {})
 
