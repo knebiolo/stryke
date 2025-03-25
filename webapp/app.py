@@ -2822,6 +2822,8 @@ def download_report():
 @app.route('/download_report_zip')
 def download_report_zip():
     proj_dir = session['proj_dir']
+    print ('project directory:',proj_dir, flush = True)
+
     # if not proj_dir:
     #     return "<h1>Session missing proj_dir</h1>", 500
 
@@ -2829,6 +2831,7 @@ def download_report_zip():
     #     return f"<h1>Project directory not found: {proj_dir}</h1>", 404
 
     zip_path = os.path.join(proj_dir, "simulation_report.zip")
+    print ('zip directory:',zip_path, flush = True)
 
     # Create a zip archive containing all files in the project directory
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
@@ -2841,6 +2844,8 @@ def download_report_zip():
                 # The arcname makes the path inside the zip relative to the project directory
                 arcname = os.path.relpath(file_path, start=proj_dir)
                 zipf.write(file_path, arcname=arcname)
+    
+    print ('zip file created')
 
     # Send the zip file for download
     return send_file(zip_path, as_attachment=True, attachment_filename="simulation_report.zip")
