@@ -1849,11 +1849,11 @@ def population():
     ]
 
     if request.method == 'POST':
-        print("starting population post route", flush=True)
+        #print("starting population post route", flush=True)
         
         # Print all form data
         form_data = dict(request.form)
-        print("Received form data:", form_data, flush=True)
+        #print("Received form data:", form_data, flush=True)
         
         species_name = request.form.get('species_name')
         common_name = request.form.get('common_name')
@@ -1876,7 +1876,7 @@ def population():
             "Entrainment Choice": None,  # Will fill if needed
             "Modeled Species": None,     # Will fill if needed
         }
-        print("Initial pop_data:", pop_data, flush=True)
+        #print("Initial pop_data:", pop_data, flush=True)
         
         # Helper for float conversion
         def safe_float(val):
@@ -1896,7 +1896,7 @@ def population():
         if simulate_choice == 'entrainment event':
             entrainment_choice = request.form.get('entrainmentChoice')
             pop_data["Entrainment Choice"] = entrainment_choice
-            print("Entrainment event selected, choice: {}".format(entrainment_choice), flush=True)
+            #print("Entrainment event selected, choice: {}".format(entrainment_choice), flush=True)
             
             Ucrit_input = request.form.get('Ucrit')
             length_mean_input = request.form.get('length_mean')
@@ -1909,14 +1909,14 @@ def population():
                     Ucrit_val = float(Ucrit_input)
                     Ucrit_ft = Ucrit_val * 3.28084 if units == 'metric' else Ucrit_val
                 except Exception as e:
-                    print("Ucrit conversion failed for input '{}': {}".format(Ucrit_input, e), flush=True)
+                    #print("Ucrit conversion failed for input '{}': {}".format(Ucrit_input, e), flush=True)
             pop_data["U_crit"] = Ucrit_ft
             
             # If “modeled”
             if entrainment_choice == 'modeled':
                 modeled_species = request.form.get('modeledSpecies')
                 pop_data["Modeled Species"] = modeled_species
-                print("Modeled entrainment selected, species: {}".format(modeled_species), flush=True)
+                #print("Modeled entrainment selected, species: {}".format(modeled_species), flush=True)
                 
                 selected_species = next((s for s in species_defaults if s["name"] == modeled_species), None)
                 if selected_species:
@@ -1950,7 +1950,7 @@ def population():
                     pop_data["shape"] = None
                     pop_data["location"] = None
                     pop_data["scale"] = None
-                print("pop_data after modeled branch:", pop_data, flush=True)
+                #print("pop_data after modeled branch:", pop_data, flush=True)
             
             # If “empirical”
             elif entrainment_choice == 'empirical':
@@ -1974,7 +1974,7 @@ def population():
                 pop_data["length shape"] = safe_float(length_shape_input)
                 pop_data["length location"] = safe_float(length_location_input)
                 pop_data["length scale"] = safe_float(length_scale_input)
-                print("pop_data after empirical branch:", pop_data, flush=True)
+                #print("pop_data after empirical branch:", pop_data, flush=True)
         
         # If user chooses “starting population” (or something else)
         else:
@@ -2002,7 +2002,7 @@ def population():
         
         import pandas as pd
         df_population = pd.DataFrame([pop_data])
-        print("DataFrame created with shape:", df_population.shape, flush=True)
+        #print("DataFrame created with shape:", df_population.shape, flush=True)
         
         expected_columns = [
             "Species", "Common Name", "Scenario", "Iterations", "Fish",
@@ -2016,14 +2016,14 @@ def population():
             if col not in df_population.columns:
                 df_population[col] = None
         df_population = df_population[expected_columns]
-        print("DataFrame after ensuring expected columns:", flush = True)
-        print (df_population, flush=True)
+        #print("DataFrame after ensuring expected columns:", flush = True)
+        #print (df_population, flush=True)
         
-       # session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
+        # session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
         # After creating and saving the DataFrame
         df_population_clean = df_population.where(pd.notnull(df_population), None)
         session['population_data_for_sim'] = df_population_clean.to_dict(orient='records')
-        print ('population dataframe for modeling:', session.get('population_data_for_sim'), flush=True)
+        #print ('population dataframe for modeling:', session.get('population_data_for_sim'), flush=True)
         summary_column_mapping = {
             "Species": "Species Name",
             "Common Name": "Common Name",
@@ -2051,17 +2051,17 @@ def population():
         
         # get the project directory
         proj_dir = session["proj_dir"]  # Or your configured project directory
-        print ('project directory:', proj_dir, flush = True)
+        #print ('project directory:', proj_dir, flush = True)
         
         # make a csv path, save the dataframe and check
         pop_csv_path = os.path.join(proj_dir, "population_params.csv")
         df_population.to_csv(pop_csv_path, index=False)   
         session['population_csv_path'] = pop_csv_path
         df_check = pd.read_csv(pop_csv_path)
-        print("CSV Headers:", df_check.columns.tolist(), flush=True)
-        print("Saved population parameters to file:", pop_csv_path, flush=True)
+        #print("CSV Headers:", df_check.columns.tolist(), flush=True)
+        #print("Saved population parameters to file:", pop_csv_path, flush=True)
 
-        print("Population DataFrame for summary:", session.get('population_dataframe_for_summary'), flush=True)
+        #print("Population DataFrame for summary:", session.get('population_dataframe_for_summary'), flush=True)
         
         print("Population parameters saved successfully! Redirecting...", flush=True)
         flash("Population parameters saved successfully!")
@@ -2821,7 +2821,7 @@ def download_report():
 
 @app.route('/download_report_zip')
 def download_report_zip():
-    proj_dir = session.get('proj_dir')
+    proj_dir = session['proj_dir']
     if not proj_dir:
         return "<h1>Session missing proj_dir</h1>", 500
 
