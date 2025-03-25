@@ -264,15 +264,20 @@
     }
 
     function saveGraph() {
-      // Get the entire Cytoscape state
+      // Grab the entire Cytoscape JSON
       var cyData = cy.json();
     
-      // `cyData.elements` is an object containing { nodes: [...], edges: [...] }
+      // cyData.elements is an object: { nodes: [...], edges: [...] }
       var nodes = cyData.elements.nodes || [];
       var edges = cyData.elements.edges || [];
     
-      // Re-wrap them in the same structure you want to send
-      var graphData = { elements: { nodes: nodes, edges: edges } };
+      // Wrap them in the format your Flask route expects
+      var graphData = {
+        elements: {
+          nodes: nodes,
+          edges: edges
+        }
+      };
     
       fetch("/save_graph", {
         method: "POST",
@@ -291,7 +296,6 @@
         alert("Error saving graph.");
       });
     }
-
 
     var edgeSource = null;
     function initiateEdge() {
