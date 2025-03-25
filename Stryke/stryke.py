@@ -1998,7 +1998,7 @@ class simulation():
                 fixed_discharge = scen_df.iat[0, scen_df.columns.get_loc('Flow')]
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df, fixed_discharge=fixed_discharge)
 #            print(f"Completed Discharge Scenario {scen} Setup using a {self.discharge_type} flow", flush=True)
-            logger.deubg('iterate over species')
+            logger.debug('iterate over species')
             for spc in species:
 #                print(f"Starting species {spc} scenario {scen}", flush=True)
                 spc_dat = self.pop[(self.pop['Scenario'] == scenario) & (self.pop.Species == spc)]
