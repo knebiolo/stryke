@@ -1051,7 +1051,7 @@ class simulation():
                 
                 
                 # calculate turbine survival estimate
-                prob = imp_surv_prob * strike_surv_prob * baro_surv_prob * latent_survival
+                prob = imp_surv_prob * strike_surv_prob # * baro_surv_prob * latent_survival
             try:
                 return np.float32(prob)
             except:
