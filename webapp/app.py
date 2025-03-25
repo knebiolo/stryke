@@ -2047,7 +2047,7 @@ def population():
  
         
         df_population_summary = df_population.rename(columns=summary_column_mapping)
-        session['population_dataframe_for_summary'] = df_population_summary.to_json(orient='records')
+        session['population_dataframe_for_summary'] = df_population.to_json(orient='records')
         proj_dir = session.get("proj_dir", "/tmp")  # Or your configured project directory
         pop_csv_path = os.path.join(proj_dir, "population_params.csv")
         df_population_summary.to_csv(pop_csv_path, index=False)   
