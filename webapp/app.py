@@ -2018,8 +2018,10 @@ def population():
         df_population = df_population[expected_columns]
         print("DataFrame after ensuring expected columns:", df_population, flush=True)
         
-        session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
-        
+       # session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
+        # After creating and saving the DataFrame
+        session['population_data_for_sim'] = df_population.to_dict(orient='records')
+
         summary_column_mapping = {
             "Species": "Species Name",
             "Common Name": "Common Name",
