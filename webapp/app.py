@@ -1998,7 +1998,7 @@ def population():
         
         print("Final pop_data before DataFrame creation:", pop_data, flush=True)
         
-        session['population_data'] = pop_data
+        #session['population_data'] = pop_data
         
         import pandas as pd
         df_population = pd.DataFrame([pop_data])
@@ -2016,12 +2016,13 @@ def population():
             if col not in df_population.columns:
                 df_population[col] = None
         df_population = df_population[expected_columns]
-        print("DataFrame after ensuring expected columns:", df_population, flush=True)
+        print("DataFrame after ensuring expected columns:", flush = True)
+        print (df_population, flush=True)
         
        # session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
         # After creating and saving the DataFrame
         session['population_data_for_sim'] = df_population.to_dict(orient='records')
-
+        print ('population dataframe for modeling:', session.get('population_data_for_sim'), flush=True)
         summary_column_mapping = {
             "Species": "Species Name",
             "Common Name": "Common Name",
