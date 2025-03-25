@@ -2346,12 +2346,18 @@ def generate_report(sim):
         return "<p>Error: HDF file not found. Please run the simulation first.</p>"
     logger.debug('hdf file exists %s',hdf_path)
     store = pd.HDFStore(hdf_path, mode='r')
+    
+    project_name = session.get('project_name', 'N/A')
+    project_notes = session.get('project_notes', 'N/A')
+    model_setup = session.get('model_setup', 'N/A')
 
     report_sections = [
         "<div style='margin: 10px;'>"
         "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
         "</div>",
-        "<h1>Simulation Report</h1>",
+        f"<h1>Simulation Report for Project: {project_name}</h1>",
+        f"<p><strong>Project Notes:</strong> {project_notes}</p>",
+        f"<p><strong>Model Setup:</strong> {model_setup}</p>",
         f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
         f"<p>HDF keys found: {store.keys()}</p>"
     ]
