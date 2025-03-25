@@ -454,6 +454,7 @@ class simulation():
                 data_dict["operating_scenarios_file"],
                 numeric_cols=['Hours', 'Location', 'Prob Not Operating', 'Scale', 'Shape', 'Unit']
             )
+            logger.info('operating scenarios columns', self.operating_scenarios_df.columns.to_list())
         else:
             self.operating_scenarios_df = None
         
@@ -470,7 +471,7 @@ class simulation():
             self.pop = to_dataframe(pop_data, numeric_cols=['Iterations', 'Length_mean', 'Length_sd', 'U_crit',
                                                                'length location', 'length scale', 'length shape',
                                                                'location', 'max_ent_rate', 'occur_prob', 'scale', 'shape'])
-        
+            logger.info('population dataframe columns:', self.pop.columns.to_list())
         # 8. Hydrograph.
         if "hydrograph_file" in data_dict:
             self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
@@ -1961,7 +1962,7 @@ class simulation():
         # Iterate over each flow scenario.
         for scen in self.flow_scenarios:
             #print(f"Starting scenario {scen} now", flush=True)
-            logger.debug('start assessing scenario ', scen)
+            logger.debug('start assessing scenario')
             try:
                 scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
             except Exception:
