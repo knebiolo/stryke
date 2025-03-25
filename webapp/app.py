@@ -2021,7 +2021,7 @@ def population():
         
        # session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
         # After creating and saving the DataFrame
-        #session['population_data_for_sim'] = df_population.to_dict(orient='records')
+        session['population_data_for_sim'] = df_population.to_dict(orient='records')
         print ('population dataframe for modeling:', session.get('population_data_for_sim'), flush=True)
         summary_column_mapping = {
             "Species": "Species Name",
