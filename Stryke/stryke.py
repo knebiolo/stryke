@@ -1880,7 +1880,7 @@ class simulation():
         """
         # Create route and associated data.
         self.create_route()
-        
+        logger.debug('starting simulation')
         # Setup string size dictionary for formatting.
         str_size = {'species': 30}
         try:
@@ -1898,7 +1898,7 @@ class simulation():
         op_order_dict = {}
         q_cap_dict = {}
         unit_fac_dict = {}
-    
+        logger.debug('building unit dictionaries')
         #print("Setting up unit parameters...", flush=True)
         for index, row in self.unit_params.iterrows():
             unit = index
@@ -1957,7 +1957,7 @@ class simulation():
             # Use the Location field as key (assuming ID equals Location).
             surv_dict[row['Location']] = row['Survival']
         #print("Survival dictionary created:", surv_dict, flush=True)
-    
+        logger.debug('iterate over scenarios')
         # Iterate over each flow scenario.
         for scen in self.flow_scenarios:
             #print(f"Starting scenario {scen} now", flush=True)
@@ -1991,7 +1991,7 @@ class simulation():
                 fixed_discharge = scen_df.iat[0, scen_df.columns.get_loc('Flow')]
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df, fixed_discharge=fixed_discharge)
 #            print(f"Completed Discharge Scenario {scen} Setup using a {self.discharge_type} flow", flush=True)
-
+            logger.deubg('iterate over species')
             for spc in species:
 #                print(f"Starting species {spc} scenario {scen}", flush=True)
                 spc_dat = self.pop[(self.pop['Scenario'] == scenario) & (self.pop.Species == spc)]
@@ -2023,7 +2023,7 @@ class simulation():
 #                 print(f"  Iterations: {iterations}, Occurrence probability: {occur_prob}", flush=True)
     
                 spc_length = pd.DataFrame()
-    
+                logger.debug('now iterate over the iterations!')
                 for i in np.arange(0, iterations, 1):
                     #logger.info('Building Q-Dict')
 #                    print(f"Starting iteration {i} for species {spc}", flush=True)
