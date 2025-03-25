@@ -1850,7 +1850,7 @@ def population():
 
     if request.method == 'POST':
         # Basic info
-        logger.debug('starting population post route')
+        logger.info('starting population post route')
         species_name = request.form.get('species_name')
         common_name = request.form.get('common_name')
         scenario = request.form.get('scenario')
@@ -1943,6 +1943,7 @@ def population():
                     pop_data["shape"] = None
                     pop_data["location"] = None
                     pop_data["scale"] = None
+                logger.info('population data dictionary: %s',pop_data)
 
             # 3) If “empirical”
             elif entrainment_choice == 'empirical':
@@ -2002,7 +2003,7 @@ def population():
         import pandas as pd
         df_population = pd.DataFrame([pop_data])
         
-        logger.debug('population data of length %s created',len(df_population))
+        logger.info('population data of length %s created',len(df_population))
         
         expected_columns = [
             "Species", "Common Name", "Scenario", "Iterations", "Fish",
