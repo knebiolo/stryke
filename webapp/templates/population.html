@@ -158,8 +158,8 @@
         empiricalScale.required = true;
     
         maxAndOccurDiv.style.display = "flex";
-        max_entrainment_rate.required = true;
-        occurrence_probability.required = true;
+        maxEntrainmentRate.required = true;
+        occurrenceProbability.required = true;
     
       } else {
         // hide all divs if no valid choice is made
@@ -175,8 +175,8 @@
         empiricalScale.required = false;
     
         maxAndOccurDiv.style.display = "none";
-        max_entrainment_rate.required = false;
-        occurrence_probability.required = false;
+        maxEntrainmentRate.required = false;
+        occurrenceProbability.required = false;
       }
     }
 
@@ -261,21 +261,37 @@
             <option value="Benthic">Benthic</option>
           </select>
         </div>
+        
+        <!-- Hidden fields for beta values -->
+        <input type="hidden" id="beta_0" name="beta_0">
+        <input type="hidden" id="beta_1" name="beta_1">
         <div>
-          <label for="beta_0">Beta 0 
-            <span class="tooltip" title="Logistic regression intercept parameter">[?]</span>
+          <label for="fish_type">Fish Type 
+            <span class="tooltip" title="Select fish type to auto-fill logistic regression parameters">[?]</span>
           </label>
-          <input type="number" step="any" id="beta_0" name="beta_0" placeholder="Enter Beta 0" required>
+          <select id="fish_type" name="fish_type" onchange="setBetaValues()" required>
+            <option value="">--Select Option--</option>
+            <option value="physoclistous">Physoclistous</option>
+            <option value="physostomous">Physostomous</option>
+          </select>
         </div>
-        <div>
-          <label for="beta_1">Beta 1 
-            <span class="tooltip" title="Logistic regression slope parameter">[?]</span>
-          </label>
-          <input type="number" step="any" id="beta_1" name="beta_1" placeholder="Enter Beta 1" required>
-        </div>
-      </div>
-      
-      
+        <script>
+          function setBetaValues() {
+            var fishType = document.getElementById("fish_type").value;
+            if (fishType === "physoclistous") {
+              document.getElementById("beta_0").value = -4.8085;
+              document.getElementById("beta_1").value = 3.33;
+            } else if (fishType === "physostomous") {
+              document.getElementById("beta_0").value = -4.93263;
+              document.getElementById("beta_1").value = 2.96225;
+            } else {
+              // Clear the values if no valid fish type is selected
+              document.getElementById("beta_0").value = "";
+              document.getElementById("beta_1").value = "";
+            }
+          }
+        </script>       
+      </div>      
       <hr>
       
       <!-- Simulation Choice -->
@@ -434,8 +450,6 @@
           document.getElementById("entrainmentChoice").addEventListener("change", toggleEntrainmentChoice);
         });
         </script>
-
-
     </form>
   </div>
 </body>
