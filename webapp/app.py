@@ -2822,11 +2822,11 @@ def download_report():
 @app.route('/download_report_zip')
 def download_report_zip():
     proj_dir = session['proj_dir']
-    if not proj_dir:
-        return "<h1>Session missing proj_dir</h1>", 500
+    # if not proj_dir:
+    #     return "<h1>Session missing proj_dir</h1>", 500
 
-    if not os.path.exists(proj_dir):
-        return f"<h1>Project directory not found: {proj_dir}</h1>", 404
+    # if not os.path.exists(proj_dir):
+    #     return f"<h1>Project directory not found: {proj_dir}</h1>", 404
 
     zip_path = os.path.join(proj_dir, "simulation_report.zip")
 
