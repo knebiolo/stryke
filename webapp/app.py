@@ -95,6 +95,15 @@ app.permanent_session_lifetime = timedelta(days=1)
 @app.before_request
 def make_session_permanent():
     session.permanent = True
+    
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Log the full traceback
+    traceback_str = traceback.format_exc()
+    print("Unhandled Exception:", traceback_str, flush=True)
+    
+    # Optionally return a custom 500 page
+    return "Internal Server Error", 500
 
 # ----------------- Password Protection -----------------
 
