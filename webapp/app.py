@@ -1841,6 +1841,7 @@ def population():
 
     if request.method == 'POST':
         # Basic info
+        logger.debug('starting population post route')
         species_name = request.form.get('species_name')
         common_name = request.form.get('common_name')
         scenario = request.form.get('scenario')
@@ -1987,11 +1988,11 @@ def population():
 
         # Store in session
         session['population_data'] = pop_data
-
+        
         # Build DataFrame with standardized keys
         import pandas as pd
         df_population = pd.DataFrame([pop_data])
-
+        logger.debug('population data of length %s created',len(df_population.len))
         expected_columns = [
             "Species", "Common Name", "Scenario", "Iterations", "Fish",
             "vertical_habitat", "beta_0", "beta_1",
@@ -2034,7 +2035,7 @@ def population():
 
         df_population_summary = df_population.rename(columns=summary_column_mapping)
         session['population_dataframe_for_summary'] = df_population_summary.to_json(orient='records')
-
+        
         flash("Population parameters saved successfully!")
         return redirect(url_for('model_setup_summary'))
     
