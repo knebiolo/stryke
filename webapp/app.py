@@ -2848,8 +2848,9 @@ def download_report_zip():
     print ('zip file created')
 
     # Send the zip file for download
-    return send_file(zip_path, as_attachment=True, attachment_filename="simulation_report.zip")
-
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_name = f"simulation_report_{timestamp}.zip"
+    return send_file(zip_path, as_attachment=True, download_name=zip_name)
 
 # Un Comment to Test Locally
 if __name__ == "__main__":
