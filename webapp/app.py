@@ -1849,20 +1849,24 @@ def population():
     ]
 
     if request.method == 'POST':
-        # Basic info
-        logger.warning('starting population post route')
         print("starting population post route", flush=True)
+        
+        # Print all form data
+        form_data = dict(request.form)
+        print("Received form data:", form_data, flush=True)
         
         species_name = request.form.get('species_name')
         common_name = request.form.get('common_name')
         scenario = request.form.get('scenario')
         simulate_choice = request.form.get('simulateChoice')
         iterations = request.form.get('iterations')
-        # Retrieve new fields from the form.
         vertical_habitat = request.form.get('vertical_habitat')
         beta_0 = request.form.get('beta_0')
         beta_1 = request.form.get('beta_1')
-
+        
+        print("Basic Info: species_name=%s, common_name=%s, scenario=%s, simulate_choice=%s, iterations=%s, vertical_habitat=%s, beta_0=%s, beta_1=%s" %
+              (species_name, common_name, scenario, simulate_choice, iterations, vertical_habitat, beta_0, beta_1), flush=True)
+        
         pop_data = {
             "Species": species_name,
             "Common Name": common_name,
@@ -1871,83 +1875,84 @@ def population():
             "Iterations": iterations,
             "Entrainment Choice": None,  # Will fill if needed
             "Modeled Species": None,     # Will fill if needed
-            # We'll fill shape, location, scale, etc. below
         }
-
-        # Helper for float
+        print("Initial pop_data:", pop_data, flush=True)
+        
+        # Helper for float conversion
         def safe_float(val):
-            try: return float(val)
-            except: return None
-
-        # Add them to your population data dictionary.
+            try:
+                return float(val)
+            except Exception as e:
+                print("safe_float failed for value '{}': {}".format(val, e), flush=True)
+                return None
+    
         pop_data["vertical_habitat"] = vertical_habitat
         pop_data["beta_0"] = safe_float(beta_0)
         pop_data["beta_1"] = safe_float(beta_1)
-
+        
         units = session.get('units', 'metric')
         
         # If user chooses “entrainment event”
         if simulate_choice == 'entrainment event':
             entrainment_choice = request.form.get('entrainmentChoice')
             pop_data["Entrainment Choice"] = entrainment_choice
-
-            # 1) Common user inputs
+            print("Entrainment event selected, choice: {}".format(entrainment_choice), flush=True)
+            
             Ucrit_input = request.form.get('Ucrit')
             length_mean_input = request.form.get('length_mean')
             length_sd_input = request.form.get('length_sd')
-
+            
             # Convert Ucrit
             Ucrit_ft = None
             if Ucrit_input:
                 try:
                     Ucrit_val = float(Ucrit_input)
                     Ucrit_ft = Ucrit_val * 3.28084 if units == 'metric' else Ucrit_val
-                except:
-                    pass
+                except Exception as e:
+                    print("Ucrit conversion failed for input '{}': {}".format(Ucrit_input, e), flush=True)
             pop_data["U_crit"] = Ucrit_ft
-
-            # 2) If “modeled”
+            
+            # If “modeled”
             if entrainment_choice == 'modeled':
                 modeled_species = request.form.get('modeledSpecies')
                 pop_data["Modeled Species"] = modeled_species
-
+                print("Modeled entrainment selected, species: {}".format(modeled_species), flush=True)
+                
                 selected_species = next((s for s in species_defaults if s["name"] == modeled_species), None)
                 if selected_species:
-                    # Grab shape, location, scale from species defaults
                     pop_data["shape"] = selected_species["shape"]
                     pop_data["location"] = selected_species["location"]
                     pop_data["scale"] = selected_species["scale"]
                     pop_data["max_ent_rate"] = selected_species["max_ent_rate"]
                     pop_data["occur_prob"] = selected_species["occur_prob"]
                     pop_data["dist"] = selected_species["dist"]
-                    # Also set length shape/location/scale from species
                     pop_data["length shape"] = safe_float(selected_species["length shape"])
                     pop_data["length location"] = safe_float(selected_species["length location"])
                     pop_data["length scale"] = safe_float(selected_species["length scale"])
                     
-                    # If user typed in length mean/sd, overwrite the length location/scale
                     if length_mean_input:
                         try:
                             length_mean_in = float(length_mean_input)
-                            if units == 'metric': length_mean_in /= 25.4
+                            if units == 'metric': 
+                                length_mean_in /= 25.4
                             pop_data["length location"] = length_mean_in
-                        except:
-                            pass
+                        except Exception as e:
+                            print("Length mean conversion failed: {}".format(e), flush=True)
                     if length_sd_input:
                         try:
                             length_sd_in = float(length_sd_input)
-                            if units == 'metric': length_sd_in /= 25.4
+                            if units == 'metric':
+                                length_sd_in /= 25.4
                             pop_data["length scale"] = length_sd_in
-                        except:
-                            pass
+                        except Exception as e:
+                            print("Length SD conversion failed: {}".format(e), flush=True)
                 else:
-                    # If no species found
                     pop_data["shape"] = None
                     pop_data["location"] = None
                     pop_data["scale"] = None
-                logger.warning('population data dictionary: %s',pop_data)
-
-            # 3) If “empirical”
+                print("pop_data after modeled branch:", pop_data, flush=True)
+            
+            # If “empirical”
             elif entrainment_choice == 'empirical':
                 empirical_shape = request.form.get('empiricalShape')
                 empirical_location = request.form.get('empiricalLocation')
@@ -1955,11 +1960,10 @@ def population():
                 empirical_dist = request.form.get('empiricalDist')
                 max_entrainment_rate = request.form.get('max_entrainment_rate')
                 occurrence_probability = request.form.get('occurrence_probability')
-
                 length_shape_input = request.form.get('length_shape')
                 length_location_input = request.form.get('length_location')
                 length_scale_input = request.form.get('length_scale')
-
+                
                 pop_data["Modeled Species"] = None
                 pop_data["shape"] = empirical_shape
                 pop_data["location"] = empirical_location
@@ -1967,45 +1971,38 @@ def population():
                 pop_data["dist"] = empirical_dist
                 pop_data["max_ent_rate"] = max_entrainment_rate
                 pop_data["occur_prob"] = occurrence_probability
-
                 pop_data["length shape"] = safe_float(length_shape_input)
                 pop_data["length location"] = safe_float(length_location_input)
                 pop_data["length scale"] = safe_float(length_scale_input)
-
-        # 4) If user chooses “starting population” (or something else)
+                print("pop_data after empirical branch:", pop_data, flush=True)
+        
+        # If user chooses “starting population” (or something else)
         else:
-            # e.g. pop_data["Fish"] = request.form.get('starting_population')
-            # or do nothing if you want
-            pass
-
-        # Now do final conversions for length_mean, length_sd
-        # Maybe you want them always computed?
+            # Optionally process starting population if needed
+            print("Starting population option selected", flush=True)
+        
+        # Final conversions for length_mean, length_sd
         length_mean_val = safe_float(request.form.get('length_mean'))
         if length_mean_val is not None:
             length_mean_in = length_mean_val / 25.4 if units == 'metric' else length_mean_val
         else:
             length_mean_in = None
         pop_data["Length_mean"] = length_mean_in
-
+    
         length_sd_val = safe_float(request.form.get('length_sd'))
         if length_sd_val is not None:
             length_sd_in = length_sd_val / 25.4 if units == 'metric' else length_sd_val
         else:
             length_sd_in = None
         pop_data["Length_sd"] = length_sd_in
-
-        # Possibly unify shape, location, scale again if you want
-        # For instance:
-        # pop_data["shape"] = pop_data.get("shape") or pop_data.get("Empirical Shape") or None
-
-        # Store in session
+        
+        print("Final pop_data before DataFrame creation:", pop_data, flush=True)
+        
         session['population_data'] = pop_data
         
-        # Build DataFrame with standardized keys
         import pandas as pd
         df_population = pd.DataFrame([pop_data])
-        
-        logger.warning('population data of length %s created',len(df_population))
+        print("DataFrame created with shape:", df_population.shape, flush=True)
         
         expected_columns = [
             "Species", "Common Name", "Scenario", "Iterations", "Fish",
@@ -2015,16 +2012,14 @@ def population():
             "Length_mean", "Length_sd", "U_crit",
             "length shape", "length location", "length scale"
         ]
-
         for col in expected_columns:
             if col not in df_population.columns:
                 df_population[col] = None
         df_population = df_population[expected_columns]
-
-        # DataFrame for simulation
+        print("DataFrame after ensuring expected columns:", df_population, flush=True)
+        
         session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
-
-        # DataFrame for summary
+        
         summary_column_mapping = {
             "Species": "Species Name",
             "Common Name": "Common Name",
@@ -2046,15 +2041,224 @@ def population():
             "length location": "Length Location",
             "length scale": "Length Scale"
         }
-
+        
         df_population_summary = df_population.rename(columns=summary_column_mapping)
         session['population_dataframe_for_summary'] = df_population_summary.to_json(orient='records')
         
+        print("Population DataFrame for summary:", session.get('population_dataframe_for_summary'), flush=True)
+        
+        print("Population parameters saved successfully! Redirecting...", flush=True)
         flash("Population parameters saved successfully!")
         return redirect(url_for('model_setup_summary'))
+
+    #if request.method == 'POST':
+        # # Basic info
+        # logger.warning('starting population post route')
+        # print("starting population post route", flush=True)
+        
+        # species_name = request.form.get('species_name')
+        # common_name = request.form.get('common_name')
+        # scenario = request.form.get('scenario')
+        # simulate_choice = request.form.get('simulateChoice')
+        # iterations = request.form.get('iterations')
+        # # Retrieve new fields from the form.
+        # vertical_habitat = request.form.get('vertical_habitat')
+        # beta_0 = request.form.get('beta_0')
+        # beta_1 = request.form.get('beta_1')
+
+        # pop_data = {
+        #     "Species": species_name,
+        #     "Common Name": common_name,
+        #     "Scenario": scenario,
+        #     "Simulate Choice": simulate_choice,
+        #     "Iterations": iterations,
+        #     "Entrainment Choice": None,  # Will fill if needed
+        #     "Modeled Species": None,     # Will fill if needed
+        #     # We'll fill shape, location, scale, etc. below
+        # }
+
+        # # Helper for float
+        # def safe_float(val):
+        #     try: return float(val)
+        #     except: return None
+
+        # # Add them to your population data dictionary.
+        # pop_data["vertical_habitat"] = vertical_habitat
+        # pop_data["beta_0"] = safe_float(beta_0)
+        # pop_data["beta_1"] = safe_float(beta_1)
+
+        # units = session.get('units', 'metric')
+        
+        # # If user chooses “entrainment event”
+        # if simulate_choice == 'entrainment event':
+        #     entrainment_choice = request.form.get('entrainmentChoice')
+        #     pop_data["Entrainment Choice"] = entrainment_choice
+
+        #     # 1) Common user inputs
+        #     Ucrit_input = request.form.get('Ucrit')
+        #     length_mean_input = request.form.get('length_mean')
+        #     length_sd_input = request.form.get('length_sd')
+
+        #     # Convert Ucrit
+        #     Ucrit_ft = None
+        #     if Ucrit_input:
+        #         try:
+        #             Ucrit_val = float(Ucrit_input)
+        #             Ucrit_ft = Ucrit_val * 3.28084 if units == 'metric' else Ucrit_val
+        #         except:
+        #             pass
+        #     pop_data["U_crit"] = Ucrit_ft
+
+        #     # 2) If “modeled”
+        #     if entrainment_choice == 'modeled':
+        #         modeled_species = request.form.get('modeledSpecies')
+        #         pop_data["Modeled Species"] = modeled_species
+
+        #         selected_species = next((s for s in species_defaults if s["name"] == modeled_species), None)
+        #         if selected_species:
+        #             # Grab shape, location, scale from species defaults
+        #             pop_data["shape"] = selected_species["shape"]
+        #             pop_data["location"] = selected_species["location"]
+        #             pop_data["scale"] = selected_species["scale"]
+        #             pop_data["max_ent_rate"] = selected_species["max_ent_rate"]
+        #             pop_data["occur_prob"] = selected_species["occur_prob"]
+        #             pop_data["dist"] = selected_species["dist"]
+        #             # Also set length shape/location/scale from species
+        #             pop_data["length shape"] = safe_float(selected_species["length shape"])
+        #             pop_data["length location"] = safe_float(selected_species["length location"])
+        #             pop_data["length scale"] = safe_float(selected_species["length scale"])
+                    
+        #             # If user typed in length mean/sd, overwrite the length location/scale
+        #             if length_mean_input:
+        #                 try:
+        #                     length_mean_in = float(length_mean_input)
+        #                     if units == 'metric': length_mean_in /= 25.4
+        #                     pop_data["length location"] = length_mean_in
+        #                 except:
+        #                     pass
+        #             if length_sd_input:
+        #                 try:
+        #                     length_sd_in = float(length_sd_input)
+        #                     if units == 'metric': length_sd_in /= 25.4
+        #                     pop_data["length scale"] = length_sd_in
+        #                 except:
+        #                     pass
+        #         else:
+        #             # If no species found
+        #             pop_data["shape"] = None
+        #             pop_data["location"] = None
+        #             pop_data["scale"] = None
+        #         logger.warning('population data dictionary: %s',pop_data)
+
+        #     # 3) If “empirical”
+        #     elif entrainment_choice == 'empirical':
+        #         empirical_shape = request.form.get('empiricalShape')
+        #         empirical_location = request.form.get('empiricalLocation')
+        #         empirical_scale = request.form.get('empiricalScale')
+        #         empirical_dist = request.form.get('empiricalDist')
+        #         max_entrainment_rate = request.form.get('max_entrainment_rate')
+        #         occurrence_probability = request.form.get('occurrence_probability')
+
+        #         length_shape_input = request.form.get('length_shape')
+        #         length_location_input = request.form.get('length_location')
+        #         length_scale_input = request.form.get('length_scale')
+
+        #         pop_data["Modeled Species"] = None
+        #         pop_data["shape"] = empirical_shape
+        #         pop_data["location"] = empirical_location
+        #         pop_data["scale"] = empirical_scale
+        #         pop_data["dist"] = empirical_dist
+        #         pop_data["max_ent_rate"] = max_entrainment_rate
+        #         pop_data["occur_prob"] = occurrence_probability
+
+        #         pop_data["length shape"] = safe_float(length_shape_input)
+        #         pop_data["length location"] = safe_float(length_location_input)
+        #         pop_data["length scale"] = safe_float(length_scale_input)
+
+        # # 4) If user chooses “starting population” (or something else)
+        # else:
+        #     # e.g. pop_data["Fish"] = request.form.get('starting_population')
+        #     # or do nothing if you want
+        #     pass
+
+        # # Now do final conversions for length_mean, length_sd
+        # # Maybe you want them always computed?
+        # length_mean_val = safe_float(request.form.get('length_mean'))
+        # if length_mean_val is not None:
+        #     length_mean_in = length_mean_val / 25.4 if units == 'metric' else length_mean_val
+        # else:
+        #     length_mean_in = None
+        # pop_data["Length_mean"] = length_mean_in
+
+        # length_sd_val = safe_float(request.form.get('length_sd'))
+        # if length_sd_val is not None:
+        #     length_sd_in = length_sd_val / 25.4 if units == 'metric' else length_sd_val
+        # else:
+        #     length_sd_in = None
+        # pop_data["Length_sd"] = length_sd_in
+
+        # # Possibly unify shape, location, scale again if you want
+        # # For instance:
+        # # pop_data["shape"] = pop_data.get("shape") or pop_data.get("Empirical Shape") or None
+
+        # # Store in session
+        # session['population_data'] = pop_data
+        
+        # # Build DataFrame with standardized keys
+        # import pandas as pd
+        # df_population = pd.DataFrame([pop_data])
+        
+        # logger.warning('population data of length %s created',len(df_population))
+        
+        # expected_columns = [
+        #     "Species", "Common Name", "Scenario", "Iterations", "Fish",
+        #     "vertical_habitat", "beta_0", "beta_1",
+        #     "shape", "location", "scale",
+        #     "max_ent_rate", "occur_prob",
+        #     "Length_mean", "Length_sd", "U_crit",
+        #     "length shape", "length location", "length scale"
+        # ]
+
+        # for col in expected_columns:
+        #     if col not in df_population.columns:
+        #         df_population[col] = None
+        # df_population = df_population[expected_columns]
+
+        # print (f'population dataframe created {len(df_population)} records long', flush = True)
+        # # DataFrame for simulation
+        # session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
+
+        # # DataFrame for summary
+        # summary_column_mapping = {
+        #     "Species": "Species Name",
+        #     "Common Name": "Common Name",
+        #     "Scenario": "Scenario",
+        #     "Iterations": "Iterations",
+        #     "Fish": "Fish",
+        #     "vertical_habitat": "Vertical Habitat",
+        #     "beta_0": "Beta 0",
+        #     "beta_1": "Beta 1",
+        #     "shape": "Empirical Shape",
+        #     "location": "Empirical Location",
+        #     "scale": "Empirical Scale",
+        #     "max_ent_rate": "Max Entr Rate",
+        #     "occur_prob": "Occur Prob",
+        #     "Length_mean": "Length Mean (in)",
+        #     "Length_sd": "Length SD (in)",
+        #     "U_crit": "Ucrit (ft/s)",
+        #     "length shape": "Length Shape",
+        #     "length location": "Length Location",
+        #     "length scale": "Length Scale"
+        # }
+
+        # df_population_summary = df_population.rename(columns=summary_column_mapping)
+        # session['population_dataframe_for_summary'] = df_population_summary.to_json(orient='records')
+        
+        # flash("Population parameters saved successfully!")
+        # return redirect(url_for('model_setup_summary'))
     
-        print("DEBUG: Population Parameters DataFrame:")
-        print(df_population, flush=True)
+        # print("DEBUG: Population Parameters DataFrame:")
+        # print(df_population, flush=True)
 
     # GET request
     return render_template('population.html', species_defaults=species_defaults)
