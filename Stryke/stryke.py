@@ -1049,7 +1049,7 @@ class simulation():
                     
                 # incoporate latent mortality
                 latent_survival = beta.rvs(1.02, 0.371, size=1)
-                latent_survival = 1.
+                #latent_survival = 1.
                 
                 
                 # calculate turbine survival estimate
