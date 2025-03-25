@@ -264,7 +264,13 @@
     }
 
     function saveGraph() {
-      var graphData = cy.json();
+      var cyData = cy.json();
+      // Filter out nodes and edges from the elements array
+      var nodes = cyData.elements.filter(e => e.group === 'nodes');
+      var edges = cyData.elements.filter(e => e.group === 'edges');
+      // Create a new graphData object with separate keys for nodes and edges
+      var graphData = { elements: { nodes: nodes, edges: edges } };
+    
       fetch("{{ url_for('save_graph') }}", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
