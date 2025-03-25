@@ -2140,7 +2140,7 @@ def model_setup_summary():
             print("Population CSV file not found on disk:", pop_csv_path, flush=True)
     else:
         print("No population CSV file key in session.", flush=True)
-        population_parameters = session['']
+        population_parameters = session['population_data_for_sim']
 
 
     
