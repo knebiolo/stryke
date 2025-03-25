@@ -2324,14 +2324,15 @@ def model_setup_summary():
 
     # --- Other Data ---
     facilities_data = session.get('facilities_data', [])
-    population_data_raw = session.get('population_dataframe_for_summary', '[]')
+    population_data_raw = session.get("population_dataframe_for_summary", "[]")
     try:
         population_parameters = json.loads(population_data_raw)
     except Exception as e:
-        print("Error decoding population data:", e)
+        print("Error decoding population data:", e, flush=True)
         population_parameters = []
     if isinstance(population_parameters, dict):
         population_parameters = [population_parameters]
+    
 
     simulation_graph = session.get('simulation_graph', {})
 
