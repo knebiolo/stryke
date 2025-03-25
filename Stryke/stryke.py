@@ -1019,7 +1019,7 @@ class simulation():
                     vertical_habitat_value = self.pop['vertical_habitat'].item()
                     if vertical_habitat_value == 'Pelagic':
                         d_1 = 0.01
-                        d_2 = 0.79
+                        d_2 = 0.33
                     elif vertical_habitat_value == 'Benthic':
                         d_1 = 0.8
                         d_2 = 1
@@ -1047,7 +1047,8 @@ class simulation():
                     baro_surv_prob = 1.
                     
                 # incoporate latent mortality
-                latent_survival = beta.rvs(1.02, 0.371, size=1)
+                #latent_survival = beta.rvs(1.02, 0.371, size=1)
+                latent_survival = 1.
                 
                 
                 # calculate turbine survival estimate
