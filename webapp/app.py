@@ -1851,6 +1851,7 @@ def population():
     if request.method == 'POST':
         # Basic info
         logger.info('starting population post route')
+        print("starting population post route", flush=True)
         species_name = request.form.get('species_name')
         common_name = request.form.get('common_name')
         scenario = request.form.get('scenario')
@@ -2816,7 +2817,6 @@ def download_report_zip():
 
     # Send the zip file for download
     return send_file(zip_path, as_attachment=True, attachment_filename="simulation_report.zip")
-
 
 
 # Un Comment to Test Locally
