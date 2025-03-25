@@ -2280,7 +2280,7 @@ class simulation():
                                              mode='a',
                                              format='table',
                                              append=True)
-                                self.hdf.flush()
+                                #self.hdf.flush()
                         
                         logger.info("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
                 self.hdf.flush()
