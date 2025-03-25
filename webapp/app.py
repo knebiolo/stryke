@@ -2511,13 +2511,13 @@ def generate_report(sim):
             report_sections.append(f"<p>No {title} data available.</p>")
 
     # Basic sections
-    add_section("Nodes", "/Nodes", units)
-    add_section("Edges", "/Edges", units)
-    add_section("Unit Parameters", "/Unit_Parameters", units)
-    add_section("Facilities", "/Facilities", units)
-    add_section("Flow Scenarios", "/Flow Scenarios", units)
-    add_section("Operating Scenarios", "/Operating Scenarios", units)
-    add_section("Population", "/Population", units)
+    # add_section("Nodes", "/Nodes", units)
+    # add_section("Edges", "/Edges", units)
+    # add_section("Unit Parameters", "/Unit_Parameters", units)
+    # add_section("Facilities", "/Facilities", units)
+    # add_section("Flow Scenarios", "/Flow Scenarios", units)
+    # add_section("Operating Scenarios", "/Operating Scenarios", units)
+    # add_section("Population", "/Population", units)
     
     logger.debug('finished basic data sections of report')
     
