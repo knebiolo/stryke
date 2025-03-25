@@ -2325,123 +2325,6 @@ def report():
     # If report_html is a complete HTML document, return it directly:
     return report_html
 
-
-# @app.route('/report')
-# def report():
-#     #import os
-#     #try:
-#     # Safely grab session folder
-#     proj_dir = session.get('proj_dir')
-#     # logger.debug('project directory can be found at: %s',proj_dir)
-#     # # if not proj_dir:
-#     # #     return "<h1>Session missing proj_dir</h1>", 500
-#     # if not proj_dir:
-#     #     return "<h1>Session missing proj_dir</h1>", 500
-    
-#     marker = os.path.join(proj_dir, "report_path.txt")
-#     if os.path.exists(marker):
-#         with open(marker, 'r', encoding='utf-8') as f:
-#             report_path = f.read().strip()
-#     else:# If the marker file doesn't exist, assume the report is at the default location.
-#         report_path = os.path.join(proj_dir, "simulation_report.html")
-            
-#     if not os.path.exists(report_path):
-#         logger.debug("[ERROR] simulation_report.html does not exist")
-#         return f"<h1>Report not found: {report_path}</h1>", 404
-
-#     # Try reading file with utf-8
-#     try:
-#         with open(report_path, 'r', encoding='utf-8') as f:
-#             report_html = f.read()
-#     except UnicodeDecodeError:
-#         logger.debug("[WARNING] UTF-8 decode error — trying Latin-1 fallback")
-#         with open(report_path, 'r', encoding='latin1') as f:
-#             report_html = f.read()
-            
-
-
-#     # render wrapper
-#     full_report_html = """<!DOCTYPE html>
-#     <html lang="en">
-#     <head>
-#         <meta charset="UTF-8">
-#         <title>Simulation Report</title>
-#         <style>
-#             body {{
-#                 font-family: Arial, sans-serif;
-#                 background: #f7f7f7;
-#                 margin: 20px;
-#                 color: #333;
-#             }}
-#             .container {{
-#                 max-width: 1000px;
-#                 margin: auto;
-#                 background: #fff;
-#                 padding: 20px;
-#                 border-radius: 8px;
-#                 box-shadow: 0 0 10px rgba(0,0,0,0.1);
-#             }}
-#             h1 {{
-#                 color: #0056b3;
-#             }}
-#             h2, h3 {{
-#                 color: #0056b3;
-#                 border-bottom: 1px solid #ddd;
-#                 padding-bottom: 4px;
-#             }}
-#             p {{
-#                 line-height: 1.6;
-#             }}
-#             table {{
-#                 width: 100%;
-#                 border-collapse: collapse;
-#                 margin: 1rem 0;
-#             }}
-#             th, td {{
-#                 padding: 8px;
-#                 border: 1px solid #ccc;
-#                 text-align: left;
-#             }}
-#             .table-wrap {{
-#                 overflow-x: auto;
-#             }}
-#             pre {{
-#                 background: #f4f4f4;
-#                 padding: 10px;
-#                 border-radius: 5px;
-#             }}
-#             .download-link {{
-#                 display: inline-block;
-#                 margin-top: 20px;
-#                 background: #007BFF;
-#                 color: white;
-#                 padding: 10px 15px;
-#                 text-decoration: none;
-#                 border-radius: 4px;
-#             }}
-#             .download-link:hover {{
-#                 background: #0056b3;
-#             }}
-#         </style>
-#     </head>
-#     <body>
-#         <div class="container">
-#             {report_html}
-#             <a href="/download_report" class="download-link">Download Report</a>
-#         </div>
-#     </body>
-#     </html>
-#     """.format(report_html=report_html)
-
-#     return full_report_html
-
-
-    # except Exception as e:
-    #     import traceback
-    #     logger.debug("[FATAL ERROR in /report]")
-    #     traceback.print_exc()
-    #     return f"<pre>500 Internal Server Error: {str(e)}</pre>", 500
-
 def generate_report(sim):
     """
     Generate the comprehensive HTML report for the simulation.
@@ -2465,7 +2348,10 @@ def generate_report(sim):
     store = pd.HDFStore(hdf_path, mode='r')
 
     report_sections = [
-        f"<h1>Simulation Report</h1>",
+        "<div style='margin: 10px;'>"
+        "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
+        "</div>",
+        "<h1>Simulation Report</h1>",
         f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
         f"<p>HDF keys found: {store.keys()}</p>"
     ]
