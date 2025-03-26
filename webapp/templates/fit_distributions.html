@@ -144,7 +144,7 @@
     {% if summary %}
     <div class="results">
       <h2>Fitting Results</h2>
-      <a href="{{ url_for('download_zip') }}" class="btn btn-primary">Download Results</a>
+      <a href="{{ url_for('download_report_zip') }}" class="btn btn-primary">Download Results</a>
       <p>{{ summary }}</p>
       <h3>Generated Plot:</h3>
       <img src="{{ url_for('serve_plot', filename=plot_filename) }}" alt="Fitting Results">
