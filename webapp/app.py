@@ -1412,6 +1412,18 @@ def population():
             "length scale": "18.4307"
         },
         {
+            "name": "Chrosomus, Great Lakes, Met Summer & Fall",
+            "dist": "Log Normal",
+            "shape": "1.6152",
+            "location": "0",
+            "scale": "0.0071",
+            "max_ent_rate": "0.28",
+            "occur_prob": "0.119",
+            "length shape": "0.274",
+            "length location": "-5.7931",
+            "length scale": "9.7798"
+        },
+        {
             "name": "Coregonus, Great Lakes, Annual",
             "dist": "Log Normal",
             "shape": "0.8508",
@@ -1590,7 +1602,43 @@ def population():
             "length shape": "0.0643",
             "length location": "-41.3359",
             "length scale": "46.2126"
-        },    
+        },
+        {
+            "name": " Etheostoma, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.8802",
+            "location": "0",
+            "scale": "0.0254",
+            "max_ent_rate": "13.5",
+            "occur_prob": "0.506",
+            "length shape": "0.054",
+            "length location": "-49.769",
+            "length scale": "54.7001"
+        },   
+        {
+            "name": " Etheostoma, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "1.6969",
+            "location": "0",
+            "scale": "0.005",
+            "max_ent_rate": "0.68",
+            "occur_prob": "0.3743",
+            "length shape": "0.4985",
+            "length location": "-1.3703",
+            "length scale": "4.0797"
+        },  
+        {
+            "name": " Etheostoma, Great Lakes, Met Fall",
+            "dist": "Log Normal",
+            "shape": "1.3218",
+            "location": "0",
+            "scale": "0.0093",
+            "max_ent_rate": "0.1",
+            "occur_prob": "0.2164",
+            "length shape": "0.472",
+            "length location": "-2.1768",
+            "length scale": "5.7151"
+        },
         {
             "name": "Lepomis, Great Lakes, Met Winter",
             "dist": "Log Normal",
@@ -1604,6 +1652,42 @@ def population():
             "length scale": "5.7882"
         },
         {
+            "name": "Lepomis, Great Lakes, Met Spring",
+            "dist": "Pareto",
+            "shape": "0.3713",
+            "location": "0",
+            "scale": "0.0014",
+            "max_ent_rate": "17.17",
+            "occur_prob": "0.4696",
+            "length shape": "0.6577",
+            "length location": "-1.1654",
+            "length scale": "5.7882"
+        },
+        {
+            "name": "Lepomis, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "1.7938",
+            "location": "0",
+            "scale": "0.0264",
+            "max_ent_rate": "7.61",
+            "occur_prob": "0.6626",
+            "length shape": "0.0175",
+            "length location": "-300.5003",
+            "length scale": "310.5752"
+        },
+        {
+            "name": "Lepomis, Great Lakes, Met Fall",
+            "dist": "Weibull",
+            "shape": "0.5825",
+            "location": "0",
+            "scale": "0.1293",
+            "max_ent_rate": "28.64",
+            "occur_prob": "0.5967",
+            "length shape": "0.5825",
+            "length location": "-1.9339",
+            "length scale": "6.6951"
+        },
+        {
             "name": "Lota, Great Lakes, Met Winter",
             "dist": "Pareto",
             "shape": "0.5486",
@@ -1614,6 +1698,42 @@ def population():
             "length shape": "0.167",
             "length location": "-36.1855",
             "length scale": "59.929"
+        },
+        {
+            "name": "Lota, Great Lakes, Met Spring",
+            "dist": "Weibull",
+            "shape": "0.6415",
+            "location": "0",
+            "scale": "0.0273",
+            "max_ent_rate": "0.35",
+            "occur_prob": "0.4902",
+            "length shape": "0.4221",
+            "length location": "6.6695",
+            "length scale": "10.4073"
+        },
+        {
+            "name": "Lota, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "1.3717",
+            "location": "0",
+            "scale": "0.0017",
+            "max_ent_rate": "0.26",
+            "occur_prob": "0.6078",
+            "length shape": "0.5136",
+            "length location": "-2.4821",
+            "length scale": "9.1436"
+        },
+        {
+            "name": "Lota, Great Lakes, Met Fall",
+            "dist": "Weibull",
+            "shape": "2.1153",
+            "location": "0",
+            "scale": "0.0042",
+            "max_ent_rate": "0.007",
+            "occur_prob": "0.3137",
+            "length shape": "0.5506",
+            "length location": "1.1179",
+            "length scale": "15.9954"
         },
         {
             "name": "Luxilus, Great Lakes, Met Fall & Winter",
@@ -2178,7 +2298,7 @@ def model_setup_summary():
     print ('model setup summary complete', flush = True)
 
 def run_simulation_in_background_custom(data_dict, log_queue):
-    print('Data dictionary made it:', data_dict, flush=True)
+    print('Simulation process started at %s:', datetime.now(), flush=True)
     try:
         sys.stdout = QueueStream(log_queue)  # Send print/logs to frontend
         user_sim_folder = data_dict['proj_dir']
@@ -2419,7 +2539,7 @@ def generate_report(sim):
     # add_section("Operating Scenarios", "/Operating Scenarios", units)
     # add_section("Population", "/Population", units)
     
-    logger.debug('finished basic data sections of report')
+    #logger.debug('finished basic data sections of report')
     
     # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
     report_sections.append("<h2>Hydrograph Plots</h2>")
@@ -2475,7 +2595,7 @@ def generate_report(sim):
         """)
     else:
         report_sections.append("<p>No hydrograph data available.</p>")
-    logger.debug('finished hydrograph')
+    #logger.debug('finished hydrograph')
     
     # --- BETA DISTRIBUTIONS ---
     add_section("Beta Distributions", "/Beta_Distributions", units)
@@ -2556,7 +2676,7 @@ def generate_report(sim):
     
 
 
-    logger.debug('finished creating yearly panel')
+    #logger.debug('finished creating yearly panel')
     if yearly_df is not None and not yearly_df.empty:
         panel_html = render_yearly_panel(yearly_df, iteration_sums)
         report_sections.append(panel_html)
@@ -2620,7 +2740,7 @@ def generate_report(sim):
         report_sections.append("<p>No daily data available.</p>")
 
     store.close()
-    logger.debug('finished daily pannel')
+    #logger.debug('finished daily pannel')
     final_html = "\n".join(report_sections)
     full_report = f"""
     <!DOCTYPE html>
@@ -2699,7 +2819,7 @@ def generate_report(sim):
     </body>
     </html>
     """
-    logger.debug('report formatted')
+    #logger.debug('report formatted')
     return full_report
 
 @app.route('/download_report')
