@@ -2178,7 +2178,7 @@ def model_setup_summary():
     print ('model setup summary complete', flush = True)
 
 def run_simulation_in_background_custom(data_dict, log_queue):
-    print ('Data dictionary made it:', data_dict, flush = True)
+    print('Data dictionary made it:', data_dict, flush=True)
     try:
         sys.stdout = QueueStream(log_queue)  # Send print/logs to frontend
         user_sim_folder = data_dict['proj_dir']
@@ -2186,6 +2186,12 @@ def run_simulation_in_background_custom(data_dict, log_queue):
         sim_instance = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
 
         sim_instance.webapp_import(data_dict, output_name="WebAppModel")
+        # Use data passed in via data_dict instead of session
+        sim_instance.project_name = data_dict.get('project_name', 'N/A')
+        sim_instance.project_notes = data_dict.get('project_notes', 'N/A')
+        sim_instance.model_setup = data_dict.get('model_setup', 'N/A')
+        sim_instance.units_session = data_dict.get('units', 'N/A')
+
         sim_instance.run()
         sim_instance.summary()
 
@@ -2206,9 +2212,10 @@ def run_simulation_in_background_custom(data_dict, log_queue):
             f.write(report_path)
 
     except Exception as e:
-        logger.exception(e)  # ✅ Use logger.exception, not logger.debug(..., e)
+        logger.exception(e)  # Log the exception with traceback
     finally:
-        log_queue.put("[Simulation Complete]")  # ✅ Ensure this always fires
+        log_queue.put("[Simulation Complete]")  # Ensure this always fires
+
 
 @app.route('/run_simulation', methods=['POST'])
 def run_simulation():
@@ -2216,6 +2223,11 @@ def run_simulation():
     pop_csv_path = session['population_csv_path']
     pop_df = pd.read_csv(pop_csv_path)
     data_dict = {
+        'proj_dir': session.get('proj_dir'),
+        'project_name': session.get('project_name'),
+        'project_notes': session.get('project_notes'),
+        'model_setup': session.get('model_setup'),
+        'units': session.get('units'),
         "facilities": session.get("facilities_data"),
         "unit_parameters_file": session.get("unit_params_file"),
         "operating_scenarios_file": session.get("op_scen_file"),
@@ -2226,7 +2238,6 @@ def run_simulation():
         "graph_summary": session.get("graph_summary"),
         "units_system": session.get("units", "imperial"),
         "simulation_mode": session.get("simulation_mode", "multiple_powerhouses_simulated_entrainment_routing"),
-        "proj_dir": session.get("proj_dir")
     }
 
     #user_sim_folder = session['proj_dir']
@@ -2346,18 +2357,15 @@ def generate_report(sim):
         return "<p>Error: HDF file not found. Please run the simulation first.</p>"
     logger.debug('hdf file exists %s',hdf_path)
     store = pd.HDFStore(hdf_path, mode='r')
-    
-    project_name = session.get('project_name', 'N/A')
-    project_notes = session.get('project_notes', 'N/A')
-    model_setup = session.get('model_setup', 'N/A')
 
     report_sections = [
         "<div style='margin: 10px;'>"
         "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
         "</div>",
-        f"<h1>Simulation Report for Project: {project_name}</h1>",
-        f"<p><strong>Project Notes:</strong> {project_notes}</p>",
-        f"<p><strong>Model Setup:</strong> {model_setup}</p>",
+        f"<h1>Simulation Report for Project: {sim.project_name if hasattr(sim, 'project_name') else 'N/A'}</h1>",
+        f"<p><strong>Project Notes:</strong> {sim.project_notes if hasattr(sim, 'project_notes') else 'N/A'}</p>",
+        f"<p><strong>Model Setup:</strong> {sim.model_setup if hasattr(sim, 'model_setup') else 'N/A'}</p>",
+        f"<p><strong>Units:</strong> {sim.units_session if hasattr(sim, 'units_session') else 'N/A'}</p>",
         f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
         f"<p>HDF keys found: {store.keys()}</p>"
     ]
