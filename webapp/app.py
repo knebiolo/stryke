@@ -2521,7 +2521,7 @@ def generate_report(sim):
             if metric == 'entrainment':
                 metric = 'entrained'
             if iteration_sums is not None and f'num_{metric}' in iteration_sums.columns:
-                hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric}', f"Total {metric.title()} Distribution by Iteration")
+                hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric}', f"Total {metric.title()} by Iteration")
             else:
                 hist_b64 = ""
             # Use expected column keys; adjust if needed.
