@@ -899,8 +899,8 @@ class simulation():
         p_2 = calc_p_2(p_atm, density, h_D)
         
         # calculate presure at p1
-        p_1 = calc_p_1(p_2, fish_depth, h_2, density, v_1, v_2, head_loss)
-        #p_1 = calc_p_2(p_atm, density, fish_depth)
+        #p_1 = calc_p_1(p_2, fish_depth, h_2, density, v_1, v_2, head_loss)
+        p_1 = calc_p_2(p_atm, density, fish_depth)
         
         # calculate pressure ratio
         p_ratio = p_1/p_2
