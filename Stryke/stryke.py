@@ -187,7 +187,7 @@ class simulation():
         elif existing == True and wks:
             self.existing_import(proj_dir, wks, output_name)
         
-        logger.info('simulation object created')
+        #logger.info('simulation object created')
             
  
     def existing_import(self, proj_dir, wks, output_name):
@@ -1582,10 +1582,10 @@ class simulation():
         flow_df = pd.DataFrame()
         
         scen_df = flow_scenarios_df[flow_scenarios_df.Scenario == scen]
-        logger.info('scenario dataframe %s', scen_df.shape)
+        #logger.info('scenario dataframe %s', scen_df.shape)
         # if the discharge type is hydrograph - import hydrography and transform using prorate factor
         if discharge_type == 'hydrograph':
-            logger.debug('hydrograph')
+            #logger.debug('hydrograph')
             #print ('discharge type: hydrograph')
             gage = str(scen_df.at[scen_df.index[0],'Gage'])
             prorate = scen_df.at[scen_df.index[0],'Prorate']
@@ -1883,7 +1883,7 @@ class simulation():
         """
         # Create route and associated data.
         self.create_route()
-        logger.debug('starting simulation')
+        #logger.debug('starting simulation')
         # Setup string size dictionary for formatting.
         str_size = {'species': 30}
         try:
