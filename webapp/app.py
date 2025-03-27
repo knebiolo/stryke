@@ -523,7 +523,6 @@ def create_project():
         project_notes = request.form.get('project_notes')
         units = request.form.get('units')
         model_setup = request.form.get('model_setup')
-        print(f'choice of units is {units}')
         
         # Save data to session or database
         session['project_name'] = project_name
@@ -531,8 +530,9 @@ def create_project():
         session['units'] = units
         session['model_setup'] = model_setup
         #session['proj_dir'] = g.user_sim_folder  # Set the project directory
-        
         flash(f"Project '{project_name}' created successfully!")
+        print("project started from directory %s",g.user_sim_folder)
+
         return redirect(url_for('flow_scenarios'))
     
     # For GET requests, render the project creation form
@@ -1748,6 +1748,30 @@ def population():
             "length scale": "189.282"
         },
         {
+            "name": "Luxilus, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.5964",
+            "location": "0",
+            "scale": "0.159",
+            "max_ent_rate": "1.45",
+            "occur_prob": "0.4928",
+            "length shape": "0.2284",
+            "length location": "-5.031",
+            "length scale": "13.0993"
+        },
+        {
+            "name": "Luxilus, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "3.0011",
+            "location": "0",
+            "scale": "0.0706",
+            "max_ent_rate": "5.18",
+            "occur_prob": "0.7467",
+            "length shape": "0.0109",
+            "length location": "-253.1085",
+            "length scale": "259.427"
+        },
+        {
             "name": "Micropterus, Great Lakes, Met Winter",
             "dist": "Log Normal",
             "shape": "0.7591",
@@ -1758,6 +1782,42 @@ def population():
             "length shape": "0.1181",
             "length location": "-20.6739",
             "length scale": "29.5847"
+        },
+        {
+            "name": "Micropterus, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.3713",
+            "location": "0",
+            "scale": "0.0081",
+            "max_ent_rate": "0.13",
+            "occur_prob": "0.4423",
+            "length shape": "0.0192",
+            "length location": "-554.6249",
+            "length scale": "576.789"
+        },
+        {
+            "name": "Micropterus, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "0.5405",
+            "location": "0",
+            "scale": "0.1621",
+            "max_ent_rate": "6.05",
+            "occur_prob": "0.6964",
+            "length shape": "0.9155",
+            "length location": "-0.3861",
+            "length scale": "3.8903"
+        },
+        {
+            "name": "Micropterus, Great Lakes, Met Fall",
+            "dist": "Log Normal",
+            "shape": "1.5437",
+            "location": "0",
+            "scale": "0.0283",
+            "max_ent_rate": "1.27",
+            "occur_prob": "0.6726",
+            "length shape": "0.4116",
+            "length location": "-1.1232",
+            "length scale": "11.2873"
         },
         {
             "name": "Morone, Great Lakes, Met Fall & Winter",
@@ -1772,6 +1832,18 @@ def population():
             "length scale": "8.0233"
         },
         {
+            "name": "Morone, Great Lakes, Met Spring & Summer",
+            "dist": "Log Normal",
+            "shape": "2.1",
+            "location": "0",
+            "scale": "0.0244",
+            "max_ent_rate": "0.42",
+            "occur_prob": "0.4706",
+            "length shape": "0.527",
+            "length location": "1.0488",
+            "length scale": "8.3202"
+        },
+        {
             "name": "Moxostoma, Great Lakes, Met Winter",
             "dist": "Log Normal",
             "shape": "1.3572",
@@ -1782,6 +1854,30 @@ def population():
             "length shape": "0.7031",
             "length location": "-1.3125",
             "length scale": "7.2819"
+        },
+        {
+            "name": "Moxostoma, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "0.9826",
+            "location": "0",
+            "scale": "0.0116",
+            "max_ent_rate": "0.07",
+            "occur_prob": "0.3472",
+            "length shape": "0.109",
+            "length location": "-123.0021",
+            "length scale": "146.2813"
+        },
+        {
+            "name": "Moxostoma, Great Lakes, Met Summer & Fall",
+            "dist": "Log Normal",
+            "shape": "1.3686",
+            "location": "0",
+            "scale": "0.0087",
+            "max_ent_rate": "0.7",
+            "occur_prob": "0.4833",
+            "length shape": "0.5167",
+            "length location": "-5.1992",
+            "length scale": "18.7"
         },
         {
             "name": "Nocomis, Great Lakes, Met Fall, Winter & Spring",
