@@ -1163,13 +1163,15 @@ class simulation():
         if status != 1:
             return location  # Fish is dead
     
-        nbors = list(graph.neighbors(location))
+        nbors = np.array(list(graph.neighbors(location)), dtype=str)
+
         if not nbors:
             return location
     
         locs = []
         probs = []
     
+
         contains_U = np.char.find(nbors, 'U') >= 0
         found_spill = np.char.find(nbors, 'spill') >= 0
     
@@ -1248,11 +1250,16 @@ class simulation():
                 probs.append(edge_weight)
     
         # Normalize probabilities
-        probs = np.array(probs, dtype=float)
+        probs = np.array(probs, dtype=float).flatten()
         if probs.sum() > 0:
             probs /= probs.sum()
         else:
             probs = np.ones(len(probs)) / len(probs)
+            
+        print("locs:", locs)
+        print("probs:", probs)
+        print("probs shape:", probs.shape)
+
     
         try:
             new_loc = np.random.choice(locs, p=probs)
