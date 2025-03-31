@@ -2161,6 +2161,7 @@ class simulation():
 
                                 # Process movement and survival for each movement step.
                                 for k in self.moves:
+                                    logger.info('start movement iteration for ',k)
                                     if k == 0:
                                         status_arr = np.repeat(1, int(n))
                                     else:
@@ -2207,7 +2208,7 @@ class simulation():
                                     if k < max(self.moves):
                                         fishes[f'state_{k+1}'] = move
                                         fishes[f'state_{k+1}'] = fishes[f'state_{k+1}'].astype(str)
-
+                                    logger.info('finished movement iteration')
                                         
                                 logger.info('Finished movement')
     
