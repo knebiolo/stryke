@@ -379,7 +379,10 @@ class simulation():
         # Convert graph summary data to DataFrames.
         graph_summary = data_dict.get('graph_summary', {})
         self.nodes = to_dataframe(graph_summary.get('Nodes', []))
-        self.edges = to_dataframe(graph_summary.get('Edges', []))
+        try:
+            self.edges = to_dataframe(graph_summary.get('Edges', []))
+        except:
+            logger.info("Single Unit Scenario Identified, No Movement")
         self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
         self.surv_fun_dict = self.surv_fun_df.to_dict('index')
     
@@ -2180,6 +2183,7 @@ class simulation():
     
                                     v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[5,6])
                                     rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
+                                    logger.info('applied vectorized survival rate')
                                     survival = np.where(dice <= rates, 1, 0)
     
                                     if k < max(self.moves):
@@ -2187,7 +2191,8 @@ class simulation():
                                         move = v_movement(current_location, survival, swim_speed, self.graph, intake_vel_dict, Q_dict, op_order_dict, q_cap_dict, unit_fac_dict)
                                     else:
                                         move = current_location
-    
+                                    logger.info('applied vectorized movement')
+
                                     fishes[f'draw_{k}'] = np.float32(dice)
                                     fishes[f'rates_{k}'] = np.float32(rates)
                                     fishes[f'survival_{k}'] = np.float32(survival)
