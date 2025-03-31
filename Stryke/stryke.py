@@ -1250,6 +1250,7 @@ class simulation():
                 probs.append(edge_weight)
     
         # Normalize probabilities
+        locs = np.array(locs, dtype=str).flatten()  # force flat array of strings
         probs = np.array(probs, dtype=float).flatten()
         if probs.sum() > 0:
             probs /= probs.sum()
@@ -1260,12 +1261,12 @@ class simulation():
         print("probs:", probs)
         print("probs shape:", probs.shape)
 
-    
         try:
             new_loc = np.random.choice(locs, p=probs)
-        except Exception:
+        except Exception as e:
+            print("Choice failed:", e)
             new_loc = location
-    
+
         return new_loc
 
  
