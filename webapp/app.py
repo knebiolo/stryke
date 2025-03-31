@@ -1880,16 +1880,16 @@ def population():
             "length scale": "18.7"
         },
         {
-            "name": "Nocomis, Great Lakes, Met Fall, Winter & Spring",
+            "name": "Nocomis, Great Lakes, Annual",
             "dist": "Log Normal",
-            "shape": "1.4922",
+            "shape": "1.7634",
             "location": "0",
-            "scale": "0.0082",
+            "scale": "0.0123",
             "max_ent_rate": "0.2",
-            "occur_prob": "0.3231",
-            "length shape": "0.6069",
-            "length location": "-2.0622",
-            "length scale": "7.0788"
+            "occur_prob": "0.337",
+            "length shape": "0.7352",
+            "length location": "-0.6709",
+            "length scale": "3.9941"
         },
         {
             "name": "Notemigonus, Great Lakes, Met Winter",
@@ -1904,16 +1904,64 @@ def population():
             "length scale": "12.5858"
         },
         {
-            "name": "Noturus, Great Lakes, Met Fall & Winter",
-            "dist": "Log Normal",
-            "shape": "1.0017",
+            "name": "Notemigonus, Great Lakes, Met Spring",
+            "dist": "Pareto",
+            "shape": "0.3",
             "location": "0",
-            "scale": "0.0085",
-            "max_ent_rate": "0.13",
-            "occur_prob": "0.4032",
-            "length shape": "0.5009",
-            "length location": "-3.4597",
-            "length scale": "11.6064"
+            "scale": "0.0008",
+            "max_ent_rate": "1.53",
+            "occur_prob": "0.64",
+            "length shape": "0.7596",
+            "length location": "-0.7386",
+            "length scale": "4.2723"
+        },
+        {
+            "name": "Notemigonus, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "2.8014",
+            "location": "0",
+            "scale": "0.0618",
+            "max_ent_rate": "6.42",
+            "occur_prob": "0.6543",
+            "length shape": "0.0207",
+            "length location": "-130.7952",
+            "length scale": "136.8216"
+        },
+        {
+            "name": "Notemigonus, Great Lakes, Met Fall",
+            "dist": "Log Normal",
+            "shape": "3.111",
+            "location": "0",
+            "scale": "0.0542",
+            "max_ent_rate": "8.92",
+            "occur_prob": "0.6914",
+            "length shape": "0.0153",
+            "length location": "-101.087",
+            "length scale": "108.5648"
+        },
+        {
+            "name": "Noturus, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.3064",
+            "location": "0",
+            "scale": "0.0073",
+            "max_ent_rate": "0.06",
+            "occur_prob": "0.3488",
+            "length shape": "0.3015",
+            "length location": "-10.8068",
+            "length scale": "19.8945"
+        },
+        {
+            "name": "Noturus, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "1.0047",
+            "location": "0",
+            "scale": "0.01",
+            "max_ent_rate": "0.09",
+            "occur_prob": "0.6889",
+            "length shape": "0.2312",
+            "length location": "-11.9586",
+            "length scale": "20.4888"
         },
         {
             "name": "Notropis, Great Lakes, Met Winter",
@@ -1928,7 +1976,55 @@ def population():
             "length scale": "1160.4858"
         },
         {
+            "name": "Notropis, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.4117",
+            "location": "0",
+            "scale": "0.007",
+            "max_ent_rate": "0.64",
+            "occur_prob": "0.4844",
+            "length shape": "0.596",
+            "length location": "-0.3735",
+            "length scale": "4.5076"
+        },
+        {
+            "name": "Notropis, Great Lakes, Met Summer",
+            "dist": "Pareto",
+            "shape": "0.4168",
+            "location": "0",
+            "scale": "0.0011",
+            "max_ent_rate": "2.01",
+            "occur_prob": "0.4346",
+            "length shape": "0.0133",
+            "length location": "-214.065",
+            "length scale": "219.2391"
+        },
+        {
+            "name": "Notropis, Great Lakes, Met Fall",
+            "dist": "Log Noraml",
+            "shape": "1.0752",
+            "location": "0",
+            "scale": "0.0065",
+            "max_ent_rate": "0.23",
+            "occur_prob": "0.23",
+            "length shape": "0.5057",
+            "length location": "-1.4499",
+            "length scale": "4.2016"
+        },
+        {
             "name": "Oncorhynchus, Great Lakes, Met Winter",
+            "dist": "Weibull",
+            "shape": "0.6833",
+            "location": "0",
+            "scale": "0.0073",
+            "max_ent_rate": "0.05",
+            "occur_prob": "0.2303",
+            "length shape": "0.0582",
+            "length location": "-74.0199",
+            "length scale": "94.144"
+        },
+        {
+            "name": "Oncorhynchus, Great Lakes, Met Spring, Summer, & Fall",
             "dist": "Weibull",
             "shape": "0.6833",
             "location": "0",
@@ -1964,6 +2060,42 @@ def population():
             "length scale": "24.4615"
         },
         {
+            "name": "Perca, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "2.8141",
+            "location": "0",
+            "scale": "0.0871",
+            "max_ent_rate": "48.32",
+            "occur_prob": "0.8276",
+            "length shape": "0.2716",
+            "length location": "-9.5459",
+            "length scale": "16.8826"
+        },
+        {
+            "name": "Perca, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "3.2221",
+            "location": "0",
+            "scale": "0.2197",
+            "max_ent_rate": "32.81",
+            "occur_prob": "0.7849",
+            "length shape": "0.537",
+            "length location": "-1.1236",
+            "length scale": "3.6604"
+        },
+        {
+            "name": "Perca, Great Lakes, Met Fall",
+            "dist": "Log Normal",
+            "shape": "2.4307",
+            "location": "0",
+            "scale": "0.1207",
+            "max_ent_rate": "34.7",
+            "occur_prob": "0.7957",
+            "length shape": "0.2627",
+            "length location": "-0.3852",
+            "length scale": "8.2808"
+        },
+        {
             "name": "Pimephales, Great Lakes, Met Winter",
             "dist": "Pareto",
             "shape": "1.8322",
@@ -1974,6 +2106,42 @@ def population():
             "length shape": "0.0036",
             "length location": "-496.3134",
             "length scale": "503.4153"
+        },
+        {
+            "name": "Pimephales, Great Lakes, Met Spring",
+            "dist": "Weibull",
+            "shape": "0.5481",
+            "location": "0",
+            "scale": "0.0316",
+            "max_ent_rate": "2.63",
+            "occur_prob": "0.4915",
+            "length shape": "0.0043",
+            "length location": "-444.0727",
+            "length scale": "451.2193"
+        },
+        {
+            "name": "Pimephales, Great Lakes, Met Summer",
+            "dist": "Log Normal",
+            "shape": "1.3049",
+            "location": "0",
+            "scale": "0.0116",
+            "max_ent_rate": "0.13",
+            "occur_prob": "0.4419",
+            "length shape": "0.009",
+            "length location": "-294.8785",
+            "length scale": "300.4008"
+        },
+        {
+            "name": "Pimephales, Great Lakes, Met Fall",
+            "dist": "Log Normal",
+            "shape": "0.9676",
+            "location": "0",
+            "scale": "0.0062",
+            "max_ent_rate": "0.24",
+            "occur_prob": "0.2481",
+            "length shape": "0.0049",
+            "length location": "-525.1864",
+            "length scale": "531.6184"
         },
         {
             "name": "Pomoxis, Great Lakes, Met Winter",
@@ -1988,6 +2156,42 @@ def population():
             "length scale": "12.5246"
         },
         {
+            "name": "Pomoxis, Great Lakes, Met Spring",
+            "dist": "Log Normal",
+            "shape": "1.5603",
+            "location": "0",
+            "scale": "0.0187",
+            "max_ent_rate": "1.49",
+            "occur_prob": "0.6129",
+            "length shape": "0.3344",
+            "length location": "-5.6749",
+            "length scale": "15.676"
+        },
+        {
+            "name": "Pomoxis, Great Lakes, Met Summer",
+            "dist": "Weibull",
+            "shape": "0.4162",
+            "location": "0",
+            "scale": "0.2537",
+            "max_ent_rate": "4.81",
+            "occur_prob": "0.6566",
+            "length shape": "0.7861",
+            "length location": "-0.5388",
+            "length scale": "3.5888"
+        },
+        {
+            "name": "Pomoxis, Great Lakes, Met Fall",
+            "dist": "Log Normal",
+            "shape": "2.3606",
+            "location": "0",
+            "scale": "1162",
+            "max_ent_rate": "5.76",
+            "occur_prob": "0.7576",
+            "length shape": "0.1213",
+            "length location": "-13.3987",
+            "length scale": "20.7735"
+        },
+        {
             "name": "Rhinichthys, Great Lakes, Met Fall & Winter",
             "dist": "Log Normal",
             "shape": "1.1916",
@@ -2000,6 +2204,18 @@ def population():
             "length scale": "545.041"
         },
         {
+            "name": "Rhinichthys, Great Lakes, Met Spring & Summer",
+            "dist": "Log Normal",
+            "shape": "1.8139",
+            "location": "0",
+            "scale": "0.0015",
+            "max_ent_rate": "0.54",
+            "occur_prob": "0.475",
+            "length shape": "0.01",
+            "length location": "-166.1794",
+            "length scale": "173.6912"
+        },
+        {
             "name": "Salmo, Great Lakes, Met Fall & Winter",
             "dist": "Log Normal",
             "shape": "1.4869",
@@ -2010,6 +2226,18 @@ def population():
             "length shape": "0.9693",
             "length location": "-4.6793",
             "length scale": "5.3207"
+        },
+        {
+            "name": "Salmo, Great Lakes, Met Spring & Summer",
+            "dist": "Log Normal",
+            "shape": "1.2363",
+            "location": "0",
+            "scale": "0.0058",
+            "max_ent_rate": "0.2",
+            "occur_prob": "0.3636",
+            "length shape": "0.3118",
+            "length location": "-8.0675",
+            "length scale": "26.9977"
         },
         {
             "name": "Salvelinus, Great Lakes, Annual",
@@ -2036,6 +2264,18 @@ def population():
             "length scale": "16.4924"
         },
         {
+            "name": "Sander, Great Lakes, Met Spring & Summer",
+            "dist": "Log Normal",
+            "shape": "0.5305",
+            "location": "0",
+            "scale": "9.8148",
+            "max_ent_rate": "5.22",
+            "occur_prob": "0.7654",
+            "length shape": "0.5305",
+            "length location": "-2.2348",
+            "length scale": "9.8148"
+        },
+        {
             "name": "Semotilus, Great Lakes, Met Fall & Winter",
             "dist": "Pareto",
             "shape": "0.5018",
@@ -2048,6 +2288,18 @@ def population():
             "length scale": "37.8381"
         },
         {
+            "name": "Semotilus, Great Lakes, Met Spring & Summer",
+            "dist": "Log Normal",
+            "shape": "1.2676",
+            "location": "0",
+            "scale": "0.0069",
+            "max_ent_rate": "0.12",
+            "occur_prob": "0.3636",
+            "length shape": "0.1264",
+            "length location": "-22.8442",
+            "length scale": "32.6316"
+        },
+        {
             "name": "Umbra, Great Lakes, Met Fall & Winter",
             "dist": "Log Normal",
             "shape": "0.8115",
@@ -2058,6 +2310,18 @@ def population():
             "length shape": "0.167",
             "length location": "-15.5853",
             "length scale": "20.9652"
+        },
+        {
+            "name": "Umbra, Great Lakes, Met Spring & Summer",
+            "dist": "Log Normal",
+            "shape": "1.8176",
+            "location": "0",
+            "scale": "0.0185",
+            "max_ent_rate": "2.32",
+            "occur_prob": "0.4936",
+            "length shape": "0.0055",
+            "length location": "-382.586",
+            "length scale": "389.8177"
         },
 
 
