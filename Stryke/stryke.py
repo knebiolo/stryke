@@ -2082,7 +2082,7 @@ class simulation():
                         #logger.debug ('bout to start daily hours')
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
  #                       print(f"Total hours: {tot_hours}", flush=True)
-                        #logger.info('Q-Dict Built')
+                        logger.info('Q-Dict Built')
                         
                         if np.any(tot_hours > 0):
                             presence_seed = np.random.uniform(0, 1)
@@ -2120,7 +2120,7 @@ class simulation():
 #                                    print("Error retrieving U_crit for species", species_name, flush=True)
                                     U_crit_val = 0
                                 swim_speed = np.repeat(U_crit_val, len(population))
-                                #logger.info('Population estimated')
+                                logger.info('Population estimated')
                                 if len(self.nodes) > 1:
                                     fishes = pd.DataFrame({
                                         'scenario_num': np.repeat(scen_num, int(n)),
@@ -2146,7 +2146,7 @@ class simulation():
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
 #                                print(f"Fish DataFrame created with {len(fishes)} rows", flush=True)
-                                #logger.info('Starting movement')
+                                logger.info('Starting movement')
 
                                 # Process movement and survival for each movement step.
                                 for k in self.moves:
@@ -2194,7 +2194,7 @@ class simulation():
                                     if k < max(self.moves):
                                         fishes[f'state_{k+1}'] = move
                                         
-                                #logger.info('Finished movement')
+                                logger.info('Finished movement')
     
 #                                print("Movement successfully simulated for iteration", i, flush=True)
                                 max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
