@@ -1165,9 +1165,9 @@ class simulation():
     
         nbors = np.array(list(graph.neighbors(location)), dtype=str)
 
-        if not nbors:
+        if nbors.size == 0:
             return location
-    
+
         locs = []
         probs = []
     
