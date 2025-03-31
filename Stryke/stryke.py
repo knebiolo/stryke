@@ -978,6 +978,7 @@ class simulation():
                     prob = surv_dict[route]
                 except:
                     logger.debug ('Problem with a priori survival function')
+                    print(surv_dict, flush = True)
     
             else:
                 param_dict = u_param_dict[route]
