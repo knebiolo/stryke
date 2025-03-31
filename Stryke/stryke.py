@@ -1229,19 +1229,29 @@ class simulation():
             total_sta_cap = sum(sta_cap_dict.get(f, 0.0) for f in facilities)
             total_env_Q = sum(env_Q_dict.get(f, 0.0) for f in facilities)
             total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities)
-    
+
             for i in nbors:
-                if curr_Q <= min_Q_dict.get(i, 0.0):
-                    prob = 1.0 if 'spill' in i else 0.0
-                elif curr_Q >= total_sta_cap + total_env_Q + total_bypass_Q:
-                    spill_Q = curr_Q - total_sta_cap - total_bypass_Q
-                    prob = max(spill_Q / curr_Q, 0.0) if 'spill' in i else 1.0 - max(spill_Q / curr_Q, 0.0)
+                if 'U' in i:  # Only unit nodes have min_Q
+                    min_Q = min_Q_dict.get(i, 0.0)
+                    if curr_Q <= min_Q:
+                        prob = 0.0
+
+                elif 'spill' in i:
+                    # Handle spill logic independently
+                    if curr_Q <= min_Q:
+                        prob = 1.0
+                    if curr_Q >= total_sta_cap + total_env_Q + total_bypass_Q:
+                        spill_Q = curr_Q - total_sta_cap - total_bypass_Q
+                        prob = max(spill_Q / curr_Q, 0.0)
+                    else:
+                        p_env = total_env_Q / curr_Q if curr_Q > 0 else 0.0
+                        prob = p_env
                 else:
-                    p_env = total_env_Q / curr_Q if curr_Q > 0 else 0.0
-                    prob = p_env if 'spill' in i else 1.0 - p_env
+                    prob = 1.0  # fallback/default for unknown node types?
+    
                 locs.append(i)
                 probs.append(prob)
-    
+
         else:
             # Fallback: edge weights from graph
             for i in nbors:
