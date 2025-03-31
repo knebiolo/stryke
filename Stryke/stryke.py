@@ -2206,8 +2206,7 @@ class simulation():
                                     fishes[f'rates_{k}'] = np.float32(rates)
                                     fishes[f'survival_{k}'] = np.float32(survival)
                                     if k < max(self.moves):
-                                        fishes[f'state_{k+1}'] = move
-                                        fishes[f'state_{k+1}'] = fishes[f'state_{k+1}'].astype(str)
+                                        fishes.loc[k, f'state_{k+1}'] = str(move)
                                     logger.info('finished movement iteration')
                                         
                                 logger.info('Finished movement')
