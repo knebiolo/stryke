@@ -593,8 +593,8 @@ def flow_scenarios():
             discharge = None
             hydrograph_data = request.form.get('hydrograph_data')
         
-        print("DEBUG: Received scenario_type:", scenario_type, flush=True)
-        print("DEBUG: Received hydrograph_data:", hydrograph_data, flush=True)
+        # print("DEBUG: Received scenario_type:", scenario_type, flush=True)
+        # print("DEBUG: Received hydrograph_data:", hydrograph_data, flush=True)
         
         # Store form values in session.
         session['scenario_type'] = scenario_type
@@ -2568,7 +2568,7 @@ def model_setup_summary():
                 df_unit = pd.read_csv(unit_params_file)
                 unit_parameters = df_unit.to_dict(orient='records')
                 unit_columns = list(df_unit.columns)
-                print("Loaded unit parameters:", unit_parameters)
+                #print("Loaded unit parameters:", unit_parameters)
             except Exception as e:
                 print("Error reading unit_params_file:", e)
         else:
@@ -2585,7 +2585,7 @@ def model_setup_summary():
             try:
                 df_ops = pd.read_csv(ops_file)
                 operating_scenarios = df_ops.to_dict(orient='records')
-                print("Loaded operating scenarios:", operating_scenarios)
+                #print("Loaded operating scenarios:", operating_scenarios)
             except Exception as e:
                 print("Error reading operating_scenarios_file:", e)
         else:
@@ -2620,7 +2620,7 @@ def model_setup_summary():
             try:
                 df_pop = pd.read_csv(pop_csv_path)
                 population_parameters = df_pop.to_dict(orient='records')
-                print("Loaded population parameters from file:", population_parameters, flush=True)
+                #print("Loaded population parameters from file:", population_parameters, flush=True)
             except Exception as e:
                 print("Error reading population CSV file:", e, flush=True)
         else:
