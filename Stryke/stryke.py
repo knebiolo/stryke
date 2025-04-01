@@ -1282,7 +1282,8 @@ class simulation():
         print("probs shape:", probs.shape)
 
         try:
-            new_loc = str(np.random.choice(locs, p=probs))
+            new_loc = np.random.choice(locs, p=probs).item()
+
         except Exception as e:
             print("Choice failed:", e)
             new_loc = location
