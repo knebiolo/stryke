@@ -875,7 +875,7 @@ class simulation():
         
         # calc penstock area from diameter input
         a = np.pi * (ps_diameter/2)**2
-        
+        logger.debug('calculated ps area')
         # Either the spreadsheet inputs are imperial, or they get converted to
         # imperial in __init__. Therefore, they must always be converted to metric
         # for barotrauma math.   
@@ -889,20 +889,20 @@ class simulation():
         fish_depth = fish_depth * 0.3048       # ft to m
         h_D = h_D * 0.3048                       # ft to m
         h_2 = h_2 * 0.3048                       # ft to m
-        
+        logger.debug('converted units')
         # calculate velocities
-        # if flow is different at input/outflow, probably pass v_1 and v_2 through the function instead
-        v_1 = calc_v(discharge,a)
-        v_2 = calc_v(discharge,a)
-        
-        # calculate friction for total head loss
-        dynamic_viscosity = 0.0010016 # for water @ 20C
+        # # if flow is different at input/outflow, probably pass v_1 and v_2 through the function instead
+        # v_1 = calc_v(discharge,a)
+        # v_2 = calc_v(discharge,a)
+        # logger.debug('calculated velocity')
+        # # calculate friction for total head loss
+        # dynamic_viscosity = 0.0010016 # for water @ 20C
         density = 998.2 # kg/m^3 for water @ 20C
-        kinematic_viscosity = calc_k_viscosity(dynamic_viscosity, density)
-        friction = calc_friction(K, ps_diameter, v_1, kinematic_viscosity)
+        # kinematic_viscosity = calc_k_viscosity(dynamic_viscosity, density)
+        # friction = calc_friction(K, ps_diameter, v_1, kinematic_viscosity)
         
-        # calculate total head loss
-        head_loss = calc_h_loss(friction, ps_length, ps_diameter, v_1)
+        # # calculate total head loss
+        # head_loss = calc_h_loss(friction, ps_length, ps_diameter, v_1)
         
         # calculate pressure at p2
         p_atm = constants.atm
@@ -1057,7 +1057,7 @@ class simulation():
                                                 self.unit_params['ps_D'][route], # penstock diameter
                                                 self.unit_params['ps_length'][route], # penstock length
                                                 self.unit_params['intake_vel'][route], # velocity head at turbine inlet
-                                                np.random.uniform(depth_1,depth_2,1), # fish depths unifrom random within depth range
+                                                np.random.uniform(depth_1,depth_2,1)[0], # fish depths unifrom random within depth range
                                                 self.unit_params['submergence_depth'][route], # submergence depth of the draft tube outlet
                                                 self.unit_params['elevation_head'][route], # elevation head at the downstream point
                                                 self.pop['beta_0'].item(),
