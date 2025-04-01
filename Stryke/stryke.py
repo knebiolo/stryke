@@ -1942,10 +1942,26 @@ class simulation():
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
                                 logger.info('Starting movement')
-
-                                logger.info('Starting movement')
                                 
-                                # Process movement and survival for each movement step.
+                                def scalarize(x):
+                                    if isinstance(x, (list, np.ndarray)) and len(x) == 1:
+                                        return x[0]
+                                    if hasattr(x, "item") and np.ndim(x) == 0:
+                                        return x.item()
+                                    return x
+                                
+                                def safe_node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict):
+                                    try:
+                                        pop = scalarize(pop)
+                                        swim = scalarize(swim)
+                                        status = scalarize(status)
+                                        surv_fun = scalarize(surv_fun)
+                                        location = scalarize(location)
+                                        return self.node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict)
+                                    except Exception as e:
+                                        print(f"Failed node_surv_rate at location={location} with error: {e}")
+                                        raise
+                                
                                 for k in self.moves:
                                     logger.info(f'start movement for node {k}')  
                                 
@@ -1955,15 +1971,10 @@ class simulation():
                                         status_arr = fishes[f'survival_{k-1}'].values
                                 
                                     current_location = fishes[f'state_{k}'].values
-                                
-                                    # Flatten and clean all scalar-ish inputs
                                     current_location = np.asarray(current_location).flatten()
-                                    status_arr = np.asarray(status_arr).flatten()
-                                    swim_speed = np.asarray(swim_speed).flatten()
                                 
                                     logger.info(f'current location: {current_location}')
                                 
-                                    # Vectorize survival function extraction
                                     def surv_fun_att(state, surv_fun_dict):
                                         return surv_fun_dict[state]['Surv_Fun']
                                 
@@ -1976,22 +1987,19 @@ class simulation():
                                 
                                     dice = np.random.uniform(0.0, 1.0, int(n))
                                 
-                                    v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[5,6])
+                                    # Flatten inputs before vectorization
+                                    population = np.asarray(population).flatten()
+                                    swim_speed = np.asarray(swim_speed).flatten()
+                                    status_arr = np.asarray(status_arr).flatten()
+                                    surv_fun = np.asarray(surv_fun).flatten()
+                                
+                                    v_surv_rate = np.vectorize(safe_node_surv_rate, excluded=[5, 6])
                                     rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
                                 
                                     logger.info('applied vectorized survival rate')
                                     survival = np.where(dice <= rates, 1, 0)
                                 
-                                    # Movement only if another step remains
                                     if k < max(self.moves):
-                                        # Sanitize all inputs before vectorized movement
-                                        def scalarize(x):
-                                            if isinstance(x, (list, np.ndarray)) and len(x) == 1:
-                                                return x[0]
-                                            if hasattr(x, "item") and np.ndim(x) == 0:
-                                                return x.item()
-                                            return x
-                                
                                         def safe_movement(location, status, speed):
                                             location = scalarize(location)
                                             status = scalarize(status)
@@ -2017,8 +2025,7 @@ class simulation():
                                     logger.info('finished movement iteration')
                                 
                                 logger.info('Finished movement')
-
-    
+   
                                 max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
                                 fishes.to_hdf(self.hdf,
                                               key=f'simulations/{scen}/{spc}',
