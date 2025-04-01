@@ -891,7 +891,8 @@ class simulation():
         
         # calc penstock area from diameter input
         a = np.pi * (ps_diameter/2)**2
-        logger.debug('calculated ps area')
+        
+        #logger.debug('calculated ps area')
         # Either the spreadsheet inputs are imperial, or they get converted to
         # imperial in __init__. Therefore, they must always be converted to metric
         # for barotrauma math.   
@@ -905,7 +906,7 @@ class simulation():
         fish_depth = fish_depth * 0.3048       # ft to m
         h_D = h_D * 0.3048                       # ft to m
         h_2 = h_2 * 0.3048                       # ft to m
-        logger.debug('converted units')
+        #logger.debug('converted units')
         # calculate velocities
         # # if flow is different at input/outflow, probably pass v_1 and v_2 through the function instead
         # v_1 = calc_v(discharge,a)
@@ -1025,7 +1026,7 @@ class simulation():
                 else:
                     imp_surv_prob = 1.
 
-                logger.debug('calculated impingement survival')
+                #logger.debug('calculated impingement survival')
                 
                 # if survival is assessed at a Kaplan turbine:
                 if surv_fun == 'Kaplan':
@@ -1047,9 +1048,9 @@ class simulation():
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
                     strike_surv_prob = self.Pump(length, param_dict)
                     
-                logger.debug ('calculated unit survival')
-                # assess barotrauma survival
+                #logger.debug ('calculated unit survival')
                 
+                # assess barotrauma survival
                 # get fish depth
                 vertical_habitat_value = self.pop['vertical_habitat'].item()
                 if vertical_habitat_value == 'Pelagic':
@@ -1090,11 +1091,11 @@ class simulation():
                 # survival probability considering blade strike and barotrauma
                 baro_surv = 1. - baro_prob                
                 
-                logger.debug('calculated barotrauma survival')
+                #logger.debug('calculated barotrauma survival')
                 # incoporate latent mortality
                 latent_survival = beta.rvs(1.02, 0.371, size=1)[0]
                 #latent_survival = 1.
-                logger.debug('calculated latent survial')
+                #logger.debug('calculated latent survial')
                 
                 # calculate turbine survival estimate
                 prob = imp_surv_prob * strike_surv_prob * baro_surv * latent_survival
@@ -1759,7 +1760,7 @@ class simulation():
         op_order_dict = {}
         q_cap_dict = {}
         unit_fac_dict = {}
-        logger.debug('building unit dictionaries')
+        #logger.debug('building unit dictionaries')
         #print("Setting up unit parameters...", flush=True)
         for index, row in self.unit_params.iterrows():
             unit = index
@@ -1818,11 +1819,11 @@ class simulation():
             # Use the Location field as key (assuming ID equals Location).
             surv_dict[row['Location']] = row['Survival']
         #print("Survival dictionary created:", surv_dict, flush=True)
-        logger.debug('iterate over scenarios')
+        #logger.debug('iterate over scenarios')
         # Iterate over each flow scenario.
         for scen in self.flow_scenarios:
             #print(f"Starting scenario {scen} now", flush=True)
-            logger.debug('start assessing scenario')
+            #logger.debug('start assessing scenario')
             try:
                 scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
             except Exception:
@@ -1860,7 +1861,7 @@ class simulation():
                 if spc_dat.empty:
                     continue
                 
-                logger.info('Working on species %s',spc)
+                #logger.info('Working on species %s',spc)
                 # Extract lognormal parameters (in centimeters)
                 s = spc_dat.iat[0, spc_dat.columns.get_loc('length shape')]
                 len_loc = spc_dat.iat[0, spc_dat.columns.get_loc('length location')]
@@ -1920,7 +1921,7 @@ class simulation():
                         Q_dict['sta_cap'] = sta_cap
 
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
-                        logger.info('Q-Dict Built')
+                        #logger.info('Q-Dict Built')
                         
                         if np.any(tot_hours > 0):
                             presence_seed = np.random.uniform(0, 1)
@@ -1949,7 +1950,7 @@ class simulation():
                                 except Exception as e:
                                     U_crit_val = 0
                                 swim_speed = np.repeat(U_crit_val, len(population))
-                                logger.info('Population estimated')
+                                #logger.info('Population estimated')
                                 if len(self.nodes) > 1:
                                     fishes = pd.DataFrame({
                                         'scenario_num': np.repeat(scen_num, int(n)),
@@ -1975,7 +1976,7 @@ class simulation():
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
                                     
-                                logger.info('Starting movement')
+                                #logger.info('Starting movement')
                                 
                                 def scalarize(x):
                                     if isinstance(x, (list, np.ndarray)) and len(x) == 1:
@@ -1991,14 +1992,14 @@ class simulation():
                                         status = scalarize(status)
                                         surv_fun = scalarize(surv_fun)
                                         location = scalarize(location)
-                                        logger.debug('scalarized variables')
+                                        #logger.debug('scalarized variables')
                                         return self.node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict)
                                     except Exception as e:
                                         print(f"Failed node_surv_rate at location={location} with error: {e}")
                                         raise
                                 
                                 for k in self.moves:
-                                    logger.info(f'start movement for node {k}')  
+                                    #logger.info(f'start movement for node {k}')  
                                 
                                     if k == 0:
                                         status_arr = np.repeat(1, int(n))
@@ -2008,7 +2009,7 @@ class simulation():
                                     current_location = fishes[f'state_{k}'].values
                                     current_location = np.asarray(current_location).flatten()
                                 
-                                    logger.info(f'current location: {current_location}')
+                                    #logger.info(f'current location: {current_location}')
                                 
                                     def surv_fun_att(state, surv_fun_dict):
                                         return surv_fun_dict[state]['Surv_Fun']
@@ -2031,7 +2032,7 @@ class simulation():
                                     v_surv_rate = np.vectorize(safe_node_surv_rate, excluded=[5, 6])
                                     rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
                                 
-                                    logger.info('applied vectorized survival rate')
+                                    #logger.info('applied vectorized survival rate')
                                     survival = np.where(dice <= rates, 1, 0)
                                 
                                     if k < max(self.moves):
@@ -2048,7 +2049,7 @@ class simulation():
                                     else:
                                         move = current_location
                                 
-                                    logger.info('applied vectorized movement')
+                                    #logger.info('applied vectorized movement')
                                 
                                     fishes[f'draw_{k}'] = np.float32(dice)
                                     fishes[f'rates_{k}'] = np.float32(rates)
@@ -2057,9 +2058,9 @@ class simulation():
                                     if k < max(self.moves):
                                         fishes[f'state_{k+1}'] = np.asarray(move).astype(str)
                                 
-                                    logger.info('finished movement iteration')
+                                    #logger.info('finished movement iteration')
                                 
-                                logger.info('Finished movement')
+                                #logger.info('Finished movement')
 
    
                                 max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
