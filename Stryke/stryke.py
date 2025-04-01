@@ -1289,213 +1289,6 @@ class simulation():
 
         return str(new_loc)
 
- 
-    
-    # def movement(self,
-    #              location,
-    #              status, 
-    #              swim_speed, 
-    #              graph, 
-    #              intake_vel_dict,
-    #              Q_dict, 
-    #              op_order, 
-    #              cap_dict,
-    #              unit_fac_dict):
-    #     """
-    #     Simulates the movement of a fish through a hydroelectric project's
-    #     infrastructure, considering operational conditions, the fish's swimming
-    #     capabilities, and environmental requirements.
-    #     """
-    #     # print("\n--- Movement Function Called ---")
-    #     # print("Initial location:", location)
-    #     # print("Status:", status)
-    #     # print("Swim speed:", swim_speed)
-    #     # print("Q_dict:", Q_dict)
-    #     # print("op_order:", op_order)
-    #     # print("cap_dict:", cap_dict)
-    #     # print("unit_fac_dict:", unit_fac_dict)
-        
-    #     curr_Q = Q_dict['curr_Q']   # current discharge
-    #     min_Q_dict = Q_dict['min_Q']     # minimum operating discharge
-    #     sta_cap_dict = Q_dict['sta_cap'] # station capacity
-    #     env_Q_dict = Q_dict['env_Q']     # min environmental discharge 
-    #     bypass_Q_dict = Q_dict['bypass_Q'] # bypass discharge
-    
-    #     #print("Current Q:", curr_Q)
-        
-    #     if status == 1:
-    #         nbors = list(graph.neighbors(location))
-    #         #print("Neighbors of", location, ":", nbors)
-            
-    #         locs = []
-    #         probs = []
-            
-    #         if len(nbors) > 1:
-    #             # Diagnostic prints for neighbor checks
-    #             found_spill = np.char.find(nbors, "spill") >= 0
-    #             contains_U = np.char.find(nbors, "U") >= 0
-    #             # print("found_spill array:", found_spill)
-    #             # print("contains_U array:", contains_U)
-                
-    #             if np.any(contains_U):
-    #                 #print("Processing unit nodes based on contains_U")
-    #                 for i in nbors:
-    #                     #print("Processing neighbor:", i)
-    #                     try:
-    #                         facility = unit_fac_dict[i]
-    #                        # print("Facility from unit_fac_dict for", i, ":", facility)
-    #                     except Exception as e:
-    #                         #print("Could not get facility for", i, "from unit_fac_dict. Exception:", e)
-    #                         for j in nbors:
-    #                             if 'U' in j:
-    #                                 try:
-    #                                     facility = self.unit_params.at[j, 'Facility']
-    #                                     #print("Fallback facility for", j, ":", facility)
-    #                                 except Exception as ex:
-    #                                     logger.debug("Fallback failed for", j, "with exception:", ex)
-    #                                 continue
-    #                     sta_cap = sta_cap_dict[facility]
-    #                     min_Q = min_Q_dict[facility]
-    #                     env_Q = env_Q_dict[facility]
-    #                     bypass_Q = bypass_Q_dict[facility]
-    #                     #print("For facility", facility, "sta_cap:", sta_cap, "min_Q:", min_Q, "env_Q:", env_Q, "bypass_Q:", bypass_Q)
-                        
-    #                     if min_Q < curr_Q < sta_cap + bypass_Q:
-    #                         excess = curr_Q - (sta_cap + env_Q + bypass_Q)
-    #                         if excess >= 0:
-    #                             prod_Q = curr_Q - env_Q - bypass_Q - excess
-    #                         else:
-    #                             prod_Q = curr_Q - env_Q - bypass_Q
-    #                         #print("For", i, "prod_Q:", prod_Q)
-                            
-    #                         if i[0] == 'U':
-    #                             unit_cap = Q_dict[i]
-    #                             order = op_order[i]
-    #                             prev_units = []
-    #                             for u in op_order:
-    #                                 fac = unit_fac_dict[u]
-    #                                 if fac == facility:
-    #                                     if op_order[u] < order:
-    #                                         prev_units.append(u)
-    #                             #print("For", i, "prev_units:", prev_units)
-    #                             if len(prev_units) == 0:
-    #                                 if prod_Q >= Q_dict[i]:
-    #                                     u_Q = Q_dict[i]
-    #                                 else:
-    #                                     u_Q = prod_Q
-    #                             else:
-    #                                 prev_Q = sum(Q_dict[j] for j in prev_units)
-    #                                 if prev_Q >= prod_Q:
-    #                                     u_Q = 0.0
-    #                                 else:
-    #                                     u_Q = prod_Q - prev_Q
-    #                                     if u_Q > unit_cap:
-    #                                         u_Q = unit_cap
-    #                             #print("For", i, "u_Q:", u_Q)
-    #                             locs.append(i)
-    #                             prob_value = u_Q / (prod_Q + bypass_Q)
-    #                             probs.append(prob_value)
-    #                             #print("Appended probability for", i, ":", prob_value)
-    #                         else:
-    #                             locs.append(i)
-    #                             prob_value = bypass_Q / (prod_Q + bypass_Q)
-    #                             probs.append(prob_value)
-    #                             #print("Appended probability for bypass", i, ":", prob_value)
-    #                     elif curr_Q >= sta_cap + bypass_Q:
-    #                         excess = curr_Q - (sta_cap + bypass_Q + env_Q)
-    #                         #print("For", i, "excess:", excess)
-    #                         if i[0] == 'U':
-    #                             q_cap = cap_dict[i]
-    #                             locs.append(i)
-    #                             prob_value = q_cap / (sta_cap + bypass_Q)
-    #                             probs.append(prob_value)
-    #                             #print("Appended probability for", i, ":", prob_value)
-    #                         else:
-    #                             locs.append(i)
-    #                             prob_value = bypass_Q / (sta_cap + bypass_Q)
-    #                             probs.append(prob_value)
-    #                             #print("Appended probability for bypass", i, ":", prob_value)
-    #             elif np.any(found_spill):
-    #                 #print("Processing spill nodes")
-    #                 for i in nbors:
-    #                     if 'spill' in i:
-    #                         facilities = self.facility_params[self.facility_params.Spillway == i].index
-    #                         #print("Facilities for spill", i, ":", facilities)
-    #                 sta_cap = 0 
-    #                 min_Q = 0 
-    #                 env_Q = 0
-    #                 bypass_Q = 0
-    #                 for i in facilities:
-    #                     sta_cap_fac = sta_cap_dict[i]
-    #                     min_Q_fac =  min_Q_dict[i]
-    #                     env_Q_fac = env_Q_dict[i]
-    #                     bypass_Q_fac = bypass_Q_dict[i]
-    #                     sta_cap += sta_cap_fac
-    #                     min_Q += min_Q_fac
-    #                     env_Q += env_Q_fac
-    #                     bypass_Q += bypass_Q_fac
-    #                 #print("Aggregated for spill: sta_cap:", sta_cap, "min_Q:", min_Q, "env_Q:", env_Q, "bypass_Q:", bypass_Q)
-    #                 for i in nbors:
-    #                     if curr_Q <= min_Q:
-    #                         if 'spill' in i:
-    #                             locs.append(i)  
-    #                             probs.append(1.)
-    #                             #print("For", i, "appended prob 1 (curr_Q <= min_Q)")
-    #                         else:
-    #                             locs.append(i)
-    #                             probs.append(0.)
-    #                     elif curr_Q >= np.sum(list(sta_cap_dict.values())) + env_Q + bypass_Q:
-    #                         excess = curr_Q - np.sum(list(sta_cap_dict.values())) - bypass_Q - env_Q
-    #                         tot_spill = excess + env_Q
-    #                         p_spill = tot_spill / curr_Q
-    #                         if 'spill' in i:
-    #                             locs.append(i)  
-    #                             probs.append(p_spill)
-    #                             #print("For", i, "appended p_spill:", p_spill)
-    #                         else:
-    #                             locs.append(i)
-    #                             probs.append(1 - p_spill)
-    #                     elif curr_Q < np.sum(list(sta_cap_dict.values())) + env_Q + bypass_Q:
-    #                         p_env = env_Q / curr_Q
-    #                         if 'spill' in i:
-    #                             locs.append(i)  
-    #                             probs.append(p_env)
-    #                             #print("For", i, "appended p_env:", p_env)
-    #                         else:
-    #                             locs.append(i)
-    #                             probs.append(1 - p_env)
-    #             else:
-    #                 #print("Using edge weights for movement")
-    #                 for i in nbors:
-    #                     locs.append(i)
-    #                     edge_weight = graph[location][i]["weight"]
-    #                     probs.append(edge_weight)
-    #                     #print("For", i, "edge weight:", edge_weight)
-    #         elif len(nbors) == 1:
-    #             locs.append(nbors[0])
-    #             probs.append(1)
-    #             #print("Only one neighbor; locs:", locs, "probs:", probs)
-    #         else:
-    #             locs.append(location)
-    #             probs.append(1)
-    #             #print("No neighbors; locs:", locs, "probs:", probs)
-        
-    #         #print("Final locs list:", locs)
-    #         #print("Final probs list:", probs)
-    #         try:
-    #             new_loc = np.random.choice(locs, 1, p=probs)[0]
-    #             #print("Chosen new location:", new_loc)
-    #         except Exception as e:
-    #             #print('Problem with movement function during np.random.choice:', e)
-    #             new_loc = location
-    #     else:
-    #         #print("Fish is dead; remains at location.")
-    #         new_loc = location
-            
-    #     #print("--- Movement Function End ---\n")
-    #     return new_loc
-
-
     def speed (L,A,M):
         """
         Calculates swimming speed based on fish length, caudal fin aspect ratio,
@@ -2019,10 +1812,8 @@ class simulation():
                 ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario'] == scenario]
             except Exception:
                 logger.warning('Scenario not in operating scenarios')
-#            print(f"Scenario {scen}: Operating scenarios extracted.", flush=True)
             
             species = self.pop.Species.unique() #[self.pop['Scenario'] == scenario].Species.unique()
-#            print(f"Scenario {scen}: Species identified: {species}", flush=True)
             
             # Create hydrograph for this scenario.
             if self.discharge_type == 'hydrograph':
@@ -2030,13 +1821,9 @@ class simulation():
             else:
                 fixed_discharge = scen_df.iat[0, scen_df.columns.get_loc('Flow')]
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df, fixed_discharge=fixed_discharge)
-#            print(f"Completed Discharge Scenario {scen} Setup using a {self.discharge_type} flow", flush=True)
-            #logger.debug('iterate over species')
             for spc in species:
-#                print(f"Starting species {spc} scenario {scen}", flush=True)
                 spc_dat = self.pop[(self.pop['Scenario'] == scenario) & (self.pop.Species == spc)]
                 if spc_dat.empty:
-#                    print(f"No population data for species {spc} in scenario {scenario}", flush=True)
                     continue
                 
                 #logger.info('Working on spcies %s',spc)
@@ -2056,21 +1843,12 @@ class simulation():
                 occur_prob = spc_dat.iat[0, spc_dat.columns.get_loc('occur_prob')]
                 if math.isnan(occur_prob):
                     occur_prob = 1.0
-    
-#                print(f"Species parameters for {species_name}:", flush=True)
-#                 print(f"  s: {s}, len_loc: {len_loc}, len_scale: {len_scale}", flush=True)
-#                 print(f"  Mean length: {mean_len}, SD: {sd_len}", flush=True)
-#                 print(f"  Iterations: {iterations}, Occurrence probability: {occur_prob}", flush=True)
-    
+        
                 spc_length = pd.DataFrame()
-                #logger.debug('now iterate over the iterations!')
                 for i in np.arange(0, iterations, 1):
-                    #logger.info('Building Q-Dict')
-#                    print(f"Starting iteration {i} for species {spc}", flush=True)
                     for flow_row in flow_df.iterrows():
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
                         day = flow_row[1]['datetimeUTC']
-#                        print(f"Flow row - Day: {day}, Current Q: {curr_Q}", flush=True)
     
                         # Build Q_dict.
                         Q_dict = {'curr_Q': curr_Q}
@@ -2084,7 +1862,6 @@ class simulation():
                                 env_Q_dict[fac] = row['Env_Flow']
                                 bypass_Q_dict[fac] = row['Bypass_Flow']
                         else:
-                            #logger.debug('Scenario not in facility parameters')
                             for index, row in self.facility_params.iterrows():
                                 fac = index
                                 min_Q_dict[fac] = row['Min_Op_Flow']
@@ -2096,7 +1873,7 @@ class simulation():
     
                         # Update Q_dict and sta_cap for units.
                         sta_cap = {}
-                        #logger.debug('there are this many units %s', units)
+
                         for u in units:
                             u_param_dict[u]['Q'] = curr_Q
                             unit_df = self.unit_params.loc[[u]]
@@ -2105,50 +1882,37 @@ class simulation():
                                 sta_cap[fac] = 0
                             Q_dict[u] = unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
                             sta_cap[fac] += unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
-                        #logger.debug ('cycled through units, added to q-dict')
+
                         Q_dict['sta_cap'] = sta_cap
-                        # print("Q_dict and sta_cap built:", flush=True)
-                        # print("  Q_dict:", Q_dict, flush=True)
-                        # print("  sta_cap:", sta_cap, flush=True)
-                        #logger.debug ('bout to start daily hours')
+
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
- #                       print(f"Total hours: {tot_hours}", flush=True)
                         logger.info('Q-Dict Built')
                         
                         if np.any(tot_hours > 0):
                             presence_seed = np.random.uniform(0, 1)
-#                            print(f"Presence seed: {presence_seed}", flush=True)
                             if occur_prob >= presence_seed:
                                 if math.isnan(spc_dat.iat[0, spc_dat.columns.get_loc('shape')]):
                                     n = int(spc_dat.iat[0, spc_dat.columns.get_loc('Fish')])
                                 else:
                                     n = self.population_sim(self.output_units, spc_dat, curr_Q)
-#                               print(f"Calculated number of fish (n): {n}", flush=True)
                                 if int(n) == 0:
                                     n = 1
-#                                   print("n adjusted to 1 because initial value was 0", flush=True)
     
                                 try:
                                     if not math.isnan(s):
-                                        # print("Generating population using lognorm.rvs", flush=True)
-                                        # print(f"  Parameters: s={s}, len_loc={len_loc}, len_scale={len_scale}, n={int(n)}", flush=True)
                                         population = np.abs(lognorm.rvs(s, len_loc, len_scale, int(n), random_state=rng))
                                         population = np.where(population > 150, 150, population)
                                         population = population * 0.0328084  # convert cm to feet
                                     else:
                                         print("Generating population using normal distribution", flush=True)
-                                        population = np.abs(np.random.normal(mean_len, sd_len, int(n))) / 12.0
-                                    # print(f"Population of {len(population)} created for species {species_name} on day {day}", flush=True)
+                                        population = np.abs(np.random.normal(mean_len, sd_len, int(n))) / 12.0                                    # print(f"Population of {len(population)} created for species {species_name} on day {day}", flush=True)
                                 except Exception as e:
-                                    # print("Error generating population for species", species_name, flush=True)
-                                    # print(f"Parameters: s={s}, len_loc={len_loc}, len_scale={len_scale}, n={n}", flush=True)
-                                    # print("Exception:", e, flush=True)
+
                                     continue
     
                                 try:
                                     U_crit_val = spc_dat.iat[0, spc_dat.columns.get_loc('U_crit')]
                                 except Exception as e:
-#                                    print("Error retrieving U_crit for species", species_name, flush=True)
                                     U_crit_val = 0
                                 swim_speed = np.repeat(U_crit_val, len(population))
                                 logger.info('Population estimated')
@@ -2176,7 +1940,6 @@ class simulation():
                                         'population': np.float32(population),
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
-#                                print(f"Fish DataFrame created with {len(fishes)} rows", flush=True)
                                 logger.info('Starting movement')
 
                                 # Process movement and survival for each movement step.
@@ -2274,9 +2037,6 @@ class simulation():
                                 daily_row_dict['num_entrained'] = total_entrained
                                 daily_row_dict['num_survived'] = total_survived_entrained
     
-                                # logger.debug("Total fish: %d | Entrained: %d | Survived entrainment: %d",
-                                #              len(fishes), total_entrained, total_survived_entrained)    
-    
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 daily.to_hdf(self.hdf,
                                              key='Daily',
@@ -2289,7 +2049,6 @@ class simulation():
                                     curr_Q_report = curr_Q * 0.02831683199881
                                 else:
                                     curr_Q_report = curr_Q
-#                                print(f"No fish present on day {day} (occurrence check failed)", flush=True)
                                 daily_row_dict = {
                                     'species': ['{:50}'.format(spc)],
                                     'scenario': ['{:50}'.format(scenario)],
