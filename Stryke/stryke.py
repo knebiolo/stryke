@@ -1737,7 +1737,7 @@ class simulation():
         op_order_dict = {}
         q_cap_dict = {}
         unit_fac_dict = {}
-        #logger.debug('building unit dictionaries')
+        logger.debug('building unit dictionaries')
         #print("Setting up unit parameters...", flush=True)
         for index, row in self.unit_params.iterrows():
             unit = index
@@ -1796,11 +1796,11 @@ class simulation():
             # Use the Location field as key (assuming ID equals Location).
             surv_dict[row['Location']] = row['Survival']
         #print("Survival dictionary created:", surv_dict, flush=True)
-        #logger.debug('iterate over scenarios')
+        logger.debug('iterate over scenarios')
         # Iterate over each flow scenario.
         for scen in self.flow_scenarios:
             #print(f"Starting scenario {scen} now", flush=True)
-            #logger.debug('start assessing scenario')
+            logger.debug('start assessing scenario')
             try:
                 scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
             except Exception:
@@ -1838,7 +1838,7 @@ class simulation():
                 if spc_dat.empty:
                     continue
                 
-                #logger.info('Working on spcies %s',spc)
+                logger.info('Working on species %s',spc)
                 # Extract lognormal parameters (in centimeters)
                 s = spc_dat.iat[0, spc_dat.columns.get_loc('length shape')]
                 len_loc = spc_dat.iat[0, spc_dat.columns.get_loc('length location')]
