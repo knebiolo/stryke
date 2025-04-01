@@ -1951,6 +1951,18 @@ class simulation():
                                         status_arr = fishes[f'survival_{k-1}'].values
     
                                     current_location = fishes[f'state_{k}'].values
+                                    # Fix case where current_location entries are lists or stringified lists
+                                    def clean_location(loc):
+                                        if isinstance(loc, list) and len(loc) == 1:
+                                            return loc[0]
+                                        elif isinstance(loc, str) and loc.startswith("[") and loc.endswith("]"):
+                                            # It's a stringified list — remove brackets and quotes
+                                            return loc.strip("[]").strip("'").strip('"')
+                                        return loc
+                                    
+                                    v_clean = np.vectorize(clean_location)
+                                    current_location = v_clean(current_location)
+
                                     logger.info(f'current location: {current_location}')
                                     
                                     def surv_fun_att(state, surv_fun_dict):
@@ -1966,6 +1978,7 @@ class simulation():
     
                                     v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[5,6])
                                     rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
+                                    
                                     logger.info('applied vectorized survival rate')
                                     survival = np.where(dice <= rates, 1, 0)
     
@@ -1980,7 +1993,8 @@ class simulation():
                                     fishes[f'rates_{k}'] = np.float32(rates)
                                     fishes[f'survival_{k}'] = np.float32(survival)
                                     if k < max(self.moves):
-                                        fishes.loc[k, f'state_{k+1}'] = str(move)
+                                        fishes.loc[:, f'state_{k+1}'] = np.vectorize(lambda m: m if isinstance(m, str) else str(m))(move)
+
                                     logger.info('finished movement iteration')
                                         
                                 logger.info('Finished movement')
