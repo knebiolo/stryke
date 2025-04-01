@@ -561,8 +561,8 @@ def process_hydrograph_data(raw_data):
     # Convert the datetime column to proper datetime format.
     # This step can be adjusted to handle non-standard datetime formats.
     df['datetimeUTC'] = pd.to_datetime(df['datetimeUTC'], errors='coerce', infer_datetime_format=True)
-    print ('hydrograph before to numeric:')
-    print (df)    
+    #print ('hydrograph before to numeric:')
+    #print (df)    
     # Convert discharge values to numeric.
     df['DAvgFlow_prorate'] = pd.to_numeric(df['DAvgFlow_prorate'], errors='coerce')
     
@@ -571,8 +571,8 @@ def process_hydrograph_data(raw_data):
     
     # Set the datetime column as the index if that is required downstream.
     #df.set_index('datetimeUTC', inplace=True)
-    print ('hydrograph:')
-    print (df)
+    #print ('hydrograph:')
+    #print (df)
     return df
 
 @app.route('/flow_scenarios', methods=['GET', 'POST'])
@@ -654,8 +654,8 @@ def flow_scenarios():
             })
         
         # Debug print the flow scenario DataFrame.
-        print("DEBUG: Flow scenario DataFrame:")
-        print(flow_scenario_df, flush=True)
+        #print("DEBUG: Flow scenario DataFrame:")
+        #print(flow_scenario_df, flush=True)
         
         # Store the flow scenario in session.
         session['flow_scenario'] = flow_scenario_df.to_dict(orient='records')
@@ -682,7 +682,7 @@ def sync_simulation_mode():
 @app.route('/facilities', methods=['GET', 'POST'])
 def facilities():
     if request.method == 'POST':
-        print("POST form data:", request.form)
+        #print("POST form data:", request.form)
 
         # Determine simulation mode and number of facilities.
         sim_mode = session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing')
@@ -783,8 +783,8 @@ def facilities():
         return redirect(url_for('unit_parameters'))  # Adjust for next page as needed.
 
         # Debug print the flow scenario DataFrame.
-        print("DEBUG: Facilities DataFrame:")
-        print(facilities_data, flush=True)
+        #print("DEBUG: Facilities DataFrame:")
+        #print(facilities_data, flush=True)
 
     units = session.get('units', 'metric')
     scenario = session.get('scenario_name', 'Unknown Scenario')
@@ -794,9 +794,9 @@ def facilities():
 @app.route('/unit_parameters', methods=['GET', 'POST'])
 def unit_parameters():
     if request.method == 'POST':
-        print("Received form data:")
-        for key, value in request.form.items():
-            print(f"{key} : {value}")
+        # print("Received form data:")
+        # for key, value in request.form.items():
+        #     print(f"{key} : {value}")
 
         # Merge form data into rows (each row represents one unit's parameters)
         rows = {}
@@ -807,15 +807,15 @@ def unit_parameters():
             field_name, row_id = parts
             # Remove any trailing underscore and digits from field_name
             clean_field_name = re.sub(r'_\d+$', '', field_name)
-            print(f"Key: {key} split into clean_field_name: {clean_field_name} and row_id: {row_id}")
+            #print(f"Key: {key} split into clean_field_name: {clean_field_name} and row_id: {row_id}")
             if row_id.isdigit():
                 if row_id not in rows:
                     rows[row_id] = {}
                 rows[row_id][clean_field_name] = value
 
-        print("Merged rows:")
-        for row_id, data in rows.items():
-            print(f"Row {row_id}: {data}")
+        # print("Merged rows:")
+        # for row_id, data in rows.items():
+        #     print(f"Row {row_id}: {data}")
 
         # Convert merged rows to a list of dictionaries.
         unit_parameters_raw = list(rows.values())
@@ -880,8 +880,8 @@ def unit_parameters():
         
         session['unit_params_file'] = unit_params_path
 
-        print("DEBUG: Unit Parameters DataFrame:")
-        print(df_units, flush=True)
+        # print("DEBUG: Unit Parameters DataFrame:")
+        # print(df_units, flush=True)
         
         flash("Unit parameters saved successfully!")
         return redirect(url_for('operating_scenarios'))
@@ -1069,8 +1069,8 @@ def operating_scenarios():
         flash("Operating scenarios saved successfully!")
         return redirect(url_for('graph_editor'))  # Replace with your next route as needed.
     
-        print("DEBUG: Operating Scenarios DataFrame:")
-        print(df_os, flush=True)
+        # print("DEBUG: Operating Scenarios DataFrame:")
+        # print(df_os, flush=True)
         
     return render_template('operating_scenarios.html')
 
@@ -1160,8 +1160,8 @@ def save_graph():
     session['nodes_data'] = summary_nodes
     session['edges_data'] = summary_edges
 
-    print("Saved Nodes:", list(G.nodes), flush = True)
-    print("Saved Edges:", list(G.edges), flush = True)
+    # print("Saved Nodes:", list(G.nodes), flush = True)
+    # print("Saved Edges:", list(G.edges), flush = True)
 
     return jsonify(success=True, summary=session['graph_summary'])
 
@@ -2344,8 +2344,8 @@ def population():
         beta_0 = request.form.get('beta_0')
         beta_1 = request.form.get('beta_1')
         
-        print("Basic Info: species_name=%s, common_name=%s, scenario=%s, simulate_choice=%s, iterations=%s, vertical_habitat=%s, beta_0=%s, beta_1=%s" %
-              (species_name, common_name, scenario, simulate_choice, iterations, vertical_habitat, beta_0, beta_1), flush=True)
+        # print("Basic Info: species_name=%s, common_name=%s, scenario=%s, simulate_choice=%s, iterations=%s, vertical_habitat=%s, beta_0=%s, beta_1=%s" %
+        #       (species_name, common_name, scenario, simulate_choice, iterations, vertical_habitat, beta_0, beta_1), flush=True)
         
         pop_data = {
             "Species": species_name,
@@ -2476,7 +2476,7 @@ def population():
             length_sd_in = None
         pop_data["Length_sd"] = length_sd_in
         
-        print("Final pop_data before DataFrame creation:", pop_data, flush=True)
+        #print("Final pop_data before DataFrame creation:", pop_data, flush=True)
         
         #session['population_data'] = pop_data
         
