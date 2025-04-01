@@ -1207,7 +1207,7 @@ class simulation():
             return location  # Fish is dead
     
         nbors = np.array(list(graph.neighbors(location)), dtype=str)
-        logger.debug(f'neighbors: {nbors}')
+        #logger.debug(f'neighbors: {nbors}')
         if nbors.size == 0:
             return location
 
@@ -1274,7 +1274,7 @@ class simulation():
             total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities)
 
             for i in nbors:
-                logger.debug(f"neighbor: {i}")
+                #logger.debug(f"neighbor: {i}")
                 if 'U' in i:  # Only unit nodes have min_Q
                     min_Q = min_Q_dict.get(i, 0.0)
                     if curr_Q <= min_Q:
