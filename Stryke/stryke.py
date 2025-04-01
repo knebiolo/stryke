@@ -986,6 +986,7 @@ class simulation():
                 except:
                     logger.debug (f'Problem with a priori survival function for {route}')
                     print(surv_dict, flush = True)
+                    prob = 1.
     
             else:
                 param_dict = u_param_dict[route]
@@ -1068,7 +1069,7 @@ class simulation():
             try:
                 return np.float32(prob)
             except:
-                logger.debug ('check')
+                logger.debug (f'check, {prob} cant be converted to number')
     
     # create function that builds networkx graph object from nodes and edges in project database
     def create_route(self):
