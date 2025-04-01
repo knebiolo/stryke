@@ -1968,6 +1968,7 @@ class simulation():
                                         status = scalarize(status)
                                         surv_fun = scalarize(surv_fun)
                                         location = scalarize(location)
+                                        logger.debug('scalarized variables')
                                         return self.node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict)
                                     except Exception as e:
                                         print(f"Failed node_surv_rate at location={location} with error: {e}")
