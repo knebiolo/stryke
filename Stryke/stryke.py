@@ -1984,8 +1984,25 @@ class simulation():
                                     survival = np.where(dice <= rates, 1, 0)
     
                                     if k < max(self.moves):
-                                        v_movement = np.vectorize(self.movement, excluded=[3,4,5,6,7,8])
-                                        move = v_movement(current_location, survival, swim_speed, self.graph, intake_vel_dict, Q_dict, op_order_dict, q_cap_dict, unit_fac_dict)
+                                        print("current_location:", current_location, "shape:", current_location.shape)
+                                        print("survival:", survival, "shape:", survival.shape)
+                                        print("swim_speed:", swim_speed, "shape:", np.shape(swim_speed))
+                                        def safe_movement(location, status, speed):
+                                            # Ensure we are passing only scalars
+                                            if isinstance(location, (np.ndarray, list)):
+                                                location = location[0] if len(location) == 1 else location
+                                            if isinstance(status, (np.ndarray, list)):
+                                                status = status[0] if len(status) == 1 else status
+                                            if isinstance(speed, (np.ndarray, list)):
+                                                speed = speed[0] if len(speed) == 1 else speed
+                                        
+                                            return self.movement(location, status, speed,
+                                                                 self.graph, intake_vel_dict, Q_dict,
+                                                                 op_order_dict, q_cap_dict, unit_fac_dict)
+                                        
+                                        v_movement = np.vectorize(safe_movement)
+                                        move = v_movement(current_location, survival, swim_speed)
+
                                     else:
                                         move = current_location
                                     logger.info('applied vectorized movement')
