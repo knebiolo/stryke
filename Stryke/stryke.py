@@ -1311,9 +1311,9 @@ class simulation():
         else:
             probs = np.ones(len(probs)) / len(probs)
             
-        print("locs:", locs)
-        print("probs:", probs)
-        print("probs shape:", probs.shape)
+        # print("locs:", locs)
+        # print("probs:", probs)
+        # print("probs shape:", probs.shape)
 
         try:
             new_loc = np.random.choice(locs, p=probs).item()
