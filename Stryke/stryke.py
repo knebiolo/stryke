@@ -982,13 +982,7 @@ class simulation():
         status = scalarize(status)
         surv_fun = scalarize(surv_fun)
         route = scalarize(route)
-        # print ('debug node survival rate')
-        # print (f'population: {length}')
-        # print (f'status: {status}')
-        # print (f'surv_fun: {surv_fun}')
-        # print (f'location: {route}')
-        # print (f'surv_dict: {surv_dict}')
-        # print (f'u_param_dict: {u_param_dict}')
+
     
         if status == 0:
             return 0.0
@@ -1015,6 +1009,8 @@ class simulation():
                 else:
                     imp_surv_prob = 1.
 
+                logger.debug('calculated impingement survival')
+                
                 # if survival is assessed at a Kaplan turbine:
                 if surv_fun == 'Kaplan':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
@@ -1035,6 +1031,7 @@ class simulation():
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
                     strike_surv_prob = self.Pump(length, param_dict)
                     
+                logger.debug ('calculated unit survival')
                 # assess barotrauma survival
 
                 #if not np.isnan(self.pop['beta_0']).item() or not np.isnan(self.pop['beta_1']).item(): # fish is affected by barotrauma
@@ -1071,11 +1068,11 @@ class simulation():
 
                 else: # "no immediate mortality was observed over the tested range"
                     baro_surv_prob = 1.
-                    
+                logger.debug('calculated barotrauma survival')
                 # incoporate latent mortality
                 latent_survival = beta.rvs(1.02, 0.371, size=1)[0]
                 #latent_survival = 1.
-                
+                logger.debug('calculated latent survial')
                 
                 # calculate turbine survival estimate
                 prob = imp_surv_prob * strike_surv_prob * baro_surv_prob * latent_survival
