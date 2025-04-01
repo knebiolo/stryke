@@ -1073,7 +1073,7 @@ class simulation():
                     baro_surv_prob = 1.
                     
                 # incoporate latent mortality
-                latent_survival = beta.rvs(1.02, 0.371, size=1)
+                latent_survival = beta.rvs(1.02, 0.371, size=1)[0]
                 #latent_survival = 1.
                 
                 
