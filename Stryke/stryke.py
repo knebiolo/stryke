@@ -934,7 +934,7 @@ class simulation():
         # calculate survival rate
         endpoint = baro_surv_prob(p_ratio, beta_0, beta_1)
 
-        return endpoint
+        return scalarize(endpoint)
 
     def node_surv_rate(self,
                        length,
