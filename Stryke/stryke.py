@@ -969,6 +969,19 @@ class simulation():
         different turbine types, providing a versatile tool for assessing fish
         survival in hydroelectric project simulations.
         """
+        def scalarize(x):
+            if isinstance(x, (np.ndarray, list)) and len(x) == 1:
+                return x[0]
+            if hasattr(x, "item") and np.ndim(x) == 0:
+                return x.item()
+            return x
+        
+        # Patch all scalar args
+        length = scalarize(length)
+        u_crit = scalarize(u_crit)
+        status = scalarize(status)
+        surv_fun = scalarize(surv_fun)
+        route = scalarize(route)
         # print ('debug node survival rate')
         # print (f'population: {length}')
         # print (f'status: {status}')
