@@ -2172,7 +2172,7 @@ class simulation():
 
                                 # Process movement and survival for each movement step.
                                 for k in self.moves:
-                                    logger.info('start movement iteration for ',k)
+                                    logger.info(f'start movement iteration for {k}')  
                                     if k == 0:
                                         status_arr = np.repeat(1, int(n))
                                     else:
@@ -2187,19 +2187,9 @@ class simulation():
                                     try:
                                         surv_fun = v_surv_fun(current_location, self.surv_fun_dict)
                                     except Exception as e:
-                                        # print("Error vectorizing survival function for locations:", current_location, flush=True)
-                                        # print("Survival function dictionary:", self.surv_fun_dict, flush=True)
-                                        # print("Exception:", e, flush=True)
                                         surv_fun = np.repeat("a priori", len(current_location))
                                     
                                     dice = np.random.uniform(0.0, 1.0, int(n))
-                                    # print("Debug - Node survival rates:", flush=True)
-                                    # print(f"  Population: {population}", flush=True)
-                                    # print(f"  Status: {status_arr}", flush=True)
-                                    # print(f"  Survival function: {surv_fun}", flush=True)
-                                    # print(f"  Location: {current_location}", flush=True)
-                                    # print(f"  Survival dict: {surv_dict}", flush=True)
-                                    # print(f"  Unit param dict: {u_param_dict}", flush=True)
     
                                     v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[5,6])
                                     rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
@@ -2222,7 +2212,6 @@ class simulation():
                                         
                                 logger.info('Finished movement')
     
-#                                print("Movement successfully simulated for iteration", i, flush=True)
                                 max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
                                 fishes.to_hdf(self.hdf,
                                               key=f'simulations/{scen}/{spc}',
