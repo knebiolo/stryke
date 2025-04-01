@@ -416,12 +416,19 @@ class simulation():
             logger.info("NodeNotFound:")
         
         if len(self.nodes) > 1:
-            paths = nx.all_shortest_paths(G, 'river_node_0', 'river_node_1')
-            max_len = max(len(path) for path in paths)
-            self.moves = np.arange(0, max_len + 1, 1)
+            try:
+                paths = list(nx.all_shortest_paths(G, 'river_node_0', 'river_node_1'))
+                max_len = max(len(path) for path in paths)
+                self.moves = np.arange(0, max_len + 1, 1)
+            except nx.NetworkXNoPath:
+                logger.warning("No path found between river_node_0 and river_node_1.")
+                self.moves = np.zeros(1, dtype=np.int32)
         else:
             self.moves = np.zeros(1, dtype=np.int32)
         self.graph = G
+        
+
+
         
         # 3. Unit Parameters.
         if "unit_parameters_file" in data_dict:
@@ -977,7 +984,7 @@ class simulation():
                 try:
                     prob = surv_dict[route]
                 except:
-                    logger.debug ('Problem with a priori survival function')
+                    logger.debug (f'Problem with a priori survival function for {route}')
                     print(surv_dict, flush = True)
     
             else:
@@ -1165,7 +1172,7 @@ class simulation():
             return location  # Fish is dead
     
         nbors = np.array(list(graph.neighbors(location)), dtype=str)
-
+        logger.debug(f'neighbors: {nbors}')
         if nbors.size == 0:
             return location
 
@@ -1232,6 +1239,7 @@ class simulation():
             total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities)
 
             for i in nbors:
+                logger.debug(f"neighbor: {i}")
                 if 'U' in i:  # Only unit nodes have min_Q
                     min_Q = min_Q_dict.get(i, 0.0)
                     if curr_Q <= min_Q:
