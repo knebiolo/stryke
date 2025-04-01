@@ -872,6 +872,22 @@ class simulation():
         Returns:
         - endpoint (array): an array of survival probabilities for each fish depth
         """
+        def scalarize(x):
+            if isinstance(x, (np.ndarray, list)) and len(x) == 1:
+                return x[0]
+            if hasattr(x, "item") and np.ndim(x) == 0:
+                return x.item()
+            return x
+        discharge = scalarize(discharge)
+        K = scalarize(K)
+        ps_diameter = scalarize(ps_diameter)
+        ps_length = scalarize(ps_length)
+        v_head = scalarize(v_head)
+        fish_depth = scalarize(fish_depth)
+        h_D = scalarize(h_D)
+        h_2 = scalarize(h_2)
+        beta_0 = scalarize(beta_0)
+        beta_1 = scalarize(beta_1)
         
         # calc penstock area from diameter input
         a = np.pi * (ps_diameter/2)**2
