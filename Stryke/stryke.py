@@ -2181,14 +2181,15 @@ class simulation():
 
                                 # Process movement and survival for each movement step.
                                 for k in self.moves:
-                                    logger.info(f'start movement iteration for {k}')  
+                                    logger.info(f'start movement for node {k}')  
                                     if k == 0:
                                         status_arr = np.repeat(1, int(n))
                                     else:
                                         status_arr = fishes[f'survival_{k-1}'].values
     
                                     current_location = fishes[f'state_{k}'].values
-    
+                                    logger.info(f'current location: {current_location}')
+                                    
                                     def surv_fun_att(state, surv_fun_dict):
                                         return surv_fun_dict[state]['Surv_Fun']
     
