@@ -1049,41 +1049,47 @@ class simulation():
                     
                 logger.debug ('calculated unit survival')
                 # assess barotrauma survival
-
-                #if not np.isnan(self.pop['beta_0']).item() or not np.isnan(self.pop['beta_1']).item(): # fish is affected by barotrauma
-                if all(not np.isnan(self.pop[key]).item() for key in ['beta_0', 'beta_1']) and \
-                    all(not np.isnan(self.unit_params[key]).item() for key in ['fb_depth', 'ps_length', 'roughness', 'submergence_depth', 'elevation_head']):
                 
-                    # get fish depth
-                    vertical_habitat_value = self.pop['vertical_habitat'].item()
-                    if vertical_habitat_value == 'Pelagic':
-                        d_1 = 0.01
-                        d_2 = 0.33
-                    elif vertical_habitat_value == 'Benthic':
-                        d_1 = 0.8
-                        d_2 = 1
-                    else:
-                        d_1 = 0.01
-                        d_2 = 1
-                    depth_1 = self.unit_params['fb_depth'][route] * d_1
-                    depth_2 = self.unit_params['fb_depth'][route] * d_2
+                # get fish depth
+                vertical_habitat_value = self.pop['vertical_habitat'].item()
+                if vertical_habitat_value == 'Pelagic':
+                    d_1 = 0.01
+                    d_2 = 0.33
+                elif vertical_habitat_value == 'Benthic':
+                    d_1 = 0.8
+                    d_2 = 1
+                else:
+                    d_1 = 0.01
+                    d_2 = 1
                     
-                    baro_prob = self.barotrauma(self.unit_params['Qopt'][route], # discharge - is this another place?
-                                                self.unit_params['roughness'][route], # K - roughness value
-                                                self.unit_params['ps_D'][route], # penstock diameter
-                                                self.unit_params['ps_length'][route], # penstock length
-                                                self.unit_params['intake_vel'][route], # velocity head at turbine inlet
-                                                np.random.uniform(depth_1,depth_2,1)[0], # fish depths unifrom random within depth range
-                                                self.unit_params['submergence_depth'][route], # submergence depth of the draft tube outlet
-                                                self.unit_params['elevation_head'][route], # elevation head at the downstream point
-                                                self.pop['beta_0'].item(),
-                                                self.pop['beta_1'].item())
-                    
-                    # survival probability considering blade strike and barotrauma
-                    baro_surv_prob = 1. - baro_prob
+                # get regression slope and intercept (beta 1 and beta 0)
+                beta_0 = self.pop['beta_0'].item()
+                beta_1 = self.pop['beta_1'].item()
+                
+                # get forebay depth and create depth range for habitat preference
+                depth_1 = self.unit_params['fb_depth'][route] * d_1 * 0.3048
+                depth_2 = self.unit_params['fb_depth'][route] * d_2 * 0.3048
+                fish_depth = np.random.uniform(depth_1,depth_2,1)[0]
+                
+                # get submergence depth 
+                h_D = self.unit_params['submergence_depth'][route]
+                
+                # get constants
+                g = constants.g
+                p_atm = constants.atm
+                density = 998.2 # kg/m^3 for water @ 20C
 
-                else: # "no immediate mortality was observed over the tested range"
-                    baro_surv_prob = 1.
+                # calculate pressure ratio
+                p_1 = p_atm + density*g*fish_depth
+                p_2 = p_atm + density*g*h_D
+                p_ratio = p_1/p_2
+                
+                # calculate survival rate
+                baro_prob = baro_surv_prob(p_ratio, beta_0, beta_1)
+
+                # survival probability considering blade strike and barotrauma
+                baro_surv = 1. - baro_prob                
+                
                 logger.debug('calculated barotrauma survival')
                 # incoporate latent mortality
                 latent_survival = beta.rvs(1.02, 0.371, size=1)[0]
@@ -1091,7 +1097,7 @@ class simulation():
                 logger.debug('calculated latent survial')
                 
                 # calculate turbine survival estimate
-                prob = imp_surv_prob * strike_surv_prob * baro_surv_prob * latent_survival
+                prob = imp_surv_prob * strike_surv_prob * baro_surv * latent_survival
                 prob = scalarize(prob)
             try:
                 return np.float32(prob)
