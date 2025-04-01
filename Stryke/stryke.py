@@ -1943,79 +1943,81 @@ class simulation():
                                     })
                                 logger.info('Starting movement')
 
+                                logger.info('Starting movement')
+                                
                                 # Process movement and survival for each movement step.
                                 for k in self.moves:
                                     logger.info(f'start movement for node {k}')  
+                                
                                     if k == 0:
                                         status_arr = np.repeat(1, int(n))
                                     else:
                                         status_arr = fishes[f'survival_{k-1}'].values
-    
+                                
                                     current_location = fishes[f'state_{k}'].values
-                                    # Fix case where current_location entries are lists or stringified lists
-                                    def clean_location(loc):
-                                        if isinstance(loc, list) and len(loc) == 1:
-                                            return loc[0]
-                                        elif isinstance(loc, str) and loc.startswith("[") and loc.endswith("]"):
-                                            # It's a stringified list — remove brackets and quotes
-                                            return loc.strip("[]").strip("'").strip('"')
-                                        return loc
-                                    
-                                    v_clean = np.vectorize(clean_location)
-                                    current_location = v_clean(current_location)
-
+                                
+                                    # Flatten and clean all scalar-ish inputs
+                                    current_location = np.asarray(current_location).flatten()
+                                    status_arr = np.asarray(status_arr).flatten()
+                                    swim_speed = np.asarray(swim_speed).flatten()
+                                
                                     logger.info(f'current location: {current_location}')
-                                    
+                                
+                                    # Vectorize survival function extraction
                                     def surv_fun_att(state, surv_fun_dict):
                                         return surv_fun_dict[state]['Surv_Fun']
-    
+                                
                                     v_surv_fun = np.vectorize(surv_fun_att, excluded=[1])
                                     try:
                                         surv_fun = v_surv_fun(current_location, self.surv_fun_dict)
                                     except Exception as e:
+                                        logger.warning(f"Survival function fallback triggered: {e}")
                                         surv_fun = np.repeat("a priori", len(current_location))
-                                    
+                                
                                     dice = np.random.uniform(0.0, 1.0, int(n))
-    
+                                
                                     v_surv_rate = np.vectorize(self.node_surv_rate, excluded=[5,6])
                                     rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
-                                    
+                                
                                     logger.info('applied vectorized survival rate')
                                     survival = np.where(dice <= rates, 1, 0)
-    
+                                
+                                    # Movement only if another step remains
                                     if k < max(self.moves):
-                                        print("current_location:", current_location, "shape:", current_location.shape)
-                                        print("survival:", survival, "shape:", survival.shape)
-                                        print("swim_speed:", swim_speed, "shape:", np.shape(swim_speed))
+                                        # Sanitize all inputs before vectorized movement
+                                        def scalarize(x):
+                                            if isinstance(x, (list, np.ndarray)) and len(x) == 1:
+                                                return x[0]
+                                            if hasattr(x, "item") and np.ndim(x) == 0:
+                                                return x.item()
+                                            return x
+                                
                                         def safe_movement(location, status, speed):
-                                            # Ensure we are passing only scalars
-                                            if isinstance(location, (np.ndarray, list)):
-                                                location = location[0] if len(location) == 1 else location
-                                            if isinstance(status, (np.ndarray, list)):
-                                                status = status[0] if len(status) == 1 else status
-                                            if isinstance(speed, (np.ndarray, list)):
-                                                speed = speed[0] if len(speed) == 1 else speed
-                                        
+                                            location = scalarize(location)
+                                            status = scalarize(status)
+                                            speed = scalarize(speed)
                                             return self.movement(location, status, speed,
                                                                  self.graph, intake_vel_dict, Q_dict,
                                                                  op_order_dict, q_cap_dict, unit_fac_dict)
-                                        
+                                
                                         v_movement = np.vectorize(safe_movement)
                                         move = v_movement(current_location, survival, swim_speed)
-
                                     else:
                                         move = current_location
+                                
                                     logger.info('applied vectorized movement')
-
+                                
                                     fishes[f'draw_{k}'] = np.float32(dice)
                                     fishes[f'rates_{k}'] = np.float32(rates)
                                     fishes[f'survival_{k}'] = np.float32(survival)
+                                
                                     if k < max(self.moves):
-                                        fishes.loc[:, f'state_{k+1}'] = np.vectorize(lambda m: m if isinstance(m, str) else str(m))(move)
-
+                                        fishes[f'state_{k+1}'] = np.asarray(move).astype(str)
+                                
                                     logger.info('finished movement iteration')
-                                        
+                                
                                 logger.info('Finished movement')
+
     
                                 max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
                                 fishes.to_hdf(self.hdf,
