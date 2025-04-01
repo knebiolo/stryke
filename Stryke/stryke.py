@@ -1941,6 +1941,7 @@ class simulation():
                                         'population': np.float32(population),
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
+                                    
                                 logger.info('Starting movement')
                                 
                                 def scalarize(x):
@@ -2025,6 +2026,7 @@ class simulation():
                                     logger.info('finished movement iteration')
                                 
                                 logger.info('Finished movement')
+
    
                                 max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
                                 fishes.to_hdf(self.hdf,
