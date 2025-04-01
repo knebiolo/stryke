@@ -2562,7 +2562,7 @@ def model_setup_summary():
     unit_columns = []
     if 'unit_params_file' in session:
         unit_params_file = session['unit_params_file']
-        print("Found unit_params_file in session:", unit_params_file)
+        #print("Found unit_params_file in session:", unit_params_file)
         if os.path.exists(unit_params_file):
             try:
                 df_unit = pd.read_csv(unit_params_file)
@@ -2580,7 +2580,7 @@ def model_setup_summary():
     operating_scenarios = []
     if 'op_scen_file' in session:
         ops_file = session['op_scen_file']
-        print("Found operating_scenarios_file in session:", ops_file)
+        #print("Found operating_scenarios_file in session:", ops_file)
         if os.path.exists(ops_file):
             try:
                 df_ops = pd.read_csv(ops_file)
@@ -2601,14 +2601,14 @@ def model_setup_summary():
         except Exception as e:
             print("Error decoding flow_scenario JSON:", e)
             flow_scenarios = []
-    print("Flow scenarios:", flow_scenarios)
+    #print("Flow scenarios:", flow_scenarios)
 
     # --- Graph Data ---
     graph_summary = session.get('graph_summary', {"Nodes": [], "Edges": []})
     graph_nodes = graph_summary.get('Nodes', [])
     graph_edges = graph_summary.get('Edges', [])
-    print("Graph summary (Nodes):", graph_nodes)
-    print("Graph summary (Edges):", graph_edges)
+    #print("Graph summary (Nodes):", graph_nodes)
+    #print("Graph summary (Edges):", graph_edges)
 
     # --- Other Data ---
     facilities_data = session.get('facilities_data', [])
@@ -2631,7 +2631,7 @@ def model_setup_summary():
 
 
     simulation_graph = session.get('simulation_graph', {})
-    print ('Loaded simulation graph:', simulation_graph, flush = True)
+    #print ('Loaded simulation graph:', simulation_graph, flush = True)
     
     summary_data = {
         "Facilities": facilities_data,
