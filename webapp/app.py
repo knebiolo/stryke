@@ -160,6 +160,7 @@ def logout():
     
     session.clear()
     flash("Logged out successfully.")
+    print('user session tied to ',g.user_sim_folder, ', succesfully logged out')
     return redirect(url_for('login'))
 
 # -------------------------------------------------------
@@ -531,7 +532,7 @@ def create_project():
         session['model_setup'] = model_setup
         #session['proj_dir'] = g.user_sim_folder  # Set the project directory
         flash(f"Project '{project_name}' created successfully!")
-        print("project started from directory %s",g.user_sim_folder)
+        print("project started from directory",g.user_sim_folder)
 
         return redirect(url_for('flow_scenarios'))
     
