@@ -2306,10 +2306,10 @@ class simulation():
     
                 self.beta_df = pd.DataFrame.from_dict(data=self.beta_dict, orient='index',
                                                        columns=['scenario number','species','state','survival rate','variance','ll','ul'])
-                try:
-                    self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
-                except:
-                    pass
+                # try:
+                #     self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
+                # except:
+                #     pass
     
                 # Group daily_summary by year
                 yearly_summary = self.daily_summary.groupby(['species','scenario','iteration'])[['pop_size','num_survived','num_entrained']].sum()
