@@ -108,31 +108,31 @@ def handle_exception(e):
 # ----------------- Password Protection -----------------
 
 
+# Helper function to clear folders
+def clear_folder(folder_path):
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        if os.path.isfile(file_path):
+            os.unlink(file_path)
+
 @app.before_request
 def require_login_and_setup():
-    # First, enforce login for protected endpoints.
     if not session.get('logged_in') and request.endpoint not in ['login', 'static', 'health']:
         return redirect(url_for('login'))
     
-    # Only set up session directories if the user is logged in.
     if session.get('logged_in'):
-        # Generate a unique directory identifier if one doesn't exist.
         if 'user_dir' not in session:
             session['user_dir'] = uuid.uuid4().hex
 
-        # Create a session-specific upload directory.
         user_upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], session['user_dir'])
-        os.makedirs(user_upload_dir, exist_ok=True)
-
-        # Create a session-specific simulation project directory.
         user_sim_folder = os.path.join(SIM_PROJECT_FOLDER, session['user_dir'])
+
+        os.makedirs(user_upload_dir, exist_ok=True)
         os.makedirs(user_sim_folder, exist_ok=True)
 
-        # Store these directories in Flask's global context for easy access.
-        g.user_upload_dir = user_upload_dir
-        g.user_sim_folder = user_sim_folder
-        session['proj_dir'] = user_sim_folder  # <-- Add this line
-
+        # Explicitly store paths in session
+        session['user_upload_dir'] = user_upload_dir
+        session['user_sim_folder'] = user_sim_folder
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -140,6 +140,7 @@ def login():
     if request.method == 'POST':
         if request.form.get('password') == app.config['PASSWORD']:
             session['logged_in'] = True
+            session['user_dir'] = uuid.uuid4().hex  # Unique directory per session
             flash("Logged in successfully!")
             return redirect(url_for('index'))
         else:
@@ -148,19 +149,20 @@ def login():
 
 @app.route('/logout')
 def logout():
-    # Retrieve the user's unique directory from the session
-    user_dir = session.get('user_dir')
-    if user_dir:
-        # Build the session-specific paths
-        user_upload_dir = os.path.join(UPLOAD_FOLDER, user_dir)
-        user_sim_folder = os.path.join(SIM_PROJECT_FOLDER, user_dir)
-        # Clear the session-specific folders
+    user_upload_dir = session.get('user_upload_dir')
+    user_sim_folder = session.get('user_sim_folder')
+
+    if user_upload_dir and os.path.exists(user_upload_dir):
         clear_folder(user_upload_dir)
+        os.rmdir(user_upload_dir)
+
+    if user_sim_folder and os.path.exists(user_sim_folder):
         clear_folder(user_sim_folder)
-    
+        os.rmdir(user_sim_folder)
+
     session.clear()
     flash("Logged out successfully.")
-    print('user session tied to ',g.user_sim_folder, ', succesfully logged out')
+    print("User session and directories cleared successfully.")
     return redirect(url_for('login'))
 
 # -------------------------------------------------------
@@ -516,7 +518,6 @@ def clear_folder(folder_path):
 
 
 
-#----------------------------------------
 @app.route('/create_project', methods=['GET', 'POST'])
 def create_project():
     if request.method == 'POST':
@@ -524,19 +525,20 @@ def create_project():
         project_notes = request.form.get('project_notes')
         units = request.form.get('units')
         model_setup = request.form.get('model_setup')
-        
-        # Save data to session or database
+
+        # Save project metadata in session
         session['project_name'] = project_name
         session['project_notes'] = project_notes
         session['units'] = units
         session['model_setup'] = model_setup
-        #session['proj_dir'] = g.user_sim_folder  # Set the project directory
+
+        # Use explicitly stored session directory
+        session['proj_dir'] = session.get('user_sim_folder')
         flash(f"Project '{project_name}' created successfully!")
-        print("project started from directory",g.user_sim_folder)
+        print("Project directory set to:", session['proj_dir'])
 
         return redirect(url_for('flow_scenarios'))
-    
-    # For GET requests, render the project creation form
+
     return render_template('create_project.html')
 
 
