@@ -2200,10 +2200,12 @@ class simulation():
                             continue
     
                         # summarize species-scenario - whole project
-                        whole_proj_succ = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
+                        #whole_proj_succ = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
+                        whole_proj_succ = dat.groupby(by=['iteration'])['survival_%s' % (max(self.moves))]\
                             .sum().to_frame().reset_index(drop=False)\
                             .rename(columns={'survival_%s' % (max(self.moves)):'successes'})
-                        whole_proj_count = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
+                        #whole_proj_count = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
+                        whole_proj_count = dat.groupby(by=['iteration'])['survival_%s' % (max(self.moves))]\
                             .count().to_frame().reset_index(drop=False)\
                             .rename(columns={'survival_%s' % (max(self.moves)):'count'})
                         whole_summ = whole_proj_succ.merge(whole_proj_count)
@@ -2245,7 +2247,7 @@ class simulation():
                             a, b, loc, scale = whole_params
                             
                             # Summary stats from the fitted distribution
-                            median = beta.median(a, b, loc=loc, scale=scale)
+                            mean = beta.mean(a, b, loc=loc, scale=scale)
                             std_dev = beta.std(a, b, loc=loc, scale=scale)
                             lcl = beta.ppf(0.025, a=a, b=b, loc=loc, scale=scale)
                             ucl = beta.ppf(0.975, a=a, b=b, loc=loc, scale=scale)
@@ -2254,7 +2256,7 @@ class simulation():
                             logger.info("Fitted Beta distribution parameters:")
                             logger.info("  alpha (a) = %.4f, beta (b) = %.4f, loc = %.4f, scale = %.4f", a, b, loc, scale)
                             logger.info("Distribution summary:")
-                            logger.info("  Mean survival probability = %.4f", median)
+                            logger.info("  Mean survival probability = %.4f", mean)
                             logger.info("  Std deviation (spread)     = %.4f", std_dev)
                             logger.info("  95%% CI from Beta fit       = [%.4f, %.4f]", lcl, ucl)
                             
@@ -2266,10 +2268,12 @@ class simulation():
                                 sub_dat = dat[dat['survival_%s' % (l-1)] == 1]
                             else:
                                 sub_dat = dat
-                            route_succ = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
+                            #route_succ = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
+                            route_succ = sub_dat.groupby(by=['iteration','state_%s' % (l)])['survival_%s' % (l)]\
                                 .sum().to_frame().reset_index(drop=False)\
                                 .rename(columns={'survival_%s' % (l):'successes'})
-                            route_count = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
+                            #route_count = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
+                            route_count = sub_dat.groupby(by=['iteration','state_%s' % (l)])['survival_%s' % (l)]\
                                 .count().to_frame().reset_index(drop=False)\
                                 .rename(columns={'survival_%s' % (l):'count'})
                             route_summ = route_succ.merge(route_count)
