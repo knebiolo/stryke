@@ -712,6 +712,7 @@ class simulation():
         ada = param_dict['ada']
         N = param_dict['N']
         Qopt = param_dict['Qopt'] #IPD: why not use Qopt for beta calculations?
+        param_dict['Qper'] = param_dict['Qopt']/param_dict['Qcap']
         Q_per = param_dict['Qper']
         _lambda = param_dict['_lambda'] # use USFWS value of 0.2
     
@@ -787,6 +788,8 @@ class simulation():
         RPM = param_dict['RPM']
         D = param_dict['D']
         Q = param_dict['Q']
+        param_dict['Qper'] = param_dict['Qopt']/param_dict['Qcap']
+
         Q_per = param_dict['Qper']
         #Q_opt = param_dict['Q_opt']
         ada = param_dict['ada']
