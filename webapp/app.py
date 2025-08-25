@@ -174,6 +174,31 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SIM_PROJECT_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+def cleanup_old_data():
+    """Remove files and directories older than 24 hours in upload and simulation folders."""
+    now = time.time()
+    cutoff = now - 24 * 3600  # 24 hours ago
+
+    for folder in (UPLOAD_FOLDER, SIM_PROJECT_FOLDER):
+        for name in os.listdir(folder):
+            path = os.path.join(folder, name)
+            try:
+                # If it's a directory, check its last modified time
+                mtime = os.path.getmtime(path)
+                if mtime < cutoff:
+                    if os.path.isdir(path):
+                        shutil.rmtree(path)
+                    else:
+                        os.remove(path)
+            except Exception as e:
+                app.logger.warning(f"Failed to clean up {path}: {e}")
+
+    # Schedule next cleanup in one hour
+    threading.Timer(3600, cleanup_old_data).start()
+
+# Kick off the first cleanup one minute after startup
+threading.Timer(60, cleanup_old_data).start()
+
 @app.route("/health")
 def health():
     print("Health endpoint accessed")
