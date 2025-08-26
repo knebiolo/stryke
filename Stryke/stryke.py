@@ -712,7 +712,6 @@ class simulation():
         ada = param_dict['ada']
         N = param_dict['N']
         Qopt = param_dict['Qopt'] #IPD: why not use Qopt for beta calculations?
-        param_dict['Qper'] = param_dict['Qopt']/param_dict['Qcap']
         Q_per = param_dict['Qper']
         _lambda = param_dict['_lambda'] # use USFWS value of 0.2
     
@@ -788,7 +787,6 @@ class simulation():
         RPM = param_dict['RPM']
         D = param_dict['D']
         Q = param_dict['Q']
-        param_dict['Qper'] = param_dict['Qopt']/param_dict['Qcap']
 
         Q_per = param_dict['Qper']
         #Q_opt = param_dict['Q_opt']
@@ -799,6 +797,7 @@ class simulation():
         D2 = param_dict['D2']
         B = param_dict['B']
         _lambda = param_dict['_lambda'] # use USFWS value of 0.2
+    
     
         # Calculations
         omega = RPM * ((2 * np.pi) / 60)  # Angular velocity (rad/s)
@@ -1784,6 +1783,7 @@ class simulation():
                               'ada': float(row['ada']),
                               'N': float(row['N']),
                               'Qopt': float(row['Qopt']),
+                              'Qper': float(row['Qopt'] / row['Qcap']),
                               '_lambda': float(row['lambda']),
                               'intake_vel':float(row['intake_vel']),
                               'rack_spacing':float(rack_spacing)}
@@ -1795,7 +1795,7 @@ class simulation():
                               'ada': float(row['ada']),
                               'N': float(row['N']),
                               'Qopt': float(row['Qopt']),
-                              'Qper': row['Qper'],
+                              'Qper': float(row['Qopt'] / row['Qcap']),
                               '_lambda': float(row['lambda']),
                               'intake_vel':float(row['intake_vel']),
                               'rack_spacing':float(rack_spacing)}
