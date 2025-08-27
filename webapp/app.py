@@ -2936,7 +2936,7 @@ def run_simulation():
 @app.route("/simulation_logs")
 def simulation_logs():
     # this template should attach to your SSE /stream
-    return render_template("results.html")
+    return render_template("simulation_logs.html")
 
 
 
