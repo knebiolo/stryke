@@ -60,6 +60,42 @@ from Stryke.stryke import epri
 # Create a global log queue
 LOG_QUEUE = queue.Queue()
 
+def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
+    """
+    Backward-compatible wrapper:
+      - tolerates file_path=None / "" (returns None)
+      - accepts optional numeric_cols kw and coerces those columns if present
+    """
+    numeric_cols = kwargs.pop("numeric_cols", None)
+
+    if not file_path or (isinstance(file_path, str) and not file_path.strip()):
+        return None
+    if not isinstance(file_path, (str, bytes, os.PathLike)):
+        raise TypeError(f"read_csv_if_exists(file_path=...) expected a path, got {type(file_path).__name__}")
+
+    if not os.path.exists(file_path):
+        # Match previous behavior: either return None or raise; returning None is kinder to UIs.
+        # If you prefer hard-fail, change to: raise FileNotFoundError(...)
+        return None
+
+    df = pd.read_csv(file_path)
+    if numeric_cols:
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+# Monkey-patch whichever Stryke import you use
+try:
+    import stryke as _stryke_mod           # common import style in your app
+except ImportError:
+    from Stryke import stryke as _stryke_mod  # if yours is packaged as Stryke/stryke.py
+
+# Patch the function on the module so internal calls use this tolerant version
+_stryke_mod.read_csv_if_exists = _read_csv_if_exists_compat
+
+# (Optional) quick sanity print so you see it once in logs
+print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=True)
 
 # Create a custom stream that writes log messages to LOG_QUEUE
 class QueueStream:
@@ -3366,6 +3402,15 @@ def download_report():
 def download_zip_alias():
     # simple handoff to the real endpoint
     return redirect(url_for('download_report_zip'))
+
+# Quick route map to spot mismatches (remove in prod)
+@app.get('/_debug_routes')
+def _debug_routes():
+    lines = []
+    for rule in app.url_map.iter_rules():
+        methods = ",".join(sorted(m for m in rule.methods if m in ("GET","POST","PUT","DELETE","PATCH")))
+        lines.append(f"{rule.endpoint:30s}  {methods:10s}  {rule}")
+    return "<pre>" + "\n".join(sorted(lines)) + "</pre>"
 
 @app.route('/download_report_zip')
 def download_report_zip():
