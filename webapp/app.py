@@ -2769,7 +2769,7 @@ def _close_hdf5_handles(obj):
 
 def run_simulation_in_background_custom(data_dict, log_queue):
     """Run the simulation in a background thread and stream logs to the frontend."""
-    start_ts = datetime.datetime.now()
+    start_ts = datetime.now()
     # Send both print() and logger.* lines to the UI stream
     _attach_queue_logger(log_queue)
     old_stdout = sys.stdout
