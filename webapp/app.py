@@ -104,6 +104,46 @@ app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password he
 # Set session lifetime to 1 day (adjust as needed)
 app.permanent_session_lifetime = timedelta(days=1)
 
+REQUIRED_FILE_KEYS = {
+    "hydrograph_file": "Hydrograph CSV",
+    "unit_parameters_file": "Unit parameters CSV",
+    "operating_scenarios_file": "Operating scenarios CSV",
+    # add any other hard requirements here
+}
+
+def _coerce_empty_to_none(v):
+    if v is None:
+        return None
+    if isinstance(v, str) and v.strip() == "":
+        return None
+    return v
+
+def _validate_and_normalize_inputs(data):
+    """
+    Returns (normalized_data, missing_keys, bad_paths)
+    - missing_keys: required keys that are None/blank
+    - bad_paths: required keys whose paths do not exist on disk
+    """
+    norm = dict(data)  # shallow copy
+    missing, bad = [], []
+    import os
+
+    # Normalize strings: "" -> None
+    for k, v in list(norm.items()):
+        norm[k] = _coerce_empty_to_none(v)
+
+    # Required files must be present and exist
+    for key, label in REQUIRED_FILE_KEYS.items():
+        fp = norm.get(key)
+        if not fp:
+            missing.append(f"{key} ({label})")
+        elif not isinstance(fp, (str, bytes, os.PathLike)):
+            bad.append(f"{key} → {repr(fp)}  (not a path)")
+        elif not os.path.isfile(fp):
+            bad.append(f"{key} → {fp}  (file not found)")
+
+    return norm, missing, bad
+
 @app.before_request
 def make_session_permanent():
     session.permanent = True
@@ -2768,13 +2808,10 @@ def _close_hdf5_handles(obj):
 
 
 def run_simulation_in_background_custom(data_dict, log_queue):
-    """Run the simulation in a background thread and stream logs to the frontend."""
-    start_ts = datetime.now()
-    # Send both print() and logger.* lines to the UI stream
-    _attach_queue_logger(log_queue)
+    import datetime as dt
+    start_ts = dt.datetime.now()
     old_stdout = sys.stdout
     sys.stdout = QueueStream(log_queue)
-
     try:
         print(f"[INFO] Simulation process started at {start_ts.isoformat()}", flush=True)
 
@@ -2784,7 +2821,25 @@ def run_simulation_in_background_custom(data_dict, log_queue):
         os.makedirs(proj_dir, exist_ok=True)
         print(f"[INFO] Project directory: {proj_dir}", flush=True)
 
-        # Create & configure sim
+        # -------- PRE-FLIGHT VALIDATION --------
+        data_dict, missing, bad = _validate_and_normalize_inputs(data_dict)
+
+        # Helpful context for graph inputs (not strictly required)
+        if not data_dict.get("graph_data"):
+            print("[WARN] No 'graph_data' provided; routing submodules may be limited.", flush=True)
+        if not data_dict.get("graph_summary"):
+            print("[WARN] No 'graph_summary' provided; summary graph metrics may be empty.", flush=True)
+
+        if missing or bad:
+            print("[INPUT ERROR] Required inputs are missing or invalid:", flush=True)
+            for m in missing:
+                print(f"  - MISSING: {m}", flush=True)
+            for b in bad:
+                print(f"  - BAD PATH: {b}", flush=True)
+            # Abort gracefully so the UI gets a clear reason instead of a stack trace
+            raise ValueError("Cannot start simulation: missing/invalid inputs (see above).")
+        # --------------------------------------
+
         print("[INFO] Creating simulation object...", flush=True)
         sim_instance = stryke.simulation(proj_dir=proj_dir, output_name="WebAppModel", wks=None)
 
@@ -2798,52 +2853,17 @@ def run_simulation_in_background_custom(data_dict, log_queue):
         print("[INFO] Running simulation...", flush=True)
         sim_instance.run()
 
-        print("[INFO] Building summary (writing HDF5)...", flush=True)
+        print("[INFO] Building summary...", flush=True)
         sim_instance.summary()
 
-        # ---- HDF5 SAFETY BARRIER ------------------------------------------------
-        # Make absolutely sure all writers are closed before the report opens the file.
-        print("[INFO] Flushing & closing any HDF5 handles...", flush=True)
-        _close_hdf5_handles(sim_instance)
-        time.sleep(0.25)  # tiny settle to avoid FS lag on network volumes
-        # ----------------------------------------------------------------------------
-
-        # Generate report with retry (common if FS/AV needs a moment)
-        attempts = 0
-        while True:
-            try:
-                print("[INFO] Generating report HTML...", flush=True)
-                report_html = generate_report(sim_instance)  # this reads the HDF5
-                break
-            except Exception as e:
-                attempts += 1
-                retriable = (tables and isinstance(e, getattr(tables, "HDF5ExtError", tuple()))) or isinstance(e, OSError)
-                if retriable and attempts <= 5:
-                    print(f"[WARN] HDF5 busy or transient error (attempt {attempts}/5): {e}", flush=True)
-                    time.sleep(0.75 * attempts)
-                    continue
-                # fall through: non-retriable or too many tries
-                raise
-
+        print("[INFO] Generating report HTML...", flush=True)
+        report_html = generate_report(sim_instance)
         report_path = os.path.join(proj_dir, "simulation_report.html")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_html)
-
-        marker_path = os.path.join(proj_dir, "report_path.txt")
-        with open(marker_path, "w", encoding="utf-8") as f:
+        with open(os.path.join(proj_dir, "report_path.txt"), "w", encoding="utf-8") as f:
             f.write(report_path)
-
         print(f"[SUCCESS] Report written to {report_path}", flush=True)
-
-        # Optional: print your PyTables/filters once, very helpful for diagnosing filter issues
-        if tables:
-            try:
-                s = io.StringIO()
-                tables.print_versions(out=s)
-                for line in s.getvalue().splitlines():
-                    print(f"[ENV] {line}", flush=True)
-            except Exception:
-                pass
 
     except Exception as e:
         print(f"[ERROR] {type(e).__name__}: {e}", flush=True)
@@ -2855,60 +2875,14 @@ def run_simulation_in_background_custom(data_dict, log_queue):
         except Exception:
             pass
 
+# @app.route('/simulation_logs')
+# def simulation_logs():
+#     return render_template('simulation_logs.html')
 
-@app.route('/run_simulation', methods=['POST'])
-def run_simulation():
-    # --- Gather inputs from session, defensively
-    proj_dir = session.get('proj_dir')
-    if not proj_dir:
-        flash("Session expired or project not initialized. Please log in and start a project.")
-        return redirect(url_for('login'))
-
-    pop_df = None
-    pop_csv_path = session.get('population_csv_path')
-    if pop_csv_path:
-        try:
-            pop_df = pd.read_csv(pop_csv_path, low_memory=False)
-        except Exception as e:
-            logger.exception("Failed to read population CSV.")
-            flash(f"Warning: population CSV could not be read ({e}). Continuing without it.")
-
-    data_dict = {
-        'proj_dir':      proj_dir,
-        'project_name':  session.get('project_name'),
-        'project_notes': session.get('project_notes'),
-        'model_setup':   session.get('model_setup'),
-        'units':         session.get('units'),
-        'facilities':    session.get('facilities_data'),
-        'unit_parameters_file':   session.get('unit_params_file'),
-        'operating_scenarios_file': session.get('op_scen_file'),
-        'population':    pop_df,  # may be None; sim.webapp_import should handle gracefully
-        'flow_scenarios': session.get('flow_scenario'),
-        'hydrograph_file': session.get('hydrograph_file'),
-        'graph_data':     session.get('simulation_graph'),
-        'graph_summary':  session.get('graph_summary'),
-        'units_system':   session.get('units', 'imperial'),
-        'simulation_mode': session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing'),
-    }
-
-    try:
-        t = threading.Thread(
-            target=run_simulation_in_background_custom,
-            args=(data_dict, LOG_QUEUE),
-            daemon=True
-        )
-        t.start()
-        flash("Simulation started! Check logs for progress.")
-    except Exception as e:
-        logger.exception("Failed to start simulation thread.")
-        flash(f"Failed to start simulation: {e}")
-
-    return redirect(url_for("simulation_logs"))
-
-
-@app.route('/simulation_logs')
+@app.route("/simulation_logs")
 def simulation_logs():
-    return render_template('simulation_logs.html')
+    # this template should attach to your SSE /stream
+    return render_template("results.html")
 
 def generate_discharge_histogram_text(df, column="DAvgFlow_prorate", bins=10):
     """

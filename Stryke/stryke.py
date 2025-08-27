@@ -126,14 +126,13 @@ def to_dataframe(data, numeric_cols=None, index_col=None):
         df.set_index(index_col, inplace=True, drop=False)
     return df
 
-def read_csv_if_exists(file_path, numeric_cols=None, index_col=None):
-    """Reads a CSV file if it exists; otherwise, returns None."""
-    if os.path.exists(file_path):
-        # Note: Changed pd.to_dataframe to to_dataframe
-        return to_dataframe(pd.read_csv(file_path), numeric_cols=numeric_cols, index_col=index_col)
-    else:
-        print(f"File not found at: {file_path}")
+def read_csv_if_exists(file_path):
+    import os, pandas as pd
+    if not file_path:         # handles None or ""
         return None
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"CSV not found: {file_path}")
+    return pd.read_csv(file_path)
 
 class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility
