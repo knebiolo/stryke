@@ -35,6 +35,8 @@ import logging
 import logging.handlers
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 import tables
+from werkzeug.exceptions import HTTPException, NotFound
+
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -86,16 +88,24 @@ def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
     return df
 
 # Monkey-patch whichever Stryke import you use
-try:
-    import stryke as _stryke_mod           # common import style in your app
-except ImportError:
-    from Stryke import stryke as _stryke_mod  # if yours is packaged as Stryke/stryke.py
+# try:
+#     import stryke as _stryke_mod           # common import style in your app
+# except ImportError:
+#     from Stryke import stryke as _stryke_mod  # if yours is packaged as Stryke/stryke.py
 
-# Patch the function on the module so internal calls use this tolerant version
-_stryke_mod.read_csv_if_exists = _read_csv_if_exists_compat
+# # Patch the function on the module so internal calls use this tolerant version
+# _stryke_mod.read_csv_if_exists = _read_csv_if_exists_compat
 
-# (Optional) quick sanity print so you see it once in logs
+# # (Optional) quick sanity print so you see it once in logs
+# print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=True)
+
+for name in ("Stryke.stryke", "stryke"):
+    mod = sys.modules.get(name)
+    if mod:
+        setattr(mod, "read_csv_if_exists", _read_csv_if_exists_compat)
+
 print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=True)
+
 
 # Create a custom stream that writes log messages to LOG_QUEUE
 class QueueStream:
@@ -179,6 +189,22 @@ def _validate_and_normalize_inputs(data):
             bad.append(f"{key} → {fp}  (file not found)")
 
     return norm, missing, bad
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Let real HTTP errors (404, 405, etc.) pass through untouched
+    if isinstance(e, HTTPException):
+        return e
+    # Log server-side exceptions with traceback, return 500
+    import traceback
+    traceback.print_exc()
+    return "Internal Server Error", 500
+
+@app.errorhandler(NotFound)
+def handle_404(e):
+    # Simple 404, no scary traceback
+    return "Not Found", 404
+
 
 @app.before_request
 def make_session_permanent():
@@ -435,25 +461,63 @@ from flask import Response, stream_with_context
 
 @app.route('/stream')
 def stream():
-    @stream_with_context
     def event_stream():
-        yield ": connected\n\n"  # open the pipe for proxies
+        import queue as _q
         while True:
             try:
-                message = LOG_QUEUE.get(timeout=15)  # don’t idle forever
-                if message is None:
-                    continue  # ignore legacy None
-                yield f"data: {message}\n\n"
-                if message == "[Simulation Complete]":
-                    break
-            except queue.Empty:
-                yield "event: ping\ndata: keepalive\n\n"  # heartbeat
+                message = LOG_QUEUE.get(timeout=15)
+            except _q.Empty:
+                yield "data: [keepalive]\n\n"
+                continue
+            yield f"data: {message}\n\n"
+            if message == "[Simulation Complete]":
+                break
+    return Response(event_stream(), mimetype="text/event-stream")
 
-    resp = Response(event_stream(), mimetype="text/event-stream")
-    resp.headers["Cache-Control"] = "no-cache"
-    resp.headers["X-Accel-Buffering"] = "no"
-    resp.headers["Connection"] = "keep-alive"
-    return resp
+
+# @app.route('/stream')
+# def stream():
+#     @stream_with_context
+#     def event_stream():
+#         yield ": connected\n\n"  # open for proxies
+#         while True:
+#             try:
+#                 message = LOG_QUEUE.get(timeout=15)
+#                 if message is None:
+#                     continue
+#                 yield f"data: {message}\n\n"
+#                 if message == "[Simulation Complete]":
+#                     break
+#             except queue.Empty:
+#                 yield "event: ping\ndata: keepalive\n\n"
+
+#     resp = Response(event_stream(), mimetype="text/event-stream")
+#     resp.headers["Cache-Control"] = "no-cache"
+#     resp.headers["X-Accel-Buffering"] = "no"
+#     resp.headers["Connection"] = "keep-alive"
+#     return resp
+
+# @app.route('/stream')
+# def stream():
+#     @stream_with_context
+#     def event_stream():
+#         yield ": connected\n\n"  # open the pipe for proxies
+#         while True:
+#             try:
+#                 message = LOG_QUEUE.get(timeout=15)  # don’t idle forever
+#                 if message is None:
+#                     continue  # ignore legacy None
+#                 yield f"data: {message}\n\n"
+#                 if message == "[Simulation Complete]":
+#                     break
+#             except queue.Empty:
+#                 yield "event: ping\ndata: keepalive\n\n"  # heartbeat
+
+#     resp = Response(event_stream(), mimetype="text/event-stream")
+#     resp.headers["Cache-Control"] = "no-cache"
+#     resp.headers["X-Accel-Buffering"] = "no"
+#     resp.headers["Connection"] = "keep-alive"
+#     return resp
 
 @app.route('/results')
 def results():
@@ -2938,8 +3002,6 @@ def simulation_logs():
     # this template should attach to your SSE /stream
     return render_template("simulation_logs.html")
 
-
-
 def generate_discharge_histogram_text(df, column="DAvgFlow_prorate", bins=10):
     """
     Generate a text-based histogram for discharge recurrence probability.
@@ -3414,36 +3476,34 @@ def _debug_routes():
 
 @app.route('/download_report_zip')
 def download_report_zip():
-    proj_dir = session['proj_dir']
-    print ('project directory:',proj_dir, flush = True)
-
-    # if not proj_dir:
-    #     return "<h1>Session missing proj_dir</h1>", 500
-
-    # if not os.path.exists(proj_dir):
-    #     return f"<h1>Project directory not found: {proj_dir}</h1>", 404
+    proj_dir = session.get('proj_dir')
+    if not proj_dir:
+        return "<h1>Session missing proj_dir</h1>", 500
+    if not os.path.exists(proj_dir):
+        return f"<h1>Project directory not found: {proj_dir}</h1>", 404
 
     zip_path = os.path.join(proj_dir, "simulation_report.zip")
-    print ('zip directory:',zip_path, flush = True)
-
-    # Create a zip archive containing all files in the project directory
+    # rebuild fresh zip
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(proj_dir):
+        for root, _, files in os.walk(proj_dir):
             for file in files:
-                file_path = os.path.join(root, file)
-                # Avoid adding the zip file itself if it already exists in the directory
-                if os.path.abspath(file_path) == os.path.abspath(zip_path):
+                fp = os.path.join(root, file)
+                if os.path.abspath(fp) == os.path.abspath(zip_path):
                     continue
-                # The arcname makes the path inside the zip relative to the project directory
-                arcname = os.path.relpath(file_path, start=proj_dir)
-                zipf.write(file_path, arcname=arcname)
-    
-    print ('zip file created')
+                zipf.write(fp, arcname=os.path.relpath(fp, start=proj_dir))
 
-    # Send the zip file for download
+    from flask import after_this_request
+    @after_this_request
+    def _cleanup(resp):
+        try:
+            os.remove(zip_path)
+        except Exception:
+            pass
+        return resp
+
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    zip_name = f"simulation_report_{timestamp}.zip"
-    return send_file(zip_path, as_attachment=True, download_name=zip_name)
+    return send_file(zip_path, as_attachment=True, download_name=f"simulation_report_{timestamp}.zip")
+
 
 # Un Comment to Test Locally
 if __name__ == "__main__":
