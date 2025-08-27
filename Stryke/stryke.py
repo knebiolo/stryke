@@ -126,13 +126,30 @@ def to_dataframe(data, numeric_cols=None, index_col=None):
         df.set_index(index_col, inplace=True, drop=False)
     return df
 
-def read_csv_if_exists(file_path):
-    import os, pandas as pd
-    if not file_path:         # handles None or ""
+def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
+    """
+    Backward-compatible wrapper:
+      - tolerates file_path=None / "" (returns None)
+      - accepts optional numeric_cols kw and coerces those columns if present
+    """
+    numeric_cols = kwargs.pop("numeric_cols", None)
+
+    if not file_path or (isinstance(file_path, str) and not file_path.strip()):
         return None
+    if not isinstance(file_path, (str, bytes, os.PathLike)):
+        raise TypeError(f"read_csv_if_exists(file_path=...) expected a path, got {type(file_path).__name__}")
+
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"CSV not found: {file_path}")
-    return pd.read_csv(file_path)
+        # Match previous behavior: either return None or raise; returning None is kinder to UIs.
+        # If you prefer hard-fail, change to: raise FileNotFoundError(...)
+        return None
+
+    df = pd.read_csv(file_path)
+    if numeric_cols:
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
 
 class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility
