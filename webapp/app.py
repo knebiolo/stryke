@@ -3362,6 +3362,10 @@ def download_report():
     return send_file(report_path, as_attachment=True,
                      download_name="simulation_report.html", mimetype="text/html")
 
+@app.get('/download_zip', endpoint='download_zip')
+def download_zip_alias():
+    # simple handoff to the real endpoint
+    return redirect(url_for('download_report_zip'))
 
 @app.route('/download_report_zip')
 def download_report_zip():
