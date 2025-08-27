@@ -401,27 +401,21 @@ from flask import Response, stream_with_context
 def stream():
     @stream_with_context
     def event_stream():
-        # Send an initial comment to open the stream and appease some proxies
-        yield ": connected\n\n"
+        yield ": connected\n\n"  # open the pipe for proxies
         while True:
             try:
-                # If no log arrives for 15s, send a heartbeat instead of idling
-                message = LOG_QUEUE.get(timeout=15)
+                message = LOG_QUEUE.get(timeout=15)  # don’t idle forever
                 if message is None:
-                    # Ignore legacy 'None' messages if any still occur
-                    continue
+                    continue  # ignore legacy None
                 yield f"data: {message}\n\n"
                 if message == "[Simulation Complete]":
                     break
             except queue.Empty:
-                # Heartbeat keeps the connection alive through proxies/load balancers
-                # (custom 'ping' event is fine; browsers ignore unknown events)
-                yield "event: ping\ndata: keepalive\n\n"
+                yield "event: ping\ndata: keepalive\n\n"  # heartbeat
 
     resp = Response(event_stream(), mimetype="text/event-stream")
-    # Helpful headers for SSE behind reverse proxies and CDNs
     resp.headers["Cache-Control"] = "no-cache"
-    resp.headers["X-Accel-Buffering"] = "no"      # disables nginx buffering
+    resp.headers["X-Accel-Buffering"] = "no"
     resp.headers["Connection"] = "keep-alive"
     return resp
 
@@ -2808,56 +2802,36 @@ def _close_hdf5_handles(obj):
 
 
 def run_simulation_in_background_custom(data_dict, log_queue):
-    import datetime as dt
-    start_ts = dt.datetime.now()
+    start_ts = datetime.now()
     old_stdout = sys.stdout
-    sys.stdout = QueueStream(log_queue)
+    sys.stdout = QueueStream(log_queue)  # route print() to SSE
     try:
         print(f"[INFO] Simulation process started at {start_ts.isoformat()}", flush=True)
 
         proj_dir = data_dict.get('proj_dir')
         if not proj_dir:
-            raise ValueError("proj_dir is missing in data_dict")
+            raise ValueError("proj_dir missing")
         os.makedirs(proj_dir, exist_ok=True)
         print(f"[INFO] Project directory: {proj_dir}", flush=True)
 
-        # -------- PRE-FLIGHT VALIDATION --------
-        data_dict, missing, bad = _validate_and_normalize_inputs(data_dict)
-
-        # Helpful context for graph inputs (not strictly required)
-        if not data_dict.get("graph_data"):
-            print("[WARN] No 'graph_data' provided; routing submodules may be limited.", flush=True)
-        if not data_dict.get("graph_summary"):
-            print("[WARN] No 'graph_summary' provided; summary graph metrics may be empty.", flush=True)
-
-        if missing or bad:
-            print("[INPUT ERROR] Required inputs are missing or invalid:", flush=True)
-            for m in missing:
-                print(f"  - MISSING: {m}", flush=True)
-            for b in bad:
-                print(f"  - BAD PATH: {b}", flush=True)
-            # Abort gracefully so the UI gets a clear reason instead of a stack trace
-            raise ValueError("Cannot start simulation: missing/invalid inputs (see above).")
-        # --------------------------------------
-
         print("[INFO] Creating simulation object...", flush=True)
-        sim_instance = stryke.simulation(proj_dir=proj_dir, output_name="WebAppModel", wks=None)
+        sim = stryke.simulation(proj_dir=proj_dir, output_name="WebAppModel", wks=None)
 
         print("[INFO] Importing model inputs...", flush=True)
-        sim_instance.webapp_import(data_dict, output_name="WebAppModel")
-        sim_instance.project_name  = data_dict.get('project_name')  or 'N/A'
-        sim_instance.project_notes = data_dict.get('project_notes') or 'N/A'
-        sim_instance.model_setup   = data_dict.get('model_setup')   or 'N/A'
-        sim_instance.units_session = data_dict.get('units')         or 'N/A'
+        sim.webapp_import(data_dict, output_name="WebAppModel")
+        sim.project_name  = data_dict.get('project_name')  or 'N/A'
+        sim.project_notes = data_dict.get('project_notes') or 'N/A'
+        sim.model_setup   = data_dict.get('model_setup')   or 'N/A'
+        sim.units_session = data_dict.get('units')         or 'N/A'
 
         print("[INFO] Running simulation...", flush=True)
-        sim_instance.run()
+        sim.run()
 
         print("[INFO] Building summary...", flush=True)
-        sim_instance.summary()
+        sim.summary()
 
         print("[INFO] Generating report HTML...", flush=True)
-        report_html = generate_report(sim_instance)
+        report_html = generate_report(sim)
         report_path = os.path.join(proj_dir, "simulation_report.html")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_html)
@@ -2871,9 +2845,53 @@ def run_simulation_in_background_custom(data_dict, log_queue):
     finally:
         sys.stdout = old_stdout
         try:
-            log_queue.put("[Simulation Complete]")
+            log_queue.put("[Simulation Complete]")  # unified sentinel
         except Exception:
             pass
+
+@app.route('/run_simulation', methods=['POST'], endpoint='run_simulation')
+def run_simulation():
+    proj_dir = session.get('proj_dir')
+    if not proj_dir:
+        flash("Session expired or project not initialized.")
+        return redirect(url_for('index'))
+
+    # population CSV is optional; don’t crash if missing
+    pop_df = None
+    pop_csv = session.get('population_csv_path')
+    if pop_csv:
+        try:
+            pop_df = pd.read_csv(pop_csv, low_memory=False)
+        except Exception as e:
+            logger.exception("Failed reading population CSV")
+            print(f"[WARN] population_csv_path unreadable: {e}", flush=True)
+
+    data_dict = {
+        'proj_dir':      proj_dir,
+        'project_name':  session.get('project_name'),
+        'project_notes': session.get('project_notes'),
+        'model_setup':   session.get('model_setup'),
+        'units':         session.get('units'),
+        'facilities':    session.get('facilities_data'),
+        'unit_parameters_file':   session.get('unit_params_file'),
+        'operating_scenarios_file': session.get('op_scen_file'),
+        'population':    pop_df,
+        'flow_scenarios': session.get('flow_scenario'),
+        'hydrograph_file': session.get('hydrograph_file'),
+        'graph_data':     session.get('simulation_graph'),
+        'graph_summary':  session.get('graph_summary'),
+        'units_system':   session.get('units', 'imperial'),
+        'simulation_mode': session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing'),
+    }
+
+    t = threading.Thread(target=run_simulation_in_background_custom,
+                         args=(data_dict, LOG_QUEUE),
+                         daemon=True)
+    t.start()
+    flash("Simulation started! Check logs for progress.")
+
+    # send user to a page that listens to /stream
+    return redirect(url_for('simulation_logs'))
 
 # @app.route('/simulation_logs')
 # def simulation_logs():
@@ -2883,6 +2901,8 @@ def run_simulation_in_background_custom(data_dict, log_queue):
 def simulation_logs():
     # this template should attach to your SSE /stream
     return render_template("results.html")
+
+
 
 def generate_discharge_histogram_text(df, column="DAvgFlow_prorate", bins=10):
     """
