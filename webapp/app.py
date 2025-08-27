@@ -34,7 +34,7 @@ import traceback
 import logging
 import logging.handlers
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
-
+import tables
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -73,6 +73,16 @@ class QueueStream:
                 pass
     def flush(self):
         pass
+    
+class QueueLogHandler(logging.Handler):
+    def __init__(self, q): super().__init__(); self.q = q
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            # keep it simple: one line per log event
+            self.q.put(msg.replace("\n", " | "))
+        except Exception:
+            pass
 
 # Set up logging to use QueueStream
 queue_stream = QueueStream(LOG_QUEUE)
@@ -2706,30 +2716,78 @@ def model_setup_summary():
     )
     print ('model setup summary complete', flush = True)
 
+def _attach_queue_logger(log_queue):
+    h = QueueLogHandler(log_queue)
+    h.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    h.setFormatter(fmt)
+    # avoid duplicates if called twice
+    for existing in logger.handlers:
+        if isinstance(existing, QueueLogHandler):
+            break
+    else:
+        logger.addHandler(h)
+
+def _close_hdf5_handles(obj):
+    """Best-effort: flush/close any HDF5/HDFStore handles hanging off the sim object."""
+    candidates = []
+    for name in dir(obj):
+        # avoid dunder & bound methods
+        if name.startswith("_"):
+            continue
+        try:
+            attr = getattr(obj, name)
+        except Exception:
+            continue
+        candidates.append(attr)
+
+    for a in candidates:
+        try:
+            # pandas
+            if hasattr(pd, "HDFStore") and isinstance(a, pd.HDFStore):
+                try: a.flush()
+                except Exception: pass
+                try: a.close()
+                except Exception: pass
+            # PyTables file
+            if tables and getattr(tables, "File", None) and isinstance(a, tables.File):
+                try: a.flush()
+                except Exception: pass
+                try: a.close()
+                except Exception: pass
+            # h5py
+            import h5py
+            if isinstance(a, h5py.File):
+                try: a.flush()
+                except Exception: pass
+                try: a.close()
+                except Exception: pass
+        except Exception:
+            # ignore any introspection weirdness
+            pass
+
+
 def run_simulation_in_background_custom(data_dict, log_queue):
     """Run the simulation in a background thread and stream logs to the frontend."""
-    start_ts = datetime.now()
+    start_ts = datetime.datetime.now()
+    # Send both print() and logger.* lines to the UI stream
+    _attach_queue_logger(log_queue)
     old_stdout = sys.stdout
-    sys.stdout = QueueStream(log_queue)  # route prints to SSE
+    sys.stdout = QueueStream(log_queue)
+
     try:
         print(f"[INFO] Simulation process started at {start_ts.isoformat()}", flush=True)
 
-        # --- Validate / prepare working directory
         proj_dir = data_dict.get('proj_dir')
         if not proj_dir:
             raise ValueError("proj_dir is missing in data_dict")
         os.makedirs(proj_dir, exist_ok=True)
         print(f"[INFO] Project directory: {proj_dir}", flush=True)
 
-        # --- Create simulation object
+        # Create & configure sim
         print("[INFO] Creating simulation object...", flush=True)
-        sim_instance = stryke.simulation(
-            proj_dir=proj_dir,
-            output_name="WebAppModel",
-            wks=None
-        )
+        sim_instance = stryke.simulation(proj_dir=proj_dir, output_name="WebAppModel", wks=None)
 
-        # --- Import inputs (from data_dict) and tag metadata
         print("[INFO] Importing model inputs...", flush=True)
         sim_instance.webapp_import(data_dict, output_name="WebAppModel")
         sim_instance.project_name  = data_dict.get('project_name')  or 'N/A'
@@ -2737,19 +2795,37 @@ def run_simulation_in_background_custom(data_dict, log_queue):
         sim_instance.model_setup   = data_dict.get('model_setup')   or 'N/A'
         sim_instance.units_session = data_dict.get('units')         or 'N/A'
 
-        # --- Run
         print("[INFO] Running simulation...", flush=True)
         sim_instance.run()
 
-        # --- Summarize
-        print("[INFO] Building summary...", flush=True)
+        print("[INFO] Building summary (writing HDF5)...", flush=True)
         sim_instance.summary()
 
-        # --- Generate and write report
-        print("[INFO] Generating report HTML...", flush=True)
-        report_html = generate_report(sim_instance)
-        report_path = os.path.join(proj_dir, "simulation_report.html")
+        # ---- HDF5 SAFETY BARRIER ------------------------------------------------
+        # Make absolutely sure all writers are closed before the report opens the file.
+        print("[INFO] Flushing & closing any HDF5 handles...", flush=True)
+        _close_hdf5_handles(sim_instance)
+        time.sleep(0.25)  # tiny settle to avoid FS lag on network volumes
+        # ----------------------------------------------------------------------------
 
+        # Generate report with retry (common if FS/AV needs a moment)
+        attempts = 0
+        while True:
+            try:
+                print("[INFO] Generating report HTML...", flush=True)
+                report_html = generate_report(sim_instance)  # this reads the HDF5
+                break
+            except Exception as e:
+                attempts += 1
+                retriable = (tables and isinstance(e, getattr(tables, "HDF5ExtError", tuple()))) or isinstance(e, OSError)
+                if retriable and attempts <= 5:
+                    print(f"[WARN] HDF5 busy or transient error (attempt {attempts}/5): {e}", flush=True)
+                    time.sleep(0.75 * attempts)
+                    continue
+                # fall through: non-retriable or too many tries
+                raise
+
+        report_path = os.path.join(proj_dir, "simulation_report.html")
         with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_html)
 
@@ -2759,12 +2835,20 @@ def run_simulation_in_background_custom(data_dict, log_queue):
 
         print(f"[SUCCESS] Report written to {report_path}", flush=True)
 
+        # Optional: print your PyTables/filters once, very helpful for diagnosing filter issues
+        if tables:
+            try:
+                s = io.StringIO()
+                tables.print_versions(out=s)
+                for line in s.getvalue().splitlines():
+                    print(f"[ENV] {line}", flush=True)
+            except Exception:
+                pass
+
     except Exception as e:
-        # Send a concise error to the UI and full stack to server logs
         print(f"[ERROR] {type(e).__name__}: {e}", flush=True)
         logger.exception("Simulation failed in background worker.")
     finally:
-        # Always restore stdout and notify the stream to close
         sys.stdout = old_stdout
         try:
             log_queue.put("[Simulation Complete]")
