@@ -1067,39 +1067,35 @@ class simulation():
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
                     strike_surv_prob = self.Pump(length, param_dict)
                     
-                #logger.debug ('calculated unit survival')
                 
-                # assess barotrauma survival
-                # get fish depth
-                vertical_habitat_value = self.pop['vertical_habitat'].item()
-                if vertical_habitat_value == 'Pelagic':
-                    d_1 = 0.01
-                    d_2 = 0.33
-                elif vertical_habitat_value == 'Benthic':
-                    d_1 = 0.8
-                    d_2 = 1
-                else:
-                    d_1 = 0.01
-                    d_2 = 1
+                if barotrauma == True:                   
+                    # get constants
+                    g = constants.g
+                    p_atm = constants.atm
+                    density = 998.2 # kg/m^3 for water @ 20C
+                    vertical_habitat_value = self.pop['vertical_habitat'].item()
+                    if vertical_habitat_value == 'Pelagic':
+                        d_1 = 0.01
+                        d_2 = 0.33
+                    elif vertical_habitat_value == 'Benthic':
+                        d_1 = 0.8
+                        d_2 = 1
+                    else:
+                        d_1 = 0.01
+                        d_2 = 1
+                        
+                    # get regression slope and intercept (beta 1 and beta 0)
+                    beta_0 = self.pop['beta_0'].item()
+                    beta_1 = self.pop['beta_1'].item()
                     
-                # get regression slope and intercept (beta 1 and beta 0)
-                beta_0 = self.pop['beta_0'].item()
-                beta_1 = self.pop['beta_1'].item()
-                
-                # get forebay depth and create depth range for habitat preference
-                depth_1 = self.unit_params['fb_depth'][route] * d_1 * 0.3048
-                depth_2 = self.unit_params['fb_depth'][route] * d_2 * 0.3048
-                fish_depth = np.random.uniform(depth_1,depth_2,1)[0]
-                
-                # get submergence depth 
-                h_D = self.unit_params['submergence_depth'][route]
-                
-                # get constants
-                g = constants.g
-                p_atm = constants.atm
-                density = 998.2 # kg/m^3 for water @ 20C
-                
-                if barotrauma == True:
+                    # get forebay depth and create depth range for habitat preference
+                    depth_1 = self.unit_params['fb_depth'][route] * d_1 * 0.3048
+                    depth_2 = self.unit_params['fb_depth'][route] * d_2 * 0.3048
+                    fish_depth = np.random.uniform(depth_1,depth_2,1)[0]
+                    
+                    # get submergence depth 
+                    h_D = self.unit_params['submergence_depth'][route]
+                    
                     # calculate pressure ratio
                     p_1 = p_atm + density*g*fish_depth
                     p_2 = p_atm + density*g*h_D
