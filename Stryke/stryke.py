@@ -864,96 +864,96 @@ class simulation():
     
         return 1 - (p_strike * length)
     
-    def barotrauma(self,discharge,K,fish_depth,h_D, beta_0, beta_1, calculate = False):
-        """
-        Calculates the pressure differential to produce a survival probability 
-        as fish pass from an acclimated depth in the impoundment, through the
-        facility, and into the draft tube.
+    # def barotrauma(self,discharge,K,fish_depth,h_D, beta_0, beta_1, calculate = False):
+    #     """
+    #     Calculates the pressure differential to produce a survival probability 
+    #     as fish pass from an acclimated depth in the impoundment, through the
+    #     facility, and into the draft tube.
         
-        It is assumed the highest pressure experienced by a fish occurs at the 
-        end of the penstock at the guide vanes just before it enters the turbine
-        and the lowest pressure (nearly atmospheric) is experienced by the fish 
-        as it enters the draft tube after exiting the turbine runner.
+    #     It is assumed the highest pressure experienced by a fish occurs at the 
+    #     end of the penstock at the guide vanes just before it enters the turbine
+    #     and the lowest pressure (nearly atmospheric) is experienced by the fish 
+    #     as it enters the draft tube after exiting the turbine runner.
         
-        Parameters:
-        - discharge (float): (m^3/s)
-        - K (float): absolute roughness of the penstock material (mm) See table from Miller 1996.
-        - ps_diameter (float): penstock diameter (m)
-        - ps_length (float): penstock length, or length from intake to outflow? (m)
-        - v_head (float): velocity head at turbine inlet (m/s)
-        - fish_depth (array): a value for fish acclimation depth (m)
-        - h_D (float): submergence depth of the draft tube outlet (m) assumed to be 2m
-        - h_2 (float): elevation head at the downstream point (m)
-        - beta_0 (float): regression coefficent
-        - beta_1 (float): regression coefficient
+    #     Parameters:
+    #     - discharge (float): (m^3/s)
+    #     - K (float): absolute roughness of the penstock material (mm) See table from Miller 1996.
+    #     - ps_diameter (float): penstock diameter (m)
+    #     - ps_length (float): penstock length, or length from intake to outflow? (m)
+    #     - v_head (float): velocity head at turbine inlet (m/s)
+    #     - fish_depth (array): a value for fish acclimation depth (m)
+    #     - h_D (float): submergence depth of the draft tube outlet (m) assumed to be 2m
+    #     - h_2 (float): elevation head at the downstream point (m)
+    #     - beta_0 (float): regression coefficent
+    #     - beta_1 (float): regression coefficient
         
-        Returns:
-        - endpoint (array): an array of survival probabilities for each fish depth
-        """
-        def scalarize(x):
-            if isinstance(x, (np.ndarray, list)) and len(x) == 1:
-                return x[0]
-            if hasattr(x, "item") and np.ndim(x) == 0:
-                return x.item()
-            return x
-        discharge = scalarize(discharge)
-        K = scalarize(K)
-        #ps_diameter = scalarize(ps_diameter)
-        #ps_length = scalarize(ps_length)
-        #v_head = scalarize(v_head)
-        fish_depth = scalarize(fish_depth)
-        h_D = scalarize(h_D)
-        #h_2 = scalarize(h_2)
-        beta_0 = scalarize(beta_0)
-        beta_1 = scalarize(beta_1)
+    #     Returns:
+    #     - endpoint (array): an array of survival probabilities for each fish depth
+    #     """
+    #     def scalarize(x):
+    #         if isinstance(x, (np.ndarray, list)) and len(x) == 1:
+    #             return x[0]
+    #         if hasattr(x, "item") and np.ndim(x) == 0:
+    #             return x.item()
+    #         return x
+    #     discharge = scalarize(discharge)
+    #     K = scalarize(K)
+    #     #ps_diameter = scalarize(ps_diameter)
+    #     #ps_length = scalarize(ps_length)
+    #     #v_head = scalarize(v_head)
+    #     fish_depth = scalarize(fish_depth)
+    #     h_D = scalarize(h_D)
+    #     #h_2 = scalarize(h_2)
+    #     beta_0 = scalarize(beta_0)
+    #     beta_1 = scalarize(beta_1)
         
-        # calc penstock area from diameter input
-        #a = np.pi * (ps_diameter/2)**2
+    #     # calc penstock area from diameter input
+    #     #a = np.pi * (ps_diameter/2)**2
         
-        #logger.debug('calculated ps area')
-        # Either the spreadsheet inputs are imperial, or they get converted to
-        # imperial in __init__. Therefore, they must always be converted to metric
-        # for barotrauma math.   
+    #     #logger.debug('calculated ps area')
+    #     # Either the spreadsheet inputs are imperial, or they get converted to
+    #     # imperial in __init__. Therefore, they must always be converted to metric
+    #     # for barotrauma math.   
         
-        # convert imperial input units to metric for calcs
-        discharge = discharge * 0.02831683199881 # cfs to cms
-        #a = a * 0.092903                         # sq ft to sq m
-        #ps_diameter = ps_diameter * 0.3048       # ft to m
-        #ps_length = ps_length * 0.3048           # ft to m
-        #v_head = v_head * 0.02831683199881       # cfs to cms
-        fish_depth = fish_depth * 0.3048       # ft to m
-        h_D = h_D * 0.3048                       # ft to m
-        #h_2 = h_2 * 0.3048                       # ft to m
-        #logger.debug('converted units')
-        # calculate velocities
-        # # if flow is different at input/outflow, probably pass v_1 and v_2 through the function instead
-        # v_1 = calc_v(discharge,a)
-        # v_2 = calc_v(discharge,a)
-        # logger.debug('calculated velocity')
-        # # calculate friction for total head loss
-        # dynamic_viscosity = 0.0010016 # for water @ 20C
-        density = 998.2 # kg/m^3 for water @ 20C
-        # kinematic_viscosity = calc_k_viscosity(dynamic_viscosity, density)
-        # friction = calc_friction(K, ps_diameter, v_1, kinematic_viscosity)
+    #     # convert imperial input units to metric for calcs
+    #     discharge = discharge * 0.02831683199881 # cfs to cms
+    #     #a = a * 0.092903                         # sq ft to sq m
+    #     #ps_diameter = ps_diameter * 0.3048       # ft to m
+    #     #ps_length = ps_length * 0.3048           # ft to m
+    #     #v_head = v_head * 0.02831683199881       # cfs to cms
+    #     fish_depth = fish_depth * 0.3048       # ft to m
+    #     h_D = h_D * 0.3048                       # ft to m
+    #     #h_2 = h_2 * 0.3048                       # ft to m
+    #     #logger.debug('converted units')
+    #     # calculate velocities
+    #     # # if flow is different at input/outflow, probably pass v_1 and v_2 through the function instead
+    #     # v_1 = calc_v(discharge,a)
+    #     # v_2 = calc_v(discharge,a)
+    #     # logger.debug('calculated velocity')
+    #     # # calculate friction for total head loss
+    #     # dynamic_viscosity = 0.0010016 # for water @ 20C
+    #     density = 998.2 # kg/m^3 for water @ 20C
+    #     # kinematic_viscosity = calc_k_viscosity(dynamic_viscosity, density)
+    #     # friction = calc_friction(K, ps_diameter, v_1, kinematic_viscosity)
         
-        # # calculate total head loss
-        # head_loss = calc_h_loss(friction, ps_length, ps_diameter, v_1)
+    #     # # calculate total head loss
+    #     # head_loss = calc_h_loss(friction, ps_length, ps_diameter, v_1)
         
-        # calculate pressure at p2
-        p_atm = constants.atm
-        p_2 = calc_p_2(p_atm, density, h_D)
+    #     # calculate pressure at p2
+    #     p_atm = constants.atm
+    #     p_2 = calc_p_2(p_atm, density, h_D)
         
-        # calculate presure at p1
-        #p_1 = calc_p_1(p_2, fish_depth, h_2, density, v_1, v_2, head_loss)
-        p_1 = calc_p_2(p_atm, density, fish_depth)
+    #     # calculate presure at p1
+    #     #p_1 = calc_p_1(p_2, fish_depth, h_2, density, v_1, v_2, head_loss)
+    #     p_1 = calc_p_2(p_atm, density, fish_depth)
         
-        # calculate pressure ratio
-        p_ratio = p_1/p_2
+    #     # calculate pressure ratio
+    #     p_ratio = p_1/p_2
         
-        # calculate survival rate
-        endpoint = baro_surv_prob(p_ratio, beta_0, beta_1)
+    #     # calculate survival rate
+    #     endpoint = baro_surv_prob(p_ratio, beta_0, beta_1)
 
-        return scalarize(endpoint)
+    #     return scalarize(endpoint)
 
     def node_surv_rate(self,
                        length,
@@ -1793,7 +1793,7 @@ class simulation():
             units.append(unit)
             op_order_dict[unit] = row['op_order']
             rack_spacing = self.facility_params.at[row['Facility'],'Rack Spacing']
-            penstock_D = self.facility_params.at[row['Facility'],'ps_D']
+            penstock_D = row['ps_D'] #self.unit_params.at[row['Facility'],'ps_D']
 
             if np.isnan(penstock_D):
                 barotrauma = False
