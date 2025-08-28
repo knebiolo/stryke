@@ -1098,13 +1098,13 @@ class simulation():
                 g = constants.g
                 p_atm = constants.atm
                 density = 998.2 # kg/m^3 for water @ 20C
-
-                # calculate pressure ratio
-                p_1 = p_atm + density*g*fish_depth
-                p_2 = p_atm + density*g*h_D
-                p_ratio = p_1/p_2
                 
                 if barotrauma == True:
+                    # calculate pressure ratio
+                    p_1 = p_atm + density*g*fish_depth
+                    p_2 = p_atm + density*g*h_D
+                    p_ratio = p_1/p_2
+                    
                     # calculate survival rate
                     baro_prob = baro_surv_prob(p_ratio, beta_0, beta_1)
     
