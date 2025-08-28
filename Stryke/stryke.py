@@ -864,7 +864,7 @@ class simulation():
     
         return 1 - (p_strike * length)
     
-    def barotrauma(self,discharge,K,ps_diameter,ps_length,v_head,fish_depth,h_D,h_2, beta_0, beta_1):
+    def barotrauma(self,discharge,K,fish_depth,h_D, beta_0, beta_1, calculate = False):
         """
         Calculates the pressure differential to produce a survival probability 
         as fish pass from an acclimated depth in the impoundment, through the
@@ -898,17 +898,17 @@ class simulation():
             return x
         discharge = scalarize(discharge)
         K = scalarize(K)
-        ps_diameter = scalarize(ps_diameter)
-        ps_length = scalarize(ps_length)
-        v_head = scalarize(v_head)
+        #ps_diameter = scalarize(ps_diameter)
+        #ps_length = scalarize(ps_length)
+        #v_head = scalarize(v_head)
         fish_depth = scalarize(fish_depth)
         h_D = scalarize(h_D)
-        h_2 = scalarize(h_2)
+        #h_2 = scalarize(h_2)
         beta_0 = scalarize(beta_0)
         beta_1 = scalarize(beta_1)
         
         # calc penstock area from diameter input
-        a = np.pi * (ps_diameter/2)**2
+        #a = np.pi * (ps_diameter/2)**2
         
         #logger.debug('calculated ps area')
         # Either the spreadsheet inputs are imperial, or they get converted to
@@ -917,13 +917,13 @@ class simulation():
         
         # convert imperial input units to metric for calcs
         discharge = discharge * 0.02831683199881 # cfs to cms
-        a = a * 0.092903                         # sq ft to sq m
-        ps_diameter = ps_diameter * 0.3048       # ft to m
-        ps_length = ps_length * 0.3048           # ft to m
-        v_head = v_head * 0.02831683199881       # cfs to cms
+        #a = a * 0.092903                         # sq ft to sq m
+        #ps_diameter = ps_diameter * 0.3048       # ft to m
+        #ps_length = ps_length * 0.3048           # ft to m
+        #v_head = v_head * 0.02831683199881       # cfs to cms
         fish_depth = fish_depth * 0.3048       # ft to m
         h_D = h_D * 0.3048                       # ft to m
-        h_2 = h_2 * 0.3048                       # ft to m
+        #h_2 = h_2 * 0.3048                       # ft to m
         #logger.debug('converted units')
         # calculate velocities
         # # if flow is different at input/outflow, probably pass v_1 and v_2 through the function instead
@@ -962,7 +962,8 @@ class simulation():
                        surv_fun,
                        route,
                        surv_dict,
-                       u_param_dict):
+                       u_param_dict,
+                       barotrauma = False):
         """
         Calculates the survival probability of a fish passing through a node in 
         the migratory network, taking into account the type of hydraulic structure 
@@ -1103,11 +1104,14 @@ class simulation():
                 p_2 = p_atm + density*g*h_D
                 p_ratio = p_1/p_2
                 
-                # calculate survival rate
-                baro_prob = baro_surv_prob(p_ratio, beta_0, beta_1)
-
-                # survival probability considering blade strike and barotrauma
-                baro_surv = 1. - baro_prob                
+                if barotrauma == True:
+                    # calculate survival rate
+                    baro_prob = baro_surv_prob(p_ratio, beta_0, beta_1)
+    
+                    # survival probability considering blade strike and barotrauma
+                    baro_surv = 1. - baro_prob  
+                else:
+                    baro_surv = 1.
                 
                 #logger.debug('calculated barotrauma survival')
                 # incoporate latent mortality
@@ -1789,6 +1793,13 @@ class simulation():
             units.append(unit)
             op_order_dict[unit] = row['op_order']
             rack_spacing = self.facility_params.at[row['Facility'],'Rack Spacing']
+            penstock_D = self.facility_params.at[row['Facility'],'ps_D']
+
+            if np.isnan(penstock_D):
+                barotrauma = False
+            else:
+                barotrauma = True
+                
             # if np.isnan(rack_spacing):
             #     rack_spacing = 2 /12.
             
@@ -1936,6 +1947,7 @@ class simulation():
                                 sta_cap[fac] = 0
                             Q_dict[u] = unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
                             sta_cap[fac] += unit_df.iat[0, unit_df.columns.get_loc('Qcap')]
+                            
 
                         Q_dict['sta_cap'] = sta_cap
 
@@ -2012,7 +2024,7 @@ class simulation():
                                         surv_fun = scalarize(surv_fun)
                                         location = scalarize(location)
                                         #logger.debug('scalarized variables')
-                                        return self.node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict)
+                                        return self.node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict, barotrauma = barotrauma)
                                     except Exception as e:
                                         print(f"Failed node_surv_rate at location={location} with error: {e}")
                                         raise
