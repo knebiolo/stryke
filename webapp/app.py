@@ -87,6 +87,13 @@ def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
                 df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
+from collections import defaultdict
+SESSION_LOCKS = defaultdict(threading.Lock)
+
+def get_session_lock(user_key: str) -> threading.Lock:
+    return SESSION_LOCKS[user_key]
+
+
 # Monkey-patch whichever Stryke import you use
 # try:
 #     import stryke as _stryke_mod           # common import style in your app
@@ -2915,10 +2922,13 @@ def run_simulation_in_background_custom(data_dict, log_queue):
         print(f"[INFO] Project directory: {proj_dir}", flush=True)
 
         print("[INFO] Creating simulation object...", flush=True)
-        sim = stryke.simulation(proj_dir=proj_dir, output_name="WebAppModel", wks=None)
+        #sim = stryke.simulation(proj_dir=proj_dir, output_name="WebAppModel", wks=None)
+        output_name = data_dict.get('output_name', 'WebAppModel')
+        sim = stryke.simulation(proj_dir=proj_dir, output_name=output_name, wks=None)
+        sim.webapp_import(data_dict, output_name=output_name)
 
         print("[INFO] Importing model inputs...", flush=True)
-        sim.webapp_import(data_dict, output_name="WebAppModel")
+        #sim.webapp_import(data_dict, output_name="WebAppModel")
         sim.project_name  = data_dict.get('project_name')  or 'N/A'
         sim.project_notes = data_dict.get('project_notes') or 'N/A'
         sim.model_setup   = data_dict.get('model_setup')   or 'N/A'
@@ -2942,15 +2952,26 @@ def run_simulation_in_background_custom(data_dict, log_queue):
     except Exception as e:
         print(f"[ERROR] {type(e).__name__}: {e}", flush=True)
         logger.exception("Simulation failed in background worker.")
+
     finally:
         sys.stdout = old_stdout
         try:
             log_queue.put("[Simulation Complete]")  # unified sentinel
+            _close_hdf5_handles(sim)
         except Exception:
             pass
 
 @app.route('/run_simulation', methods=['POST'], endpoint='run_simulation')
 def run_simulation():
+    # in run_simulation()
+    output_name = f"WebAppModel_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    session['output_name'] = output_name  # so /report can find it later
+    data_dict = {
+        'proj_dir': session.get('proj_dir'),
+        # ... existing fields ...
+        'output_name': output_name,
+    }
+
     proj_dir = session.get('proj_dir')
     if not proj_dir:
         flash("Session expired or project not initialized.")
@@ -3081,15 +3102,22 @@ def report():
 def generate_report(sim):
     """
     Generate the comprehensive HTML report for the simulation.
-    This version ensures that all plot fonts render at least size 8,
-    rounds numeric values in the Beta Distributions table to two decimals,
-    and plots the daily histograms (entrainment and mortality) side by side.
+    Adds:
+      - Robust HDF5 open with retry/backoff when the file is momentarily locked.
+      - Guaranteed close of the HDFStore via try/finally.
+      - Optional concurrent-read mode via env var HDF5_ALLOW_CONCURRENT_READS=1.
     """
     import os
-    import pandas as pd
+    import time
     import io, base64
     from datetime import datetime
+    import pandas as pd
     import matplotlib.pyplot as plt
+
+    # Optional: allow reading while the writer still has the file open.
+    # Enable in your env (Railway/compose) with HDF5_ALLOW_CONCURRENT_READS=1
+    if os.getenv("HDF5_ALLOW_CONCURRENT_READS") == "1":
+        os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
     # Set global minimum font size for all plots
     plt.rcParams.update({'font.size': 8})
@@ -3097,227 +3125,169 @@ def generate_report(sim):
     hdf_path = os.path.join(sim.proj_dir, f"{sim.output_name}.h5")
     if not os.path.exists(hdf_path):
         return "<p>Error: HDF file not found. Please run the simulation first.</p>"
-    logger.debug('hdf file exists %s',hdf_path)
-    store = pd.HDFStore(hdf_path, mode='r')
 
-    report_sections = [
-        "<div style='margin: 10px;'>"
-        "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
-        "</div>",
-        f"<h1>Simulation Report for Project: {sim.project_name if hasattr(sim, 'project_name') else 'N/A'}</h1>",
-        f"<p><strong>Project Notes:</strong> {sim.project_notes if hasattr(sim, 'project_notes') else 'N/A'}</p>",
-        f"<p><strong>Model Setup:</strong> {sim.model_setup if hasattr(sim, 'model_setup') else 'N/A'}</p>",
-        f"<p><strong>Units:</strong> {sim.units_session if hasattr(sim, 'units_session') else 'N/A'}</p>",
-        f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
-        f"<p>HDF keys found: {store.keys()}</p>"
-    ]
+    # --- Open HDF with retry/backoff to survive transient file locks ---
+    attempts = 12         # ~ a few seconds total with exponential backoff
+    base_delay = 0.15
+    store = None
+    try:
+        for i in range(attempts):
+            try:
+                store = pd.HDFStore(hdf_path, mode='r')
+                break
+            except Exception as e:
+                msg = str(e)
+                # HDF5 lock messages often contain these substrings
+                if ("unable to lock file" in msg) or ("Resource temporarily unavailable" in msg):
+                    if i == attempts - 1:
+                        if 'logger' in globals():
+                            logger.error("HDF5 busy after retries: %s", msg)
+                        return "<p>The report file is busy. Please try again in a few seconds.</p>"
+                    # Exponential backoff
+                    time.sleep(base_delay * (1.5 ** i))
+                    continue
+                # Different error → surface it
+                raise
 
-    units = sim.output_units
-    # Helper: Wrap DataFrame HTML in a scrollable container.
-    def enforce_horizontal(df, name=""):
-        if df is None or df.empty:
-            return f"<p>No {name} data available.</p>"
-        shape_info = f"<p>{name} data shape: {df.shape}</p>"
-        if df.shape[0] > 1 and df.shape[0] > df.shape[1]:
-            df = df.T
-            shape_info += f"<p>Transposed to shape: {df.shape}</p>"
-        # For Beta Distributions, round numeric columns to 2 decimals.
-        if name.lower() == "beta distributions":
-            df = df.copy()
-            for col in df.select_dtypes(include=["number"]).columns:
-                df[col] = df[col].round(2)
-        table_html = df.to_html(index=False, border=1, classes="table")
-        return shape_info + f"<div style='overflow-x:auto;'>{table_html}</div>"
+        if 'logger' in globals():
+            logger.debug('hdf file exists and opened %s', hdf_path)
 
-    def add_section(title, key,  units):
-        report_sections.append(f"<h2>{title}</h2>")
-        if key in store.keys():
-            df = store[key]
-            if units == 'metric':
-                if key == '/Unit_Parameters':
-                    df['intake_vel'] = df.intake_vel * 0.3048
-                    df['D'] = df.D * 0.3048
-                    df['H'] = df.H * 0.3048
-                    df['Qopt'] = df.Qopt * 0.0283168
-                    df['Qcap'] = df.Qcap * 0.0283168
-                    df['B'] = df.B * 0.3048
-                    df['D1'] = df.D1 * 0.3048
-                    df['D2'] = df.D2 * 0.3048
-                elif key == '/Facilities':
-                    df['Bypass_Flow'] = df.Bypass_Flow * 0.0283168
-                    df['Env_Flow'] = df.Env_Flow * 0.0283168
-                    df['Min_Op_Flow'] = df.Min_Op_Flow * 0.0283168
-                    
-            report_sections.append(enforce_horizontal(df, title))
+        report_sections = [
+            "<div style='margin: 10px;'>"
+            "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
+            "</div>",
+            f"<h1>Simulation Report for Project: {getattr(sim, 'project_name', 'N/A')}</h1>",
+            f"<p><strong>Project Notes:</strong> {getattr(sim, 'project_notes', 'N/A')}</p>",
+            f"<p><strong>Model Setup:</strong> {getattr(sim, 'model_setup', 'N/A')}</p>",
+            f"<p><strong>Units:</strong> {getattr(sim, 'units_session', 'N/A')}</p>",
+            f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
+            f"<p>HDF keys found: {store.keys()}</p>"
+        ]
+
+        units = sim.output_units
+
+        # Helper: Wrap DataFrame HTML in a scrollable container.
+        def enforce_horizontal(df, name=""):
+            if df is None or df.empty:
+                return f"<p>No {name} data available.</p>"
+            shape_info = f"<p>{name} data shape: {df.shape}</p>"
+            if df.shape[0] > 1 and df.shape[0] > df.shape[1]:
+                df = df.T
+                shape_info += f"<p>Transposed to shape: {df.shape}</p>"
+            # For Beta Distributions, round numeric columns to 2 decimals.
+            if name.lower() == "beta distributions":
+                df = df.copy()
+                for col in df.select_dtypes(include=["number"]).columns:
+                    df[col] = df[col].round(2)
+            table_html = df.to_html(index=False, border=1, classes="table")
+            return shape_info + f"<div style='overflow-x:auto;'>{table_html}</div>"
+
+        def add_section(title, key, units):
+            report_sections.append(f"<h2>{title}</h2>")
+            if key in store.keys():
+                df = store[key]
+                if units == 'metric':
+                    if key == '/Unit_Parameters':
+                        df['intake_vel'] = df.intake_vel * 0.3048
+                        df['D'] = df.D * 0.3048
+                        df['H'] = df.H * 0.3048
+                        df['Qopt'] = df.Qopt * 0.0283168
+                        df['Qcap'] = df.Qcap * 0.0283168
+                        df['B'] = df.B * 0.3048
+                        df['D1'] = df.D1 * 0.3048
+                        df['D2'] = df.D2 * 0.3048
+                    elif key == '/Facilities':
+                        df['Bypass_Flow'] = df.Bypass_Flow * 0.0283168
+                        df['Env_Flow'] = df.Env_Flow * 0.0283168
+                        df['Min_Op_Flow'] = df.Min_Op_Flow * 0.0283168
+                report_sections.append(enforce_horizontal(df, title))
+            else:
+                report_sections.append(f"<p>No {title} data available.</p>")
+
+        # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
+        report_sections.append("<h2>Hydrograph Plots</h2>")
+        if "/Hydrograph" in store.keys():
+            hydrograph_df = store["/Hydrograph"]
+            if 'datetimeUTC' in hydrograph_df.columns:
+                hydrograph_df['datetimeUTC'] = pd.to_datetime(hydrograph_df['datetimeUTC'])
+                if units == 'metric':
+                    hydrograph_df['DAvgFlow_prorate'] = hydrograph_df.DAvgFlow_prorate * 0.0283168
+
+            def create_hydro_timeseries(df):
+                plt.rcParams.update({'font.size': 8})
+                fig = plt.figure(figsize=(6, 4))
+                plt.plot(df['datetimeUTC'], df['DAvgFlow_prorate'], marker='.', linestyle='-')
+                plt.xlabel("Date")
+                plt.ylabel("Discharge")
+                plt.title("Hydrograph Time Series")
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                plt.close(fig)
+                buf.seek(0)
+                return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+            def create_hydro_hist(df):
+                plt.rcParams.update({'font.size': 8})
+                fig = plt.figure(figsize=(6, 4))
+                plt.hist(df["DAvgFlow_prorate"].dropna(), bins=10, edgecolor='black')
+                plt.xlabel("Discharge")
+                plt.ylabel("Frequency")
+                plt.title("Recurrence Histogram")
+                plt.tight_layout()
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                plt.close(fig)
+                buf.seek(0)
+                return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+            ts_b64 = create_hydro_timeseries(hydrograph_df)
+            hist_b64 = create_hydro_hist(hydrograph_df)
+            report_sections.append(f"""
+            <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
+                <div style="flex:1; min-width:300px; text-align:center;">
+                    <h3>Time Series</h3>
+                    <img src="data:image/png;base64,{ts_b64}" style="max-width:100%; height:auto;" />
+                </div>
+                <div style="flex:1; min-width:300px; text-align:center;">
+                    <h3>Recurrence Histogram</h3>
+                    <img src="data:image/png;base64,{hist_b64}" style="max-width:100%; height:auto;" />
+                </div>
+            </div>
+            """)
         else:
-            report_sections.append(f"<p>No {title} data available.</p>")
+            report_sections.append("<p>No hydrograph data available.</p>")
 
-    # Basic sections
-    # add_section("Nodes", "/Nodes", units)
-    # add_section("Edges", "/Edges", units)
-    # add_section("Unit Parameters", "/Unit_Parameters", units)
-    # add_section("Facilities", "/Facilities", units)
-    # add_section("Flow Scenarios", "/Flow Scenarios", units)
-    # add_section("Operating Scenarios", "/Operating Scenarios", units)
-    # add_section("Population", "/Population", units)
-    
-    #logger.debug('finished basic data sections of report')
-    
-    # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
-    report_sections.append("<h2>Hydrograph Plots</h2>")
-    if "/Hydrograph" in store.keys():
-        hydrograph_df = store["/Hydrograph"]
-        if 'datetimeUTC' in hydrograph_df.columns:
-            hydrograph_df['datetimeUTC'] = pd.to_datetime(hydrograph_df['datetimeUTC'])
-            if units == 'metric':
-                hydrograph_df['DAvgFlow_prorate'] = hydrograph_df.DAvgFlow_prorate * 0.0283168
+        # --- BETA DISTRIBUTIONS ---
+        add_section("Beta Distributions", "/Beta_Distributions", units)
 
-        def create_hydro_timeseries(df):
-            plt.rcParams.update({'font.size': 8})
-            fig = plt.figure(figsize=(6,4))
-            plt.plot(df['datetimeUTC'], df['DAvgFlow_prorate'], marker='.', linestyle='-')
-            plt.xlabel("Date")
-            plt.ylabel("Discharge")
-            plt.title("Hydrograph Time Series")
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', bbox_inches='tight')
-            plt.close(fig)
-            buf.seek(0)
-            return base64.b64encode(buf.getvalue()).decode('utf-8')
+        # --- YEARLY SUMMARY PANEL (Iteration-based) ---
+        yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
+        daily_df = store["/Daily"] if "/Daily" in store.keys() else None
 
-        def create_hydro_hist(df):
-            plt.rcParams.update({'font.size': 8})
-            fig = plt.figure(figsize=(6,4))
-            plt.hist(df["DAvgFlow_prorate"].dropna(), bins=10, edgecolor='black')
-            plt.xlabel("Discharge")
-            plt.ylabel("Frequency")
-            plt.title("Recurrence Histogram")
-            plt.tight_layout()
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', bbox_inches='tight')
-            plt.close(fig)
-            buf.seek(0)
-            return base64.b64encode(buf.getvalue()).decode('utf-8')
-
-        ts_b64 = create_hydro_timeseries(hydrograph_df)
-        hist_b64 = create_hydro_hist(hydrograph_df)
-        report_sections.append(f"""
-        <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
-            <div style="flex:1; min-width:300px; text-align:center;">
-                <h3>Time Series</h3>
-                <img src="data:image/png;base64,{ts_b64}" style="max-width:100%; height:auto;" />
-            </div>
-            <div style="flex:1; min-width:300px; text-align:center;">
-                <h3>Recurrence Histogram</h3>
-                <img src="data:image/png;base64,{hist_b64}" style="max-width:100%; height:auto;" />
-            </div>
-        </div>
-        """)
-    else:
-        report_sections.append("<p>No hydrograph data available.</p>")
-    #logger.debug('finished hydrograph')
-    
-    # --- BETA DISTRIBUTIONS ---
-    add_section("Beta Distributions", "/Beta_Distributions", units)
-
-    # --- YEARLY SUMMARY PANEL (Iteration-based) ---
-    yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
-    daily_df = store["/Daily"] if "/Daily" in store.keys() else None
-
-    if daily_df is not None and not daily_df.empty:
-        if 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
-            daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
-        if 'iteration' in daily_df.columns:
-            iteration_sums = daily_df.groupby('iteration').agg({
-                'num_entrained': 'sum',
-                'num_mortality': 'sum'
-            }).reset_index()
+        if daily_df is not None and not daily_df.empty:
+            if 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
+                daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
+            if 'iteration' in daily_df.columns:
+                iteration_sums = daily_df.groupby('iteration').agg({
+                    'num_entrained': 'sum',
+                    'num_mortality': 'sum'
+                }).reset_index()
+            else:
+                iteration_sums = None
+                if 'logger' in globals():
+                    logger.debug('no daily df iteration column')
         else:
             iteration_sums = None
-            logger.debug('no daily df')
-    else:
-        iteration_sums = None
-        logger.debug('no daily df')
+            if 'logger' in globals():
+                logger.debug('no daily df')
 
-    def create_iteration_hist(df, metric, title):
-        plt.rcParams.update({'font.size': 8})
-        fig = plt.figure()
-        plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
-        plt.xlabel(metric.replace('_', ' ').title())
-        plt.ylabel("Frequency")
-        plt.title(title)
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
-        plt.close(fig)
-        buf.seek(0)
-        return base64.b64encode(buf.getvalue()).decode('utf-8')
-
-    def render_yearly_panel(yearly_df, iteration_sums):
-        if yearly_df is None or yearly_df.empty:
-            return "<p>No yearly summary data available.</p>"
-        row = yearly_df.iloc[0]  # Only one row expected
-        panel_html = "<h2>Seasonal Summary (by Iteration)</h2>"
-        for metric in ["entrainment", "mortality"]:
-            if metric == 'entrainment':
-                metric = 'entrained'
-            if iteration_sums is not None and f'num_{metric}' in iteration_sums.columns:
-                hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric}', f"Total {metric.title()} by Iteration")
-            else:
-                hist_b64 = ""
-            # Use expected column keys; adjust if needed.
-            if metric == 'entrained':
-                metric = 'entrainment'
-
-            mean_val = row.get(f"mean_yearly_{metric}", "N/A")
-            lcl_val = row.get(f"lcl_yearly_{metric}", "N/A")
-            ucl_val = row.get(f"ucl_yearly_{metric}", "N/A")
-            like10 = row.get(f"1_in_10_day_{metric}", "N/A")
-            like100 = row.get(f"1_in_100_day_{metric}", "N/A")
-            like1000 = row.get(f"1_in_1000_day_{metric}", "N/A")
-            panel_html += f"""
-            <div style="display:flex; flex-wrap:wrap; margin-bottom:20px; border:1px solid #ccc; padding:10px; border-radius:5px;">
-                <div style="flex:1; min-width:300px; padding:10px; border-right:1px solid #ddd;">
-                    <h3>Histogram ({metric.title()})</h3>
-                    <div style="text-align:center;">
-                        {'<img src="data:image/png;base64,' + hist_b64 + '" style="max-width:100%; height:auto;" />' if hist_b64 else "<p>No histogram data</p>"}
-                    </div>
-                </div>
-                <div style="flex:1; min-width:300px; padding:10px;">
-                    <h3>Statistics ({metric.title()})</h3>
-                    <p><strong>Average Annual:</strong> {mean_val}</p>
-                    <p><strong>95% CI:</strong> {lcl_val} - {ucl_val}</p>
-                    <p><strong>1 in 10 day event:</strong> {like10}</p>
-                    <p><strong>1 in 100 day event:</strong> {like100}</p>
-                    <p><strong>1 in 1000 day event:</strong> {like1000}</p>
-                </div>
-            </div>
-            """
-        return panel_html
-    
-
-
-    #logger.debug('finished creating yearly panel')
-    if yearly_df is not None and not yearly_df.empty:
-        panel_html = render_yearly_panel(yearly_df, iteration_sums)
-        report_sections.append(panel_html)
-    else:
-        report_sections.append("<p>No yearly summary data available.</p>")
-        logger.debug('something went wrong, yearly df empty')
-
-    # --- DAILY HISTOGRAMS SIDE BY SIDE ---
-    report_sections.append("<h2>Daily Histograms</h2>")
-    if daily_df is not None and not daily_df.empty:
-        # Ensure daily mortality exists
-        if 'num_mortality' not in daily_df.columns and 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
-            daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
-
-        def create_daily_hist(data, col, title):
+        def create_iteration_hist(df, metric, title):
             plt.rcParams.update({'font.size': 8})
             fig = plt.figure()
-            plt.hist(data[col].dropna(), bins=20, edgecolor='black')
-            plt.xlabel(col.replace('_', ' ').title())
+            plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
+            plt.xlabel(metric.replace('_', ' ').title())
             plt.ylabel("Frequency")
             plt.title(title)
             buf = io.BytesIO()
@@ -3326,123 +3296,555 @@ def generate_report(sim):
             buf.seek(0)
             return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-        entr_img = None
-        mort_img = None
-        if 'num_entrained' in daily_df.columns:
-            entr_img = create_daily_hist(daily_df, 'num_entrained', 'Daily Entrainment Distribution')
-        if 'num_mortality' in daily_df.columns:
-            mort_img = create_daily_hist(daily_df, 'num_mortality', 'Daily Mortality Distribution')
+        def render_yearly_panel(yearly_df, iteration_sums):
+            if yearly_df is None or yearly_df.empty:
+                return "<p>No yearly summary data available.</p>"
+            row = yearly_df.iloc[0]  # Only one row expected
+            panel_html = "<h2>Seasonal Summary (by Iteration)</h2>"
+            for metric in ["entrainment", "mortality"]:
+                if metric == 'entrainment':
+                    metric_key = 'entrained'
+                else:
+                    metric_key = 'mortality'
 
-        report_sections.append("""
-        <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
-        """)
-        if entr_img:
-            report_sections.append(f"""
-            <div style="flex:1; min-width:300px; text-align:center;">
-                <h3>Daily Entrainment</h3>
-                <img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />
-            </div>
-            """)
+                if iteration_sums is not None and f'num_{metric_key}' in iteration_sums.columns:
+                    hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric_key}',
+                                                     f"Total {metric.title()} by Iteration")
+                else:
+                    hist_b64 = ""
+
+                mean_val = row.get(f"mean_yearly_{metric}", "N/A")
+                lcl_val  = row.get(f"lcl_yearly_{metric}", "N/A")
+                ucl_val  = row.get(f"ucl_yearly_{metric}", "N/A")
+                like10   = row.get(f"1_in_10_day_{metric}", "N/A")
+                like100  = row.get(f"1_in_100_day_{metric}", "N/A")
+                like1000 = row.get(f"1_in_1000_day_{metric}", "N/A")
+                panel_html += f"""
+                <div style="display:flex; flex-wrap:wrap; margin-bottom:20px; border:1px solid #ccc; padding:10px; border-radius:5px;">
+                    <div style="flex:1; min-width:300px; padding:10px; border-right:1px solid #ddd;">
+                        <h3>Histogram ({metric.title()})</h3>
+                        <div style="text-align:center;">
+                            {'<img src="data:image/png;base64,' + hist_b64 + '" style="max-width:100%; height:auto;" />' if hist_b64 else "<p>No histogram data</p>"}
+                        </div>
+                    </div>
+                    <div style="flex:1; min-width:300px; padding:10px;">
+                        <h3>Statistics ({metric.title()})</h3>
+                        <p><strong>Average Annual:</strong> {mean_val}</p>
+                        <p><strong>95% CI:</strong> {lcl_val} - {ucl_val}</p>
+                        <p><strong>1 in 10 day event:</strong> {like10}</p>
+                        <p><strong>1 in 100 day event:</strong> {like100}</p>
+                        <p><strong>1 in 1000 day event:</strong> {like1000}</p>
+                    </div>
+                </div>
+                """
+            return panel_html
+
+        if yearly_df is not None and not yearly_df.empty:
+            panel_html = render_yearly_panel(yearly_df, iteration_sums)
+            report_sections.append(panel_html)
         else:
-            report_sections.append("""
-            <div style="flex:1; min-width:300px; text-align:center;">
-                <h3>Daily Entrainment</h3>
-                <p>No 'num_entrained' data available.</p>
-            </div>
-            """)
-        if mort_img:
-            report_sections.append(f"""
-            <div style="flex:1; min-width:300px; text-align:center;">
-                <h3>Daily Mortality</h3>
-                <img src="data:image/png;base64,{mort_img}" style="max-width:100%; height:auto;" />
-            </div>
-            """)
-        report_sections.append("</div>")
-    else:
-        report_sections.append("<p>No daily data available.</p>")
+            report_sections.append("<p>No yearly summary data available.</p>")
+            if 'logger' in globals():
+                logger.debug('something went wrong, yearly df empty')
 
-    store.close()
-    #logger.debug('finished daily pannel')
-    final_html = "\n".join(report_sections)
-    full_report = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>Simulation Report</title>
-        <style>
-            body {{
-                font-family: Arial, sans-serif;
-                background: #f7f7f7;
-                margin: 20px;
-                color: #333;
-            }}
-            .container {{
-                max-width: 1800px;
-                margin: auto;
-                background: #fff;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            }}
-            h1 {{
-                color: #0056b3;
-            }}
-            h2 {{
-                color: #0056b3;
-                border-bottom: 1px solid #ddd;
-                padding-bottom: 4px;
-                margin-top: 2rem;
-            }}
-            h3 {{
-                color: #0056b3;
-                margin-top: 1.5rem;
-            }}
-            p {{
-                line-height: 1.6;
-            }}
-            table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin: 1rem 0;
-            }}
-            th, td {{
-                padding: 8px;
-                border: 1px solid #ccc;
-                text-align: left;
-            }}
-            .table-wrap {{
-                overflow-x: auto;
-            }}
-            pre {{
-                background: #f4f4f4;
-                padding: 10px;
-                border-radius: 5px;
-            }}
-            .download-link {{
-                display: inline-block;
-                margin-top: 20px;
-                background: #007BFF;
-                color: white;
-                padding: 10px 15px;
-                text-decoration: none;
-                border-radius: 4px;
-            }}
-            .download-link:hover {{
-                background: #0056b3;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            {final_html}
-            <a href="/download_report_zip" class="download-link">Download Report</a>
-        </div>
-    </body>
-    </html>
-    """
-    #logger.debug('report formatted')
-    return full_report
+        # --- DAILY HISTOGRAMS SIDE BY SIDE ---
+        report_sections.append("<h2>Daily Histograms</h2>")
+        if daily_df is not None and not daily_df.empty:
+            # Ensure daily mortality exists
+            if 'num_mortality' not in daily_df.columns and 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
+                daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
+
+            def create_daily_hist(data, col, title):
+                plt.rcParams.update({'font.size': 8})
+                fig = plt.figure()
+                plt.hist(data[col].dropna(), bins=20, edgecolor='black')
+                plt.xlabel(col.replace('_', ' ').title())
+                plt.ylabel("Frequency")
+                plt.title(title)
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                plt.close(fig)
+                buf.seek(0)
+                return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+            entr_img = create_daily_hist(daily_df, 'num_entrained', 'Daily Entrainment Distribution') \
+                       if 'num_entrained' in daily_df.columns else None
+            mort_img = create_daily_hist(daily_df, 'num_mortality', 'Daily Mortality Distribution') \
+                       if 'num_mortality' in daily_df.columns else None
+
+            report_sections.append("""
+            <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
+            """)
+            if entr_img:
+                report_sections.append(f"""
+                <div style="flex:1; min-width:300px; text-align:center;">
+                    <h3>Daily Entrainment</h3>
+                    <img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />
+                </div>
+                """)
+            else:
+                report_sections.append("""
+                <div style="flex:1; min-width:300px; text-align:center;">
+                    <h3>Daily Entrainment</h3>
+                    <p>No 'num_entrained' data available.</p>
+                </div>
+                """)
+            if mort_img:
+                report_sections.append(f"""
+                <div style="flex:1; min-width:300px; text-align:center;">
+                    <h3>Daily Mortality</h3>
+                    <img src="data:image/png;base64,{mort_img}" style="max-width:100%; height:auto;" />
+                </div>
+                """)
+            report_sections.append("</div>")
+        else:
+            report_sections.append("<p>No daily data available.</p>")
+
+        # ---- finalize HTML ----
+        final_html = "\n".join(report_sections)
+        full_report = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>Simulation Report</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    background: #f7f7f7;
+                    margin: 20px;
+                    color: #333;
+                }}
+                .container {{
+                    max-width: 1800px;
+                    margin: auto;
+                    background: #fff;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                }}
+                h1 {{ color: #0056b3; }}
+                h2 {{
+                    color: #0056b3;
+                    border-bottom: 1px solid #ddd;
+                    padding-bottom: 4px;
+                    margin-top: 2rem;
+                }}
+                h3 {{ color: #0056b3; margin-top: 1.5rem; }}
+                p {{ line-height: 1.6; }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 1rem 0;
+                }}
+                th, td {{
+                    padding: 8px;
+                    border: 1px solid #ccc;
+                    text-align: left;
+                }}
+                .table-wrap {{ overflow-x: auto; }}
+                pre {{
+                    background: #f4f4f4;
+                    padding: 10px;
+                    border-radius: 5px;
+                }}
+                .download-link {{
+                    display: inline-block;
+                    margin-top: 20px;
+                    background: #007BFF;
+                    color: white;
+                    padding: 10px 15px;
+                    text-decoration: none;
+                    border-radius: 4px;
+                }}
+                .download-link:hover {{ background: #0056b3; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                {final_html}
+                <a href="/download_report_zip" class="download-link">Download Report</a>
+            </div>
+        </body>
+        </html>
+        """
+        return full_report
+
+    finally:
+        # Close the HDFStore no matter what happened above
+        try:
+            if store is not None:
+                store.close()
+        except Exception:
+            pass
+
+
+
+# def generate_report(sim):
+#     """
+#     Generate the comprehensive HTML report for the simulation.
+#     This version ensures that all plot fonts render at least size 8,
+#     rounds numeric values in the Beta Distributions table to two decimals,
+#     and plots the daily histograms (entrainment and mortality) side by side.
+#     """
+#     import os
+#     import pandas as pd
+#     import io, base64
+#     from datetime import datetime
+#     import matplotlib.pyplot as plt
+
+#     # Set global minimum font size for all plots
+#     plt.rcParams.update({'font.size': 8})
+
+#     hdf_path = os.path.join(sim.proj_dir, f"{sim.output_name}.h5")
+#     if not os.path.exists(hdf_path):
+#         return "<p>Error: HDF file not found. Please run the simulation first.</p>"
+#     logger.debug('hdf file exists %s',hdf_path)
+#     store = pd.HDFStore(hdf_path, mode='r')
+
+#     report_sections = [
+#         "<div style='margin: 10px;'>"
+#         "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
+#         "</div>",
+#         f"<h1>Simulation Report for Project: {sim.project_name if hasattr(sim, 'project_name') else 'N/A'}</h1>",
+#         f"<p><strong>Project Notes:</strong> {sim.project_notes if hasattr(sim, 'project_notes') else 'N/A'}</p>",
+#         f"<p><strong>Model Setup:</strong> {sim.model_setup if hasattr(sim, 'model_setup') else 'N/A'}</p>",
+#         f"<p><strong>Units:</strong> {sim.units_session if hasattr(sim, 'units_session') else 'N/A'}</p>",
+#         f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
+#         f"<p>HDF keys found: {store.keys()}</p>"
+#     ]
+
+#     units = sim.output_units
+#     # Helper: Wrap DataFrame HTML in a scrollable container.
+#     def enforce_horizontal(df, name=""):
+#         if df is None or df.empty:
+#             return f"<p>No {name} data available.</p>"
+#         shape_info = f"<p>{name} data shape: {df.shape}</p>"
+#         if df.shape[0] > 1 and df.shape[0] > df.shape[1]:
+#             df = df.T
+#             shape_info += f"<p>Transposed to shape: {df.shape}</p>"
+#         # For Beta Distributions, round numeric columns to 2 decimals.
+#         if name.lower() == "beta distributions":
+#             df = df.copy()
+#             for col in df.select_dtypes(include=["number"]).columns:
+#                 df[col] = df[col].round(2)
+#         table_html = df.to_html(index=False, border=1, classes="table")
+#         return shape_info + f"<div style='overflow-x:auto;'>{table_html}</div>"
+
+#     def add_section(title, key,  units):
+#         report_sections.append(f"<h2>{title}</h2>")
+#         if key in store.keys():
+#             df = store[key]
+#             if units == 'metric':
+#                 if key == '/Unit_Parameters':
+#                     df['intake_vel'] = df.intake_vel * 0.3048
+#                     df['D'] = df.D * 0.3048
+#                     df['H'] = df.H * 0.3048
+#                     df['Qopt'] = df.Qopt * 0.0283168
+#                     df['Qcap'] = df.Qcap * 0.0283168
+#                     df['B'] = df.B * 0.3048
+#                     df['D1'] = df.D1 * 0.3048
+#                     df['D2'] = df.D2 * 0.3048
+#                 elif key == '/Facilities':
+#                     df['Bypass_Flow'] = df.Bypass_Flow * 0.0283168
+#                     df['Env_Flow'] = df.Env_Flow * 0.0283168
+#                     df['Min_Op_Flow'] = df.Min_Op_Flow * 0.0283168
+                    
+#             report_sections.append(enforce_horizontal(df, title))
+#         else:
+#             report_sections.append(f"<p>No {title} data available.</p>")
+
+#     # Basic sections
+#     # add_section("Nodes", "/Nodes", units)
+#     # add_section("Edges", "/Edges", units)
+#     # add_section("Unit Parameters", "/Unit_Parameters", units)
+#     # add_section("Facilities", "/Facilities", units)
+#     # add_section("Flow Scenarios", "/Flow Scenarios", units)
+#     # add_section("Operating Scenarios", "/Operating Scenarios", units)
+#     # add_section("Population", "/Population", units)
+    
+#     #logger.debug('finished basic data sections of report')
+    
+#     # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
+#     report_sections.append("<h2>Hydrograph Plots</h2>")
+#     if "/Hydrograph" in store.keys():
+#         hydrograph_df = store["/Hydrograph"]
+#         if 'datetimeUTC' in hydrograph_df.columns:
+#             hydrograph_df['datetimeUTC'] = pd.to_datetime(hydrograph_df['datetimeUTC'])
+#             if units == 'metric':
+#                 hydrograph_df['DAvgFlow_prorate'] = hydrograph_df.DAvgFlow_prorate * 0.0283168
+
+#         def create_hydro_timeseries(df):
+#             plt.rcParams.update({'font.size': 8})
+#             fig = plt.figure(figsize=(6,4))
+#             plt.plot(df['datetimeUTC'], df['DAvgFlow_prorate'], marker='.', linestyle='-')
+#             plt.xlabel("Date")
+#             plt.ylabel("Discharge")
+#             plt.title("Hydrograph Time Series")
+#             plt.xticks(rotation=45)
+#             plt.tight_layout()
+#             buf = io.BytesIO()
+#             plt.savefig(buf, format='png', bbox_inches='tight')
+#             plt.close(fig)
+#             buf.seek(0)
+#             return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+#         def create_hydro_hist(df):
+#             plt.rcParams.update({'font.size': 8})
+#             fig = plt.figure(figsize=(6,4))
+#             plt.hist(df["DAvgFlow_prorate"].dropna(), bins=10, edgecolor='black')
+#             plt.xlabel("Discharge")
+#             plt.ylabel("Frequency")
+#             plt.title("Recurrence Histogram")
+#             plt.tight_layout()
+#             buf = io.BytesIO()
+#             plt.savefig(buf, format='png', bbox_inches='tight')
+#             plt.close(fig)
+#             buf.seek(0)
+#             return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+#         ts_b64 = create_hydro_timeseries(hydrograph_df)
+#         hist_b64 = create_hydro_hist(hydrograph_df)
+#         report_sections.append(f"""
+#         <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
+#             <div style="flex:1; min-width:300px; text-align:center;">
+#                 <h3>Time Series</h3>
+#                 <img src="data:image/png;base64,{ts_b64}" style="max-width:100%; height:auto;" />
+#             </div>
+#             <div style="flex:1; min-width:300px; text-align:center;">
+#                 <h3>Recurrence Histogram</h3>
+#                 <img src="data:image/png;base64,{hist_b64}" style="max-width:100%; height:auto;" />
+#             </div>
+#         </div>
+#         """)
+#     else:
+#         report_sections.append("<p>No hydrograph data available.</p>")
+#     #logger.debug('finished hydrograph')
+    
+#     # --- BETA DISTRIBUTIONS ---
+#     add_section("Beta Distributions", "/Beta_Distributions", units)
+
+#     # --- YEARLY SUMMARY PANEL (Iteration-based) ---
+#     yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
+#     daily_df = store["/Daily"] if "/Daily" in store.keys() else None
+
+#     if daily_df is not None and not daily_df.empty:
+#         if 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
+#             daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
+#         if 'iteration' in daily_df.columns:
+#             iteration_sums = daily_df.groupby('iteration').agg({
+#                 'num_entrained': 'sum',
+#                 'num_mortality': 'sum'
+#             }).reset_index()
+#         else:
+#             iteration_sums = None
+#             logger.debug('no daily df')
+#     else:
+#         iteration_sums = None
+#         logger.debug('no daily df')
+
+#     def create_iteration_hist(df, metric, title):
+#         plt.rcParams.update({'font.size': 8})
+#         fig = plt.figure()
+#         plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
+#         plt.xlabel(metric.replace('_', ' ').title())
+#         plt.ylabel("Frequency")
+#         plt.title(title)
+#         buf = io.BytesIO()
+#         plt.savefig(buf, format='png', bbox_inches='tight')
+#         plt.close(fig)
+#         buf.seek(0)
+#         return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+#     def render_yearly_panel(yearly_df, iteration_sums):
+#         if yearly_df is None or yearly_df.empty:
+#             return "<p>No yearly summary data available.</p>"
+#         row = yearly_df.iloc[0]  # Only one row expected
+#         panel_html = "<h2>Seasonal Summary (by Iteration)</h2>"
+#         for metric in ["entrainment", "mortality"]:
+#             if metric == 'entrainment':
+#                 metric = 'entrained'
+#             if iteration_sums is not None and f'num_{metric}' in iteration_sums.columns:
+#                 hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric}', f"Total {metric.title()} by Iteration")
+#             else:
+#                 hist_b64 = ""
+#             # Use expected column keys; adjust if needed.
+#             if metric == 'entrained':
+#                 metric = 'entrainment'
+
+#             mean_val = row.get(f"mean_yearly_{metric}", "N/A")
+#             lcl_val = row.get(f"lcl_yearly_{metric}", "N/A")
+#             ucl_val = row.get(f"ucl_yearly_{metric}", "N/A")
+#             like10 = row.get(f"1_in_10_day_{metric}", "N/A")
+#             like100 = row.get(f"1_in_100_day_{metric}", "N/A")
+#             like1000 = row.get(f"1_in_1000_day_{metric}", "N/A")
+#             panel_html += f"""
+#             <div style="display:flex; flex-wrap:wrap; margin-bottom:20px; border:1px solid #ccc; padding:10px; border-radius:5px;">
+#                 <div style="flex:1; min-width:300px; padding:10px; border-right:1px solid #ddd;">
+#                     <h3>Histogram ({metric.title()})</h3>
+#                     <div style="text-align:center;">
+#                         {'<img src="data:image/png;base64,' + hist_b64 + '" style="max-width:100%; height:auto;" />' if hist_b64 else "<p>No histogram data</p>"}
+#                     </div>
+#                 </div>
+#                 <div style="flex:1; min-width:300px; padding:10px;">
+#                     <h3>Statistics ({metric.title()})</h3>
+#                     <p><strong>Average Annual:</strong> {mean_val}</p>
+#                     <p><strong>95% CI:</strong> {lcl_val} - {ucl_val}</p>
+#                     <p><strong>1 in 10 day event:</strong> {like10}</p>
+#                     <p><strong>1 in 100 day event:</strong> {like100}</p>
+#                     <p><strong>1 in 1000 day event:</strong> {like1000}</p>
+#                 </div>
+#             </div>
+#             """
+#         return panel_html
+    
+
+
+#     #logger.debug('finished creating yearly panel')
+#     if yearly_df is not None and not yearly_df.empty:
+#         panel_html = render_yearly_panel(yearly_df, iteration_sums)
+#         report_sections.append(panel_html)
+#     else:
+#         report_sections.append("<p>No yearly summary data available.</p>")
+#         logger.debug('something went wrong, yearly df empty')
+
+#     # --- DAILY HISTOGRAMS SIDE BY SIDE ---
+#     report_sections.append("<h2>Daily Histograms</h2>")
+#     if daily_df is not None and not daily_df.empty:
+#         # Ensure daily mortality exists
+#         if 'num_mortality' not in daily_df.columns and 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
+#             daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
+
+#         def create_daily_hist(data, col, title):
+#             plt.rcParams.update({'font.size': 8})
+#             fig = plt.figure()
+#             plt.hist(data[col].dropna(), bins=20, edgecolor='black')
+#             plt.xlabel(col.replace('_', ' ').title())
+#             plt.ylabel("Frequency")
+#             plt.title(title)
+#             buf = io.BytesIO()
+#             plt.savefig(buf, format='png', bbox_inches='tight')
+#             plt.close(fig)
+#             buf.seek(0)
+#             return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+#         entr_img = None
+#         mort_img = None
+#         if 'num_entrained' in daily_df.columns:
+#             entr_img = create_daily_hist(daily_df, 'num_entrained', 'Daily Entrainment Distribution')
+#         if 'num_mortality' in daily_df.columns:
+#             mort_img = create_daily_hist(daily_df, 'num_mortality', 'Daily Mortality Distribution')
+
+#         report_sections.append("""
+#         <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
+#         """)
+#         if entr_img:
+#             report_sections.append(f"""
+#             <div style="flex:1; min-width:300px; text-align:center;">
+#                 <h3>Daily Entrainment</h3>
+#                 <img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />
+#             </div>
+#             """)
+#         else:
+#             report_sections.append("""
+#             <div style="flex:1; min-width:300px; text-align:center;">
+#                 <h3>Daily Entrainment</h3>
+#                 <p>No 'num_entrained' data available.</p>
+#             </div>
+#             """)
+#         if mort_img:
+#             report_sections.append(f"""
+#             <div style="flex:1; min-width:300px; text-align:center;">
+#                 <h3>Daily Mortality</h3>
+#                 <img src="data:image/png;base64,{mort_img}" style="max-width:100%; height:auto;" />
+#             </div>
+#             """)
+#         report_sections.append("</div>")
+#     else:
+#         report_sections.append("<p>No daily data available.</p>")
+
+#     store.close()
+#     #logger.debug('finished daily pannel')
+#     final_html = "\n".join(report_sections)
+#     full_report = f"""
+#     <!DOCTYPE html>
+#     <html lang="en">
+#     <head>
+#         <meta charset="UTF-8">
+#         <title>Simulation Report</title>
+#         <style>
+#             body {{
+#                 font-family: Arial, sans-serif;
+#                 background: #f7f7f7;
+#                 margin: 20px;
+#                 color: #333;
+#             }}
+#             .container {{
+#                 max-width: 1800px;
+#                 margin: auto;
+#                 background: #fff;
+#                 padding: 20px;
+#                 border-radius: 8px;
+#                 box-shadow: 0 0 10px rgba(0,0,0,0.1);
+#             }}
+#             h1 {{
+#                 color: #0056b3;
+#             }}
+#             h2 {{
+#                 color: #0056b3;
+#                 border-bottom: 1px solid #ddd;
+#                 padding-bottom: 4px;
+#                 margin-top: 2rem;
+#             }}
+#             h3 {{
+#                 color: #0056b3;
+#                 margin-top: 1.5rem;
+#             }}
+#             p {{
+#                 line-height: 1.6;
+#             }}
+#             table {{
+#                 width: 100%;
+#                 border-collapse: collapse;
+#                 margin: 1rem 0;
+#             }}
+#             th, td {{
+#                 padding: 8px;
+#                 border: 1px solid #ccc;
+#                 text-align: left;
+#             }}
+#             .table-wrap {{
+#                 overflow-x: auto;
+#             }}
+#             pre {{
+#                 background: #f4f4f4;
+#                 padding: 10px;
+#                 border-radius: 5px;
+#             }}
+#             .download-link {{
+#                 display: inline-block;
+#                 margin-top: 20px;
+#                 background: #007BFF;
+#                 color: white;
+#                 padding: 10px 15px;
+#                 text-decoration: none;
+#                 border-radius: 4px;
+#             }}
+#             .download-link:hover {{
+#                 background: #0056b3;
+#             }}
+#         </style>
+#     </head>
+#     <body>
+#         <div class="container">
+#             {final_html}
+#             <a href="/download_report_zip" class="download-link">Download Report</a>
+#         </div>
+#     </body>
+#     </html>
+#     """
+#     #logger.debug('report formatted')
+#     return full_report
 
 @app.route('/download_report')
 def download_report():
