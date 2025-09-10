@@ -1444,11 +1444,11 @@ def population():
             "length scale": "381.4015"
         },
         {
-            "name": "Ambloplites, Great Lakes, Met Summer",
+            "name": "Ambloplites, Great Lakes, Met Fall",
             "dist": "Log Normal",
             "shape": "1.7352",
             "location": "0",
-            "scale": "0.0012",
+            "scale": "0.0773",
             "max_ent_rate": "24.62",
             "occur_prob": "0.8495",
             "length shape": "0.0162",
