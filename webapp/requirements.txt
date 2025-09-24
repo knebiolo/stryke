@@ -18,6 +18,7 @@ tables
 
 # Flask Web App
 Flask
+Flask-Session==0.6.0
 gunicorn
 Werkzeug
 
