@@ -154,6 +154,7 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password here
 
+
 # Set session lifetime to 1 day (adjust as needed)
 app.permanent_session_lifetime = timedelta(days=1)
 
@@ -298,6 +299,12 @@ SIM_PROJECT_FOLDER = os.path.join(os.getcwd(), 'simulation_project')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SIM_PROJECT_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+from flask_session import Session
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = os.path.join(SIM_PROJECT_FOLDER, '_flask_session')
+os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
+app.config['SESSION_PERMANENT'] = True
+Session(app)
 
 def cleanup_old_data():
     """Remove files and directories older than 24 hours in upload and simulation folders."""
@@ -1297,7 +1304,13 @@ def graph_editor():
 @app.route('/save_graph', methods=['POST'])
 def save_graph():
     from networkx.readwrite import json_graph
+    import json, pandas as pd
 
+    graph_data = request.get_json()
+    proj_dir = session.get('proj_dir')
+    if not proj_dir:
+        return jsonify(success=False, error="No project directory"), 400
+    
     graph_data = request.get_json()
     session['raw_graph_data'] = graph_data
     logger.debug('graph data acquired')
@@ -1354,14 +1367,33 @@ def save_graph():
 
     # Save graph in node-link format
     sim_graph_data = json_graph.node_link_data(G)
-    session['simulation_graph'] = sim_graph_data
+    
+    # 1) Save full Cytoscape JSON and node-link JSON to disk
+    full_path = os.path.join(proj_dir, 'graph_full.json')
+    with open(full_path, 'w', encoding='utf-8') as f:
+        json.dump(graph_data, f)
 
+    node_link_path = os.path.join(proj_dir, 'graph_node_link.json')
+    with open(node_link_path, 'w', encoding='utf-8') as f:
+        json.dump(sim_graph_data, f)
+
+    # 2) Save summary CSVs (nice for auditing)
+    nodes_csv = os.path.join(proj_dir, 'graph_nodes.csv')
+    edges_csv = os.path.join(proj_dir, 'graph_edges.csv')
+    pd.DataFrame(summary_nodes).to_csv(nodes_csv, index=False)
+    pd.DataFrame(summary_edges).to_csv(edges_csv, index=False)
+
+    # 3) Keep only pointers in session; drop heavy blobs
+    session['graph_files'] = {
+        'full': full_path,
+        'node_link': node_link_path,
+        'nodes_csv': nodes_csv,
+        'edges_csv': edges_csv,
+    }
     session['graph_summary'] = {"Nodes": summary_nodes, "Edges": summary_edges}
-    session['nodes_data'] = summary_nodes
-    session['edges_data'] = summary_edges
-
-    # print("Saved Nodes:", list(G.nodes), flush = True)
-    # print("Saved Edges:", list(G.edges), flush = True)
+    session.pop('raw_graph_data', None)        # ⬅️ remove big object
+    session.pop('simulation_graph', None)      # ⬅️ remove big object
+    session.modified = True
 
     return jsonify(success=True, summary=session['graph_summary'])
 
@@ -2812,25 +2844,42 @@ def model_setup_summary():
 
     # --- Other Data ---
     facilities_data = session.get('facilities_data', [])
+    population_parameters = []
+
+    pop_csv_path = session.get('population_csv_path')
+    proj_dir = session.get('proj_dir')
+    
+    if not pop_csv_path and proj_dir:
+        candidate = os.path.join(proj_dir, "population_params.csv")
+        if os.path.exists(candidate):
+            pop_csv_path = candidate
+            session['population_csv_path'] = candidate  # repopulate pointer
+            session.modified = True
     
     population_parameters = []
-    pop_csv_path = session.get('population_csv_path')
-    
-    if pop_csv_path:
-        print("Found population CSV file in session:", pop_csv_path, flush=True)
-        if os.path.exists(pop_csv_path):
-            try:
-                df_pop = pd.read_csv(pop_csv_path)
-                population_parameters = df_pop.to_dict(orient='records')
-            except Exception as e:
-                print("Error reading population CSV file:", e, flush=True)
-        else:
-            print("Population CSV file not found on disk:", pop_csv_path, flush=True)
+    if pop_csv_path and os.path.exists(pop_csv_path):
+        df_pop = pd.read_csv(pop_csv_path)
+        population_parameters = df_pop.to_dict(orient='records')
     else:
-        print("No population CSV file key in session.", flush=True)
-        # Use any in-memory data if we have it
+        # last-ditch fallback
         population_parameters = session.get('population_data_for_sim', [])
 
+    # pop_csv_path = session.get('population_csv_path')
+    
+    # if pop_csv_path:
+    #     print("Found population CSV file in session:", pop_csv_path, flush=True)
+    #     if os.path.exists(pop_csv_path):
+    #         try:
+    #             df_pop = pd.read_csv(pop_csv_path)
+    #             population_parameters = df_pop.to_dict(orient='records')
+    #         except Exception as e:
+    #             print("Error reading population CSV file:", e, flush=True)
+    #     else:
+    #         print("Population CSV file not found on disk:", pop_csv_path, flush=True)
+    # else:
+    #     print("No population CSV file key in session.", flush=True)
+    #     # Use any in-memory data if we have it
+    #     population_parameters = session.get('population_data_for_sim', [])
 
     simulation_graph = session.get('simulation_graph', {})
     #print ('Loaded simulation graph:', simulation_graph, flush = True)
@@ -2989,6 +3038,14 @@ def run_simulation():
             logger.exception("Failed reading population CSV")
             print(f"[WARN] population_csv_path unreadable: {e}", flush=True)
 
+    graph_data = None
+    graph_summary = session.get('graph_summary')
+    gf = session.get('graph_files') or {}
+    node_link_path = gf.get('node_link')
+    if node_link_path and os.path.exists(node_link_path):
+        with open(node_link_path, 'r', encoding='utf-8') as f:
+            graph_data = json.load(f)
+
     data_dict = {
         'proj_dir':      proj_dir,
         'project_name':  session.get('project_name'),
@@ -3001,8 +3058,8 @@ def run_simulation():
         'population':    pop_df,
         'flow_scenarios': session.get('flow_scenario'),
         'hydrograph_file': session.get('hydrograph_file'),
-        'graph_data':     session.get('simulation_graph'),
-        'graph_summary':  session.get('graph_summary'),
+        'graph_data':     graph_data,
+        'graph_summary':  graph_summary,
         'units_system':   session.get('units', 'imperial'),
         'simulation_mode': session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing'),
     }
