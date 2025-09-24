@@ -2699,10 +2699,10 @@ def population():
         #print("DataFrame after ensuring expected columns:", flush = True)
         #print (df_population, flush=True)
         
-        session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
+        #session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
         # After creating and saving the DataFrame
-        #df_population_clean = df_population.where(pd.notnull(df_population), None)
-        #session['population_data_for_sim'] = df_population_clean.to_dict(orient='records')
+        df_population_clean = df_population.where(pd.notnull(df_population), None)
+        session['population_data_for_sim'] = df_population_clean.to_dict(orient='records')
         #print ('population dataframe for modeling:', session.get('population_data_for_sim'), flush=True)
         summary_column_mapping = {
             "Species": "Species Name",
@@ -2738,7 +2738,7 @@ def population():
         df_population.to_csv(pop_csv_path, index=False)   
         session['population_csv_path'] = pop_csv_path
         df_check = pd.read_csv(pop_csv_path)
-        #print("CSV Headers:", df_check.columns.tolist(), flush=True)
+        print("CSV Headers:", df_check.columns.tolist(), flush=True)
         #print("Saved population parameters to file:", pop_csv_path, flush=True)
 
         #print("Population DataFrame for summary:", session.get('population_dataframe_for_summary'), flush=True)
