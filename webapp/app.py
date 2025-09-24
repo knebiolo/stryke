@@ -305,7 +305,7 @@ app.config['SESSION_FILE_DIR'] = os.path.join(SIM_PROJECT_FOLDER, '_flask_sessio
 os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
 app.config['SESSION_PERMANENT'] = True
 Session(app)
-
+                                 # <-- correct
 def cleanup_old_data():
     """Remove files and directories older than 24 hours in upload and simulation folders."""
     now = time.time()

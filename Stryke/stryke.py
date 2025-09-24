@@ -1477,19 +1477,21 @@ class simulation():
             
             # if not, use the hydrograph data in the Hydrology sheet
             else: 
-                flow_df = self.input_hydrograph_df
+                df = self.input_hydrograph_df
                 # apply prorate
                 try:
-                    flow_df['DAvgFlow_prorate'] = flow_df.Discharge * prorate
-                    flow_df['datetimeUTC'] = pd.to_datetime(flow_df.Date)
+                    df['DAvgFlow_prorate'] = df.Discharge * prorate
+                    df['datetimeUTC'] = pd.to_datetime(flow_df.Date)
                 except AttributeError:
                     pass
                 # convert to datetime
                 # extract year
-                flow_df['year'] = pd.DatetimeIndex(flow_df['datetimeUTC']).year
-                flow_df = flow_df[flow_df.year == flow_year]
+                df['year'] = pd.DatetimeIndex(flow_df['datetimeUTC']).year
+                df = df[df.year == flow_year]
                 # get months
-                flow_df['month'] = pd.DatetimeIndex(flow_df['datetimeUTC']).month
+                df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month
+                for i in scen_months:
+                    flow_df = pd.concat([flow_df, df[df.month == i]])
             #print (flow_df)
         
         # if it is a fixed discharge - simulate a hydrograph
