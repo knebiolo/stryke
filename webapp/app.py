@@ -2662,15 +2662,17 @@ def population():
             print("Starting population option selected", flush=True)
         
         # Final conversions for length_mean, length_sd
-        length_mean_val = safe_float(request.form.get('length_mean'))
+        length_mean_val = request.form.get('length_mean')
         if length_mean_val is not None:
+            length_mean_val = safe_float(length_mean_val)
             length_mean_in = length_mean_val / 25.4 if units == 'metric' else length_mean_val
         else:
             length_mean_in = None
         pop_data["Length_mean"] = length_mean_in
     
-        length_sd_val = safe_float(request.form.get('length_sd'))
+        length_sd_val = request.form.get('length_sd')
         if length_sd_val is not None:
+            length_sd_val = safe_float(length_sd_val)
             length_sd_in = length_sd_val / 25.4 if units == 'metric' else length_sd_val
         else:
             length_sd_in = None
@@ -2699,10 +2701,10 @@ def population():
         #print("DataFrame after ensuring expected columns:", flush = True)
         #print (df_population, flush=True)
         
-        # session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
+        session['population_dataframe_for_sim'] = df_population.to_json(orient='records')
         # After creating and saving the DataFrame
-        df_population_clean = df_population.where(pd.notnull(df_population), None)
-        session['population_data_for_sim'] = df_population_clean.to_dict(orient='records')
+        #df_population_clean = df_population.where(pd.notnull(df_population), None)
+        #session['population_data_for_sim'] = df_population_clean.to_dict(orient='records')
         #print ('population dataframe for modeling:', session.get('population_data_for_sim'), flush=True)
         summary_column_mapping = {
             "Species": "Species Name",
