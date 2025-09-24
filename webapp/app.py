@@ -299,12 +299,12 @@ SIM_PROJECT_FOLDER = os.path.join(os.getcwd(), 'simulation_project')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(SIM_PROJECT_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-from flask.session import Session
+
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_FILE_DIR'] = os.path.join(SIM_PROJECT_FOLDER, '_flask_session')
 os.makedirs(app.config['SESSION_FILE_DIR'], exist_ok=True)
 app.config['SESSION_PERMANENT'] = True
-Session(app)
+session.Session(app)
 
 def cleanup_old_data():
     """Remove files and directories older than 24 hours in upload and simulation folders."""
