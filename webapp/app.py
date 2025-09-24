@@ -2812,22 +2812,24 @@ def model_setup_summary():
 
     # --- Other Data ---
     facilities_data = session.get('facilities_data', [])
+    
     population_parameters = []
-    if 'population_csv_path' in session:
-        pop_csv_path = session['population_csv_path']
+    pop_csv_path = session.get('population_csv_path')
+    
+    if pop_csv_path:
         print("Found population CSV file in session:", pop_csv_path, flush=True)
         if os.path.exists(pop_csv_path):
             try:
                 df_pop = pd.read_csv(pop_csv_path)
                 population_parameters = df_pop.to_dict(orient='records')
-                #print("Loaded population parameters from file:", population_parameters, flush=True)
             except Exception as e:
                 print("Error reading population CSV file:", e, flush=True)
         else:
             print("Population CSV file not found on disk:", pop_csv_path, flush=True)
     else:
         print("No population CSV file key in session.", flush=True)
-        population_parameters = session['population_data_for_sim']
+        # Use any in-memory data if we have it
+        population_parameters = session.get('population_data_for_sim', [])
 
 
     simulation_graph = session.get('simulation_graph', {})
