@@ -1,5 +1,7 @@
 # Use an official lightweight Python image.
-FROM python:3.9-slim
+# FROM python:3.9-slim
+FROM public.ecr.aws/docker/library/python:3.9-slim
+
 
 # Set the working directory to /app
 WORKDIR /app
