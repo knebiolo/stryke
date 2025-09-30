@@ -3050,6 +3050,23 @@ def run_simulation():
         flash("Session expired or project not initialized.")
         return redirect(url_for('index'))
 
+    # Guarantee hydrograph CSV is written to the current run_dir
+    hydrograph_data = session.get('hydrograph_data')
+    scenario_type = session.get('scenario_type')
+    if scenario_type == 'hydrograph' and hydrograph_data and hydrograph_data.strip():
+        try:
+            df_hydro = process_hydrograph_data(hydrograph_data)
+        except Exception as e:
+            flash(f"Hydrograph error: {e}")
+            return redirect(url_for('flow_scenarios'))
+        units = session.get('units', 'metric')
+        df_hydro['DAvgFlow_prorate'] = pd.to_numeric(df_hydro['DAvgFlow_prorate'], errors='coerce')
+        if units == 'metric':
+            df_hydro['DAvgFlow_prorate'] = df_hydro['DAvgFlow_prorate'] * 35.3147
+        hydro_file_path = os.path.join(run_dir, 'hydrograph.csv')
+        df_hydro.to_csv(hydro_file_path, index=False)
+        session['hydrograph_file'] = hydro_file_path
+
     # population CSV is optional; don’t crash if missing
     pop_df = None
     pop_csv = session.get('population_csv_path')
