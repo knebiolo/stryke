@@ -850,20 +850,21 @@ def create_project():
     return render_template('create_project.html')
 
 def process_hydrograph_data(raw_data):
-    # Read the pasted text as a tab-delimited file without a header
+    # Try tab first, then comma if only one column detected
     df = pd.read_csv(StringIO(raw_data), delimiter="\t", header=None)
-
-    # Always assign column names (no header expected)
+    if df.shape[1] == 1:
+        df = pd.read_csv(StringIO(raw_data), delimiter=",", header=None)
+    if df.shape[1] != 2:
+        raise ValueError("Hydrograph data must have exactly two columns (date and flow), tab- or comma-delimited. Paste directly from Excel.")
     df.columns = ['datetimeUTC', 'DAvgFlow_prorate']
-
-    # Convert the datetime column to proper datetime format
     df['datetimeUTC'] = pd.to_datetime(df['datetimeUTC'], errors='coerce', infer_datetime_format=True)
-    # Convert discharge values to numeric
     df['DAvgFlow_prorate'] = pd.to_numeric(df['DAvgFlow_prorate'], errors='coerce')
-
-    # Drop rows with invalid dates or missing discharge values
     df.dropna(inplace=True)
-
+    # Debug: print columns and first few rows
+    print("Hydrograph columns:", df.columns.tolist(), flush=True)
+    print("Hydrograph head:", df.head(), flush=True)
+    if df.empty or 'datetimeUTC' not in df.columns:
+        raise ValueError("No valid hydrograph data found. Please check your input format (two columns, no header, paste directly from Excel).")
     return df
 
 @app.route('/flow_scenarios', methods=['GET', 'POST'])
@@ -898,8 +899,11 @@ def flow_scenarios():
         
         # Build the flow scenario DataFrame.
         if scenario_type == 'hydrograph' and hydrograph_data and hydrograph_data.strip():
-            # Process the pasted hydrograph data.
-            df_hydro = process_hydrograph_data(hydrograph_data)
+            try:
+                df_hydro = process_hydrograph_data(hydrograph_data)
+            except Exception as e:
+                flash(f"Hydrograph error: {e}")
+                return redirect(url_for('flow_scenarios'))
             units = session.get('units', 'metric')
             # Ensure the flow column is numeric.
             df_hydro['DAvgFlow_prorate'] = pd.to_numeric(df_hydro['DAvgFlow_prorate'], errors='coerce')
