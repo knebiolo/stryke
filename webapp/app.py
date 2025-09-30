@@ -13,7 +13,7 @@ import queue
 #import datetime
 import io
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, after_this_request, send_from_directory, session, Response, g
-from flask import jsonify, stream_with_context
+from flask import jsonify, stream_with_context, current_app
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -65,7 +65,6 @@ RUN_QUEUES = defaultdict(queue.Queue)
 def get_queue(run_id):
     return RUN_QUEUES[run_id]
 
-
 def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
     """
     Backward-compatible wrapper:
@@ -97,39 +96,12 @@ SESSION_LOCKS = defaultdict(threading.Lock)
 def get_session_lock(user_key: str) -> threading.Lock:
     return SESSION_LOCKS[user_key]
 
-
-# Monkey-patch whichever Stryke import you use
-# try:
-#     import stryke as _stryke_mod           # common import style in your app
-# except ImportError:
-#     from Stryke import stryke as _stryke_mod  # if yours is packaged as Stryke/stryke.py
-
-# # Patch the function on the module so internal calls use this tolerant version
-# _stryke_mod.read_csv_if_exists = _read_csv_if_exists_compat
-
-# # (Optional) quick sanity print so you see it once in logs
-# print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=True)
-
 for name in ("Stryke.stryke", "stryke"):
     mod = sys.modules.get(name)
     if mod:
         setattr(mod, "read_csv_if_exists", _read_csv_if_exists_compat)
 
 print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=True)
-
-
-# # Create a custom stream that writes log messages to LOG_QUEUE
-# class QueueStream:
-#     def __init__(self, q):
-#         self.q = q
-#     def write(self, message):
-#         if message.strip():
-#             try:
-#                 self.q.put(message)
-#             except Exception:
-#                 pass
-#     def flush(self):
-#         pass
  
 class QueueStream:
     """File-like object that writes text lines into a queue.Queue for SSE."""
@@ -185,28 +157,24 @@ class QueueLogHandler(logging.Handler):
             self.q.put(msg.replace("\n", " | "))
         except Exception:
             pass
-
-# Set up logging to use QueueStream
-# --- replace your current global logging setup block with this ---
-# logger = logging.getLogger()
-# logger.setLevel(logging.INFO)
-
-# # remove any existing handlers to avoid duplicates
-# for h in list(logger.handlers):
-#     logger.removeHandler(h)
-
-# stream_handler = logging.StreamHandler(sys.stdout)  # <-- key change
-# formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# stream_handler.setFormatter(formatter)
-# logger.addHandler(stream_handler)
-# ---------------------------------------------------------------
-
-
+        
+def _attach_queue_log_handler(q):
+    """Attach a per-run logging handler that writes to the SSE queue."""
+    h = QueueLogHandler(q)
+    h.setLevel(logging.INFO)
+    h.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    # Attach to this module's logger AND the Stryke logger (if it emits logs)
+    targets = [logging.getLogger(__name__), logging.getLogger("Stryke"), logging.getLogger("Stryke.stryke")]
+    for lg in targets:
+        lg.addHandler(h)
+        # Avoid duplicate console logs from propagation if needed:
+        # lg.propagate = False
+    return h, targets
 
 # ----------------- Password Protection -----------------
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
-app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password here
+app.config['PASSWORD'] = 'XXXXXX'  # Set your desired password here
 
 app.secret_key = os.environ.get('FLASK_SECRET_KEY')
 if not app.secret_key:
@@ -236,42 +204,6 @@ app.config.update(
     SESSION_FILE_DIR=SESSION_ROOT,
     SESSION_PERMANENT=False,
 )
-
-# def cleanup_old_data(root_dirs, older_than_hours=24, exclude=None):
-#     """Delete files/dirs older than the threshold, skipping excluded paths.
-
-#     Args:
-#         root_dirs (list[str]): top-level directories to clean.
-#         older_than_hours (int): age threshold.
-#         exclude (list[str]|None): absolute paths to skip (and their children).
-#     """
-#     exclude = set(os.path.abspath(p) for p in (exclude or []))
-#     cutoff = time.time() - (older_than_hours * 3600)
-
-#     def _is_excluded(path: str) -> bool:
-#         ap = os.path.abspath(path)
-#         return any(ap == ex or ap.startswith(ex + os.sep) for ex in exclude)
-
-#     for root in root_dirs:
-#         if not root or not os.path.isdir(root):
-#             continue
-#         for name in os.listdir(root):
-#             path = os.path.join(root, name)
-#             if _is_excluded(path):
-#                 continue
-#             try:
-#                 st = os.stat(path)
-#             except FileNotFoundError:
-#                 continue
-#             if st.st_mtime < cutoff:
-#                 try:
-#                     if os.path.isdir(path):
-#                         shutil.rmtree(path, ignore_errors=True)
-#                     else:
-#                         os.remove(path)
-#                 except Exception:
-#                     # best-effort cleaner; keep the app running
-#                     pass
 
 def _coerce_empty_to_none(v):
     if v is None:
@@ -412,12 +344,17 @@ Session(app)
                                  # <-- correct
 def cleanup_old_data():
     """Remove files and directories older than 24 hours in upload and simulation folders."""
+    SESSION_DIR = app.config['SESSION_FILE_DIR']
+
     now = time.time()
     cutoff = now - 24 * 3600  # 24 hours ago
 
     for folder in (UPLOAD_FOLDER, SIM_PROJECT_FOLDER):
         for name in os.listdir(folder):
             path = os.path.join(folder, name)
+            # skip the session store
+            if os.path.abspath(path) == os.path.abspath(SESSION_DIR):
+                continue
             try:
                 # If it's a directory, check its last modified time
                 mtime = os.path.getmtime(path)
@@ -439,10 +376,6 @@ threading.Timer(60, cleanup_old_data).start()
 def health():
     print("Health endpoint accessed")
     return "OK", 200
-
-# Make sure these exist near your imports:
-# import os, sys, logging
-# logger = logging.getLogger(__name__)  # or your global logger
 
 class _SafeQueueStream:
     """Minimal stdout proxy to push lines into a Queue."""
@@ -476,6 +409,7 @@ def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
     old_stdout, old_stderr = sys.stdout, sys.stderr
     sys.stdout = QueueStream(q)
     sys.stderr = QueueStream(q)
+    h, targets = _attach_queue_log_handler(q)
 
     # optional file lock (safe if filelock not installed)
     h5_path = os.path.join(ws, f"{output_name}.h5")
@@ -505,9 +439,18 @@ def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
         try: q.put(f"[ERROR] Simulation failed: {e}")
         except Exception: pass
     finally:
+        # restore stdio
         sys.stdout, sys.stderr = old_stdout, old_stderr
-        try: q.put("[Simulation Complete]")
-        except Exception: pass
+        # detach handler so it doesn’t leak to future runs
+        for lg in targets:
+            try:
+                lg.removeHandler(h)
+            except Exception:
+                pass
+        try:
+            q.put("[Simulation Complete]")
+        except Exception:
+            pass
 
 @app.route('/')
 def index():
@@ -610,85 +553,6 @@ def upload_simulation():
         #                        output_filename=output_filename)
 
 
-# @app.route('/download_zip')
-# def download_zip():
-#     user_sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
-
-#     # Remove any old zip files.
-#     for fname in os.listdir(user_sim_folder):
-#         if fname.endswith(".zip"):
-#             old_path = os.path.join(user_sim_folder, fname)
-#             try:
-#                 os.remove(old_path)
-#                 print(f"Removed old ZIP: {old_path}")
-#             except Exception as e:
-#                 print(f"Error removing old ZIP {old_path}: {e}")
-
-#     # Create a new ZIP file.
-#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-#     zip_filename = f"simulation_results_{timestamp}.zip"
-#     zip_filepath = os.path.join(user_sim_folder, zip_filename)
-#     print(f"Creating ZIP file: {zip_filepath}")
-
-#     try:
-#         with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
-#             for file_name in os.listdir(user_sim_folder):
-#                 # Skip files with these extensions (adjust as needed).
-#                 if file_name.endswith((".hdf", ".h5", ".zip")):
-#                     continue
-#                 file_path = os.path.join(user_sim_folder, file_name)
-#                 if os.path.isfile(file_path):
-#                     try:
-#                         zipf.write(file_path, arcname=file_name)
-#                         print(f"Added to ZIP: {file_name}")
-#                     except Exception as e:
-#                         print(f"Skipping file {file_name} => {e}")
-#         print(f"ZIP file successfully created: {zip_filepath}")
-#     except Exception as e:
-#         print(f"Error creating ZIP file: {e}")
-#         flash("Failed to create ZIP file.")
-#         return redirect(url_for('some_error_page'))
-
-#     if os.path.exists(zip_filepath):
-#         return send_file(zip_filepath, as_attachment=True)
-#     else:
-#         flash("ZIP file not found.")
-#         return redirect(url_for('some_error_page'))
-
-from flask import Response, stream_with_context
-
-# @app.get('/stream')
-# def stream():
-#     run_id = request.args.get('run', '')
-#     if not run_id:
-#         return "Missing ?run=<run_id>", 400
-
-#     q = get_queue(run_id)
-
-#     def event_stream():
-#         import queue as _q
-#         while True:
-#             try:
-#                 msg = q.get(timeout=20)
-#             except _q.Empty:
-#                 # keep the SSE connection alive
-#                 yield "data: [keepalive]\n\n"
-#                 continue
-
-#             # stream the log line
-#             yield f"data: {msg}\n\n"
-
-#             # close this run's stream when the worker signals done
-#             if msg == "[Simulation Complete]":
-#                 break
-
-#     # SSE headers
-#     return Response(
-#         event_stream(),
-#         mimetype="text/event-stream",
-#         headers={"Cache-Control": "no-cache"}
-#     )
-
 @app.get('/stream')
 def stream():
     run_id = request.args.get('run', '')
@@ -719,18 +583,8 @@ def stream():
         },
     )
 
-# DROP-IN: secure results + download routes scoped to a specific run sandbox
-# Add this helper once (near your routes)
-
 def _safe_path(base_dir: str, *parts: str) -> str:
     """Join parts to base_dir and ensure the result stays inside base_dir."""
-    base_abs = os.path.abspath(base_dir)
-    target = os.path.abspath(os.path.join(base_abs, *parts))
-    if not target.startswith(base_abs + os.sep):
-        raise PermissionError("Not allowed")
-    return target
-
-def _safe_path(base_dir: str, *parts: str) -> str:
     base_abs = os.path.abspath(base_dir)
     target = os.path.abspath(os.path.join(base_abs, *parts))
     if not target.startswith(base_abs + os.sep):
@@ -761,41 +615,6 @@ def results():
                            output_file=os.path.basename(target_path),
                            run_id=run_id,
                            summary='Simulation ran successfully. You can download the output below.')
-
-
-# @app.route('/results')
-# def results():
-#     # require run token
-#     run_id = request.args.get('run', '')
-#     if not run_id:
-#         return "Missing ?run=<run_id>", 400
-
-#     # which file to show? default to Simulation_Output.h5
-#     output_file = request.args.get('output_file', 'Simulation_Output.h5')
-
-#     # resolve to this user's per-run sandbox
-#     user_root = session.get('user_sim_folder', '')
-#     if not user_root:
-#         flash('Session expired. Please log in again.')
-#         return redirect(url_for('login'))
-
-#     run_dir = os.path.join(user_root, run_id)
-#     try:
-#         target_path = _safe_path(run_dir, output_file)
-#     except PermissionError:
-#         return "Not allowed", 403
-
-#     if not os.path.exists(target_path):
-#         return "Not found", 404
-
-#     # Render your existing results page; keep only the filename for display
-#     return render_template(
-#         'results.html',
-#         output_file=os.path.basename(target_path),
-#         run_id=run_id,
-#         summary='Simulation ran successfully. You can download the output below.'
-#     )
-
 
 @app.route('/download')
 def download():
@@ -1004,8 +823,6 @@ def clear_folder(folder_path):
             except Exception as e:
                 print(f"Failed to delete {file_path}: {e}")
 
-
-
 @app.route('/create_project', methods=['GET', 'POST'])
 def create_project():
     if request.method == 'POST':
@@ -1028,7 +845,6 @@ def create_project():
         return redirect(url_for('flow_scenarios'))
 
     return render_template('create_project.html')
-
 
 def process_hydrograph_data(raw_data):
     # Read the pasted text as a tab-delimited file without a header
@@ -1160,15 +976,11 @@ def flow_scenarios():
     units = session.get('units', 'metric')
     return render_template('flow_scenarios.html', units=units)
 
-
-
-# ----------------- New Code: Sync model_setup with simulation_mode -----------------
 @app.before_request
 def sync_simulation_mode():
     # If the project model setup has been defined, copy it to 'simulation_mode'
     if 'model_setup' in session:
         session['simulation_mode'] = session['model_setup']
-
 
 @app.route('/facilities', methods=['GET', 'POST'])
 def facilities():
@@ -1335,7 +1147,6 @@ def unit_parameters():
             "D2": "D2",
             "lambda": "lambda",
             "roughness": "roughness",
-            # New fields for barotrauma:
             "fb_depth": "fb_depth",                  # forebay depth
             "ps_D": "ps_D",                          # penstock diameter
             "ps_length": "ps_length",                # penstock length
@@ -1377,105 +1188,6 @@ def unit_parameters():
         flash("Unit parameters saved successfully!")
         return redirect(url_for('operating_scenarios'))
     return render_template('unit_parameters.html')
-
-# @app.route('/unit_parameters', methods=['GET', 'POST'])
-# def unit_parameters():
-#     if request.method == 'POST':
-#         print("Received form data:")
-#         for key, value in request.form.items():
-#             print(f"{key} : {value}")
-
-#         # Merge form data into rows (each row represents one unit's parameters)
-#         rows = {}
-#         for key, value in request.form.items():
-#             parts = key.rsplit('_', 1)
-#             if len(parts) != 2:
-#                 continue
-#             field_name, row_id = parts
-#             # Remove any trailing underscore and digits from field_name
-#             clean_field_name = re.sub(r'_\d+$', '', field_name)
-#             print(f"Key: {key} split into clean_field_name: {clean_field_name} and row_id: {row_id}")
-#             if row_id.isdigit():
-#                 if row_id not in rows:
-#                     rows[row_id] = {}
-#                 rows[row_id][clean_field_name] = value
-
-#         print("Merged rows:")
-#         for row_id, data in rows.items():
-#             print(f"Row {row_id}: {data}")
-
-#         # Convert merged rows to a list of dictionaries.
-#         unit_parameters_raw = list(rows.values())
-#         # Save raw data for reporting purposes.
-#         session['unit_parameters_raw'] = unit_parameters_raw
-
-#         # Create a DataFrame from the raw unit parameters.
-#         df_units = pd.DataFrame(unit_parameters_raw)
-        
-#         # Rename columns to match the Excel sheet expected by Stryke.
-#         # Adjust these keys if your form uses different names.
-#         rename_map = {
-#             "facility": "Facility",  # if applicable; often auto-filled
-#             "unit": "Unit",          # if applicable; might be generated automatically
-#             "type": "Runner Type",
-#             "velocity": "intake_vel",
-#             "order": "op_order",
-#             "H": "H",
-#             "RPM": "RPM",
-#             "D": "D",
-#             "efficiency": "ada",
-#             "N": "N",
-#             "Qopt": "Qopt",
-#             "Qcap": "Qcap",
-#             "B": "B",
-#             "iota": "iota",
-#             "D1": "D1",
-#             "D2": "D2",
-#             "lambda": "lambda",
-#             "roughness": "roughness"
-#         }
-#         df_units.rename(columns=rename_map, inplace=True)
-        
-#         # Retrieve the user's unit system.
-#         units = session.get('units', 'metric')
-        
-#         # If units are metric, convert the appropriate fields to imperial.
-#         # Conversion factors: meters -> feet: multiply by 3.28084; m³/s -> ft³/s: multiply by 35.31469989.
-#         if units == 'metric':
-#             conv_length = 3.28084  # For fields measured in meters
-#             conv_flow = 35.31469989  # For fields measured in m³/s
-
-#             # List of columns to convert from meters to feet.
-#             length_fields = ["intake_vel", "H", "D", "B", "D1", "D2"]
-#             # List of columns to convert from m³/s to ft³/s.
-#             flow_fields = ["Qopt", "Qcap"]
-
-#             for col in length_fields:
-#                 if col in df_units.columns:
-#                     # Convert to numeric and multiply by conversion factor.
-#                     df_units[col] = pd.to_numeric(df_units[col], errors='coerce') * conv_length
-
-#             for col in flow_fields:
-#                 if col in df_units.columns:
-#                     df_units[col] = pd.to_numeric(df_units[col], errors='coerce') * conv_flow
-
-#         # Assume unit_params is your DataFrame containing the unit parameters
-#         unit_params_path = os.path.join(session['proj_dir'], 'unit_params.csv')
-#         df_units.to_csv(unit_params_path, index=False)
-        
-#         # Store only the file path in the session
-#         session['unit_params_file'] = unit_params_path
-#         # Save the converted DataFrame into session in JSON-serializable format.
-#         #session['unit_parameters_dataframe'] = df_units.to_json(orient='records')
-#         #session['unit_parameters'] = df_units.to_dict(orient='records')
-        
-#         # Debug print the flow scenario DataFrame.
-#         print("DEBUG: Unit Parameters DataFrame:")
-#         print(df_units, flush=True)
-        
-#         flash("Unit parameters saved successfully!")
-#         return redirect(url_for('operating_scenarios'))
-#     return render_template('unit_parameters.html')
 
 @app.route('/operating_scenarios', methods=['GET', 'POST'])
 def operating_scenarios():
@@ -1584,90 +1296,111 @@ def get_operating_scenarios():
 def graph_editor():
     return render_template('graph_editor.html')
 
-
 @app.route('/save_graph', methods=['POST'])
 def save_graph():
-    from networkx.readwrite import json_graph
-    import json, pandas as pd
+    log = current_app.logger
 
-    graph_data = request.get_json()
     proj_dir = session.get('proj_dir')
     if not proj_dir:
         return jsonify(success=False, error="No project directory"), 400
-    
-    graph_data = request.get_json()
+
+    try:
+        graph_data = request.get_json(silent=False)
+    except Exception as e:
+        log.exception("Failed to parse JSON body")
+        return jsonify(success=False, error=f"Invalid JSON: {e}"), 400
+
+    if not isinstance(graph_data, dict):
+        return jsonify(success=False, error="JSON body must be an object"), 400
+
     session['raw_graph_data'] = graph_data
-    logger.debug('graph data acquired')
+    log.debug('Graph data acquired')
+
     summary_nodes = []
-    simulation_nodes = {}  # Use node_id as the key
+    simulation_nodes = {}  # keyed by node_id
     summary_edges = []
     simulation_edges = []
 
-    nodes = graph_data.get("elements", {}).get("nodes", [])
+    # --- Nodes ---
+    elements = graph_data.get("elements", {}) if isinstance(graph_data, dict) else {}
+    nodes = elements.get("nodes", []) if isinstance(elements, dict) else []
     for node in nodes:
-        data = node.get("data", {})
+        data = (node or {}).get("data", {})
         node_id = data.get("id")
+        if not node_id:
+            # skip malformed nodes
+            log.debug("Skipping node without id: %r", node)
+            continue
         label = data.get("label", node_id)
         surv_fun = data.get("surv_fun", "default")
-        survival_rate = data.get("survival_rate", None)
-        # Swap the ID with Location
+        survival_rate = data.get("survival_rate")
+
         summary_nodes.append({
-            "ID": label,         # Use label as the ID
-            "Location": node_id,   # Use node_id as the Location
+            "ID": label,          # Use label as the ID (human-friendly)
+            "Location": node_id,  # Use node_id as the Location (machine id)
             "Surv_Fun": surv_fun,
-            "Survival": survival_rate
+            "Survival": survival_rate,
         })
 
         simulation_nodes[node_id] = {
             "ID": label,
             "Location": node_id,
             "Surv_Fun": surv_fun,
-            "Survival": survival_rate
+            "Survival": survival_rate,
         }
-    logger.debug('Nodes found')
-    
-    edges = graph_data.get("elements", {}).get("edges", [])
+    log.debug('Nodes processed: %d', len(simulation_nodes))
+
+    # --- Edges ---
+    edges = elements.get("edges", []) if isinstance(elements, dict) else []
     for edge in edges:
-        data = edge.get("data", {})
+        data = (edge or {}).get("data", {})
         source = data.get("source")
         target = data.get("target")
-        weight = float(data.get("weight", "1.0"))
+        if not source or not target:
+            log.debug("Skipping edge without source/target: %r", edge)
+            continue
+        # robust weight parsing
+        w_raw = data.get("weight", 1.0)
+        try:
+            weight = float(w_raw)
+        except Exception:
+            log.debug("Invalid weight %r; defaulting to 1.0", w_raw)
+            weight = 1.0
 
-        summary_edges.append({
-            "_from": source,
-            "_to": target,
-            "weight": weight
-        })
-
+        summary_edges.append({"_from": source, "_to": target, "weight": weight})
         simulation_edges.append((source, target, {"weight": weight}))
 
-    logger.debug('edges created')
-    # Build the NetworkX graph
+    log.debug('Edges processed: %d', len(simulation_edges))
+
+    # --- Build NetworkX graph ---
     G = nx.DiGraph()
     for node_id, attrs in simulation_nodes.items():
         G.add_node(node_id, **attrs)
     for source, target, attrs in simulation_edges:
         G.add_edge(source, target, **attrs)
 
-    # Save graph in node-link format
     sim_graph_data = json_graph.node_link_data(G)
-    
-    # 1) Save full Cytoscape JSON and node-link JSON to disk
-    full_path = os.path.join(proj_dir, 'graph_full.json')
-    with open(full_path, 'w', encoding='utf-8') as f:
-        json.dump(graph_data, f)
 
-    node_link_path = os.path.join(proj_dir, 'graph_node_link.json')
-    with open(node_link_path, 'w', encoding='utf-8') as f:
-        json.dump(sim_graph_data, f)
+    # --- Write outputs ---
+    try:
+        os.makedirs(proj_dir, exist_ok=True)
+        full_path = os.path.join(proj_dir, 'graph_full.json')
+        with open(full_path, 'w', encoding='utf-8') as f:
+            json.dump(graph_data, f, ensure_ascii=False)
 
-    # 2) Save summary CSVs (nice for auditing)
-    nodes_csv = os.path.join(proj_dir, 'graph_nodes.csv')
-    edges_csv = os.path.join(proj_dir, 'graph_edges.csv')
-    pd.DataFrame(summary_nodes).to_csv(nodes_csv, index=False)
-    pd.DataFrame(summary_edges).to_csv(edges_csv, index=False)
+        node_link_path = os.path.join(proj_dir, 'graph_node_link.json')
+        with open(node_link_path, 'w', encoding='utf-8') as f:
+            json.dump(sim_graph_data, f, ensure_ascii=False)
 
-    # 3) Keep only pointers in session; drop heavy blobs
+        nodes_csv = os.path.join(proj_dir, 'graph_nodes.csv')
+        edges_csv = os.path.join(proj_dir, 'graph_edges.csv')
+        pd.DataFrame(summary_nodes).to_csv(nodes_csv, index=False)
+        pd.DataFrame(summary_edges).to_csv(edges_csv, index=False)
+    except Exception as e:
+        log.exception("Failed writing graph artifacts")
+        return jsonify(success=False, error=f"Write error: {e}"), 500
+
+    # --- Record lightweight pointers & summaries in session ---
     session['graph_files'] = {
         'full': full_path,
         'node_link': node_link_path,
@@ -1675,12 +1408,11 @@ def save_graph():
         'edges_csv': edges_csv,
     }
     session['graph_summary'] = {"Nodes": summary_nodes, "Edges": summary_edges}
-    session.pop('raw_graph_data', None)        # ⬅️ remove big object
-    session.pop('simulation_graph', None)      # ⬅️ remove big object
+    session.pop('raw_graph_data', None)   # drop heavy blobs
+    session.pop('simulation_graph', None)
     session.modified = True
 
     return jsonify(success=True, summary=session['graph_summary'])
-
 
 @app.route('/get_unit_parameters', methods=['GET'])
 def get_unit_parameters():
@@ -3063,16 +2795,11 @@ def population():
         flash("Population parameters saved successfully!")
         return redirect(url_for('model_setup_summary'))
 
-
     # GET request
     return render_template('population.html', species_defaults=species_defaults)
 
 @app.route('/model_summary')
 def model_setup_summary():
-    import os
-    import json
-    import pandas as pd
-
     # --- Unit Parameters ---
     unit_parameters = []
     unit_columns = []
@@ -3230,40 +2957,58 @@ def _close_hdf5_handles(obj):
             # ignore any introspection weirdness
             pass
 
-
-# === UI-driven worker: uses per-run queue `q`, not LOG_QUEUE ===
-# Call signature from /run_simulation route: run_simulation_in_background_custom(data_dict, q)
-
-def run_simulation_in_background_custom(data_dict: dict, q: queue.Queue):
-    """Background thread for UI-driven runs.
-
-    Expects data_dict to include at least:
+def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
+    """
+    Background thread for UI-driven runs.
+    Expects at least:
       - proj_dir (str): per-run sandbox path
       - output_name (str)
       - other fields your Stryke factory reads (project_name, facilities, ...)
     """
-    old_stdout = sys.stdout
+    import os, sys, logging
+
+    log = logging.getLogger(__name__)  # <-- local logger (safe in a thread)
+
+    # ---- Validate inputs up front
+    proj_dir = data_dict.get('proj_dir')
+    output_name = data_dict.get('output_name', 'Simulation_Output')
+    if not proj_dir or not os.path.isdir(proj_dir):
+        try: q.put(f"[ERROR] Invalid proj_dir: {proj_dir!r}")
+        finally:
+            try: q.put("[Simulation Complete]"); 
+            except Exception: pass
+        return
+
+    # ---- Route all print()/logger output to this run's queue
+    old_stdout, old_stderr = sys.stdout, sys.stderr
     sys.stdout = QueueStream(q)
+    sys.stderr = QueueStream(q)
+
+    # ---- Optional HDF5 lock (safe if filelock not installed)
+    h5_path = os.path.join(proj_dir, f"{output_name}.h5")
     try:
-        logger.info("Starting simulation (UI path)...")
+        from filelock import FileLock
+        lock = FileLock(h5_path + ".lock")
+    except Exception:
+        lock = None
 
-        proj_dir    = data_dict['proj_dir']
-        output_name = data_dict['output_name']
+    try:
+        log.info("Starting simulation (UI path)...")
 
-        # If your Stryke factory for UI path differs, keep your original build here.
-        # Many apps pass a dict to a convenience constructor; adapt as needed.
-        sim = stryke.simulation_from_ui(data_dict) if hasattr(stryke, 'simulation_from_ui') \
-              else stryke.simulation(proj_dir, data_dict.get('wks', ''), output_name=output_name)
-
-        # Optional: guard HDF5 writes against accidental double-clicks
-        h5_path = os.path.join(proj_dir, f"{output_name}.h5")
+        # Build the simulation from UI data. Prefer a convenience ctor if present.
         try:
-            from filelock import FileLock
-            lock = FileLock(h5_path + ".lock")
-        except Exception:
-            lock = None
+            sim = stryke.simulation_from_ui(data_dict)  # newer style
+        except AttributeError:
+            # Fallback for older Stryke APIs
+            wks = data_dict.get('wks', '')
+            try:
+                sim = stryke.simulation(proj_dir, wks, output_name=output_name)
+            except TypeError:
+                # Oldest signature without output_name kw
+                sim = stryke.simulation(proj_dir, wks)
 
         sim.webapp_import()
+
         if lock:
             with lock:
                 sim.run()
@@ -3272,28 +3017,29 @@ def run_simulation_in_background_custom(data_dict: dict, q: queue.Queue):
             sim.run()
             sim.summary()
 
-        logger.info("Simulation completed successfully (UI path).")
-    except Exception as e:
-        logger.exception("Simulation failed (UI path).")
-        try:
-            q.put(f"[ERROR] Simulation failed: {e}")
-        except Exception:
-            pass
-    finally:
-        sys.stdout = old_stdout
-        try:
-            q.put("[Simulation Complete]")
-        except Exception:
-            pass
+        log.info("Simulation completed successfully (UI path).")
 
+    except Exception as e:
+        # Make sure the traceback hits logs and the SSE stream
+        log.exception("Simulation failed (UI path).")
+        try: q.put(f"[ERROR] Simulation failed: {e}")
+        except Exception: pass
+
+    finally:
+        # Always restore stdio and close the SSE stream cleanly
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+        try: q.put("[Simulation Complete]")
+        except Exception: pass
 
 @app.route('/run_simulation', methods=['POST'], endpoint='run_simulation')
 def run_simulation():
+    log = current_app.logger
+
     # Unique name for artifacts
     output_name = f"WebAppModel_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     session['output_name'] = output_name
 
-    # --- NEW: per-run sandbox under the user's sim folder ---
+    # --- per-run sandbox under the user's sim folder ---
     base = session.get('user_sim_folder')
     if not base:
         flash("Session expired or project not initialized.")
@@ -3307,7 +3053,7 @@ def run_simulation():
     session['proj_dir'] = run_dir   # so /report reads the right report for THIS run
     session['last_run_id'] = run_id # handy for templates/logs pages
 
-    #get the per-run queue (from #1)
+    # get the per-run queue (from #1)
     q = get_queue(run_id)
 
     proj_dir = session.get('proj_dir')
@@ -3322,28 +3068,36 @@ def run_simulation():
         try:
             pop_df = pd.read_csv(pop_csv, low_memory=False)
         except Exception as e:
-            logger.exception("Failed reading population CSV")
-            print(f"[WARN] population_csv_path unreadable: {e}", flush=True)
+            log.exception("Failed reading population CSV")
+            # still proceed; log to the SSE stream as well
+            try:
+                q.put(f"[WARN] population_csv_path unreadable: {e}")
+            except Exception:
+                pass
 
+    # Graph (optional)
     graph_data = None
     graph_summary = session.get('graph_summary')
     gf = session.get('graph_files') or {}
     node_link_path = gf.get('node_link')
     if node_link_path and os.path.exists(node_link_path):
-        with open(node_link_path, 'r', encoding='utf-8') as f:
-            graph_data = json.load(f)
+        try:
+            with open(node_link_path, 'r', encoding='utf-8') as f:
+                graph_data = json.load(f)
+        except Exception:
+            log.exception('Failed reading node_link graph file: %s', node_link_path)
 
     data_dict = {
-        'proj_dir':       proj_dir,
-        'project_name':   session.get('project_name'),
-        'project_notes':  session.get('project_notes'),
-        'model_setup':    session.get('model_setup'),
-        'units':          session.get('units'),
-        'facilities':     session.get('facilities_data'),
-        'unit_parameters_file':    session.get('unit_params_file'),
+        'proj_dir':        proj_dir,
+        'project_name':    session.get('project_name'),
+        'project_notes':   session.get('project_notes'),
+        'model_setup':     session.get('model_setup'),
+        'units':           session.get('units'),
+        'facilities':      session.get('facilities_data'),
+        'unit_parameters_file':     session.get('unit_params_file'),
         'operating_scenarios_file': session.get('op_scen_file'),
-        'population':     pop_df,
-        'flow_scenarios': session.get('flow_scenario'),
+        'population':      pop_df,
+        'flow_scenarios':  session.get('flow_scenario'),
         'hydrograph_file': session.get('hydrograph_file'),
         'graph_data':      graph_data,
         'graph_summary':   graph_summary,
@@ -3352,20 +3106,15 @@ def run_simulation():
         'output_name':     output_name,
     }
 
-    #pass the per-run queue (q), not LOG_QUEUE
+    # Start the UI-driven worker with the per-run queue
     t = threading.Thread(target=run_simulation_in_background_custom,
                          args=(data_dict, q),
                          daemon=True)
     t.start()
     flash("Simulation started! Check logs for progress.")
 
-    #Include run token so the logs page can open /stream?run=...
+    # Include run token so the logs page can open /stream?run=...
     return redirect(url_for('simulation_logs', run=run_id))
-
-
-# @app.route('/simulation_logs')
-# def simulation_logs():
-#     return render_template('simulation_logs.html')
 
 @app.route("/simulation_logs")
 def simulation_logs():
@@ -3425,81 +3174,89 @@ def debug_report_path():
 
 @app.route('/report')
 def report():
+    log = current_app.logger
+
     proj_dir = session.get('proj_dir')
-    marker = os.path.join(proj_dir, "report_path.txt")
+    if not proj_dir or not os.path.isdir(proj_dir):
+        flash('Session expired or run not initialized.')
+        return redirect(url_for('upload_simulation'))
+
+    marker = os.path.join(proj_dir, 'report_path.txt')
     if os.path.exists(marker):
-        with open(marker, 'r', encoding='utf-8') as f:
-            report_path = f.read().strip()
+        try:
+            with open(marker, 'r', encoding='utf-8') as f:
+                report_path = f.read().strip()
+        except Exception:
+            log.exception('Failed reading report_path marker: %s', marker)
+            report_path = os.path.join(proj_dir, 'simulation_report.html')
     else:
-        report_path = os.path.join(proj_dir, "simulation_report.html")
-    
+        report_path = os.path.join(proj_dir, 'simulation_report.html')
+
     if not os.path.exists(report_path):
-        logger.debug("[ERROR] simulation_report.html does not exist")
+        log.warning('Report not found: %s', report_path)
         return f"<h1>Report not found: {report_path}</h1>", 404
 
     try:
         with open(report_path, 'r', encoding='utf-8') as f:
             report_html = f.read()
     except UnicodeDecodeError:
-        logger.debug("[WARNING] UTF-8 decode error — trying Latin-1 fallback")
-        with open(report_path, 'r', encoding='latin1') as f:
+        log.warning('UTF-8 decode error for %s — trying Latin-1 fallback', report_path)
+        with open(report_path, 'r', encoding='latin1', errors='replace') as f:
             report_html = f.read()
+    except Exception:
+        log.exception('Failed reading report HTML: %s', report_path)
+        return 'Failed to read report.', 500
 
-    # If report_html is a complete HTML document, return it directly:
-    return report_html
+    return Response(report_html, mimetype='text/html')
+
 
 def generate_report(sim):
     """
     Generate the comprehensive HTML report for the simulation.
-    Adds:
-      - Robust HDF5 open with retry/backoff when the file is momentarily locked.
-      - Guaranteed close of the HDFStore via try/finally.
-      - Optional concurrent-read mode via env var HDF5_ALLOW_CONCURRENT_READS=1.
+    Robust HDF5 open with retry/backoff; guaranteed close; headless plotting.
     """
-    import os
-    import time
-    import io, base64
+    import os, time, io, base64, logging
     from datetime import datetime
     import pandas as pd
+
+    # Headless backend for servers / gunicorn
+    import matplotlib
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    # Optional: allow reading while the writer still has the file open.
-    # Enable in your env (Railway/compose) with HDF5_ALLOW_CONCURRENT_READS=1
+    log = logging.getLogger(__name__)
+
+    # Allow concurrent reads if configured
     if os.getenv("HDF5_ALLOW_CONCURRENT_READS") == "1":
         os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
-    # Set global minimum font size for all plots
     plt.rcParams.update({'font.size': 8})
 
     hdf_path = os.path.join(sim.proj_dir, f"{sim.output_name}.h5")
     if not os.path.exists(hdf_path):
+        log.warning("HDF not found at %s", hdf_path)
         return "<p>Error: HDF file not found. Please run the simulation first.</p>"
 
-    # --- Open HDF with retry/backoff to survive transient file locks ---
-    attempts = 12         # ~ a few seconds total with exponential backoff
+    attempts = 12
     base_delay = 0.15
     store = None
     try:
+        # Open HDF with retry/backoff to survive transient file locks
         for i in range(attempts):
             try:
                 store = pd.HDFStore(hdf_path, mode='r')
                 break
             except Exception as e:
                 msg = str(e)
-                # HDF5 lock messages often contain these substrings
                 if ("unable to lock file" in msg) or ("Resource temporarily unavailable" in msg):
                     if i == attempts - 1:
-                        if 'logger' in globals():
-                            logger.error("HDF5 busy after retries: %s", msg)
+                        log.error("HDF5 busy after retries: %s", msg)
                         return "<p>The report file is busy. Please try again in a few seconds.</p>"
-                    # Exponential backoff
                     time.sleep(base_delay * (1.5 ** i))
                     continue
-                # Different error → surface it
                 raise
 
-        if 'logger' in globals():
-            logger.debug('hdf file exists and opened %s', hdf_path)
+        log.debug("HDF opened: %s", hdf_path)
 
         report_sections = [
             "<div style='margin: 10px;'>"
@@ -3510,12 +3267,12 @@ def generate_report(sim):
             f"<p><strong>Model Setup:</strong> {getattr(sim, 'model_setup', 'N/A')}</p>",
             f"<p><strong>Units:</strong> {getattr(sim, 'units_session', 'N/A')}</p>",
             f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
-            f"<p>HDF keys found: {store.keys()}</p>"
+            f"<p>HDF keys found: {store.keys()}</p>",
         ]
 
-        units = sim.output_units
+        units = getattr(sim, 'output_units', 'imperial')
 
-        # Helper: Wrap DataFrame HTML in a scrollable container.
+        # Helper to render a df nicely (transposes tall tables, rounds Beta Distributions)
         def enforce_horizontal(df, name=""):
             if df is None or df.empty:
                 return f"<p>No {name} data available.</p>"
@@ -3523,7 +3280,6 @@ def generate_report(sim):
             if df.shape[0] > 1 and df.shape[0] > df.shape[1]:
                 df = df.T
                 shape_info += f"<p>Transposed to shape: {df.shape}</p>"
-            # For Beta Distributions, round numeric columns to 2 decimals.
             if name.lower() == "beta distributions":
                 df = df.copy()
                 for col in df.select_dtypes(include=["number"]).columns:
@@ -3531,41 +3287,42 @@ def generate_report(sim):
             table_html = df.to_html(index=False, border=1, classes="table")
             return shape_info + f"<div style='overflow-x:auto;'>{table_html}</div>"
 
-        def add_section(title, key, units):
+        def add_section(title, key, units_mode):
             report_sections.append(f"<h2>{title}</h2>")
             if key in store.keys():
                 df = store[key]
-                if units == 'metric':
+                if units_mode == 'metric':
                     if key == '/Unit_Parameters':
-                        df['intake_vel'] = df.intake_vel * 0.3048
-                        df['D'] = df.D * 0.3048
-                        df['H'] = df.H * 0.3048
-                        df['Qopt'] = df.Qopt * 0.0283168
-                        df['Qcap'] = df.Qcap * 0.0283168
-                        df['B'] = df.B * 0.3048
-                        df['D1'] = df.D1 * 0.3048
-                        df['D2'] = df.D2 * 0.3048
+                        for c, factor in [
+                            ('intake_vel', 0.3048), ('D', 0.3048), ('H', 0.3048),
+                            ('Qopt', 0.0283168), ('Qcap', 0.0283168), ('B', 0.3048),
+                            ('D1', 0.3048), ('D2', 0.3048)
+                        ]:
+                            if c in df.columns:
+                                df[c] = df[c] * factor
                     elif key == '/Facilities':
-                        df['Bypass_Flow'] = df.Bypass_Flow * 0.0283168
-                        df['Env_Flow'] = df.Env_Flow * 0.0283168
-                        df['Min_Op_Flow'] = df.Min_Op_Flow * 0.0283168
+                        for c in ['Bypass_Flow', 'Env_Flow', 'Min_Op_Flow']:
+                            if c in df.columns:
+                                df[c] = df[c] * 0.0283168
                 report_sections.append(enforce_horizontal(df, title))
             else:
                 report_sections.append(f"<p>No {title} data available.</p>")
 
-        # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
+        # Hydrograph plots
         report_sections.append("<h2>Hydrograph Plots</h2>")
         if "/Hydrograph" in store.keys():
             hydrograph_df = store["/Hydrograph"]
             if 'datetimeUTC' in hydrograph_df.columns:
+                hydrograph_df = hydrograph_df.copy()
                 hydrograph_df['datetimeUTC'] = pd.to_datetime(hydrograph_df['datetimeUTC'])
-                if units == 'metric':
-                    hydrograph_df['DAvgFlow_prorate'] = hydrograph_df.DAvgFlow_prorate * 0.0283168
+                if units == 'metric' and 'DAvgFlow_prorate' in hydrograph_df.columns:
+                    hydrograph_df['DAvgFlow_prorate'] = hydrograph_df['DAvgFlow_prorate'] * 0.0283168
 
             def create_hydro_timeseries(df):
                 plt.rcParams.update({'font.size': 8})
                 fig = plt.figure(figsize=(6, 4))
-                plt.plot(df['datetimeUTC'], df['DAvgFlow_prorate'], marker='.', linestyle='-')
+                if {'datetimeUTC', 'DAvgFlow_prorate'} <= set(df.columns):
+                    plt.plot(df['datetimeUTC'], df['DAvgFlow_prorate'], marker='.', linestyle='-')
                 plt.xlabel("Date")
                 plt.ylabel("Discharge")
                 plt.title("Hydrograph Time Series")
@@ -3580,7 +3337,8 @@ def generate_report(sim):
             def create_hydro_hist(df):
                 plt.rcParams.update({'font.size': 8})
                 fig = plt.figure(figsize=(6, 4))
-                plt.hist(df["DAvgFlow_prorate"].dropna(), bins=10, edgecolor='black')
+                if 'DAvgFlow_prorate' in df.columns:
+                    plt.hist(df["DAvgFlow_prorate"].dropna(), bins=10, edgecolor='black')
                 plt.xlabel("Discharge")
                 plt.ylabel("Frequency")
                 plt.title("Recurrence Histogram")
@@ -3608,34 +3366,34 @@ def generate_report(sim):
         else:
             report_sections.append("<p>No hydrograph data available.</p>")
 
-        # --- BETA DISTRIBUTIONS ---
+        # Beta distributions
         add_section("Beta Distributions", "/Beta_Distributions", units)
 
-        # --- YEARLY SUMMARY PANEL (Iteration-based) ---
+        # Yearly summary panel (iteration-based)
         yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
-        daily_df = store["/Daily"] if "/Daily" in store.keys() else None
+        daily_df  = store["/Daily"] if "/Daily" in store.keys() else None
 
         if daily_df is not None and not daily_df.empty:
-            if 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
-                daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
-            if 'iteration' in daily_df.columns:
-                iteration_sums = daily_df.groupby('iteration').agg({
+            df = daily_df.copy()
+            if {'num_survived', 'pop_size'} <= set(df.columns) and 'num_mortality' not in df.columns:
+                df['num_mortality'] = df['pop_size'] - df['num_survived']
+            if 'iteration' in df.columns:
+                iteration_sums = df.groupby('iteration').agg({
                     'num_entrained': 'sum',
                     'num_mortality': 'sum'
                 }).reset_index()
             else:
                 iteration_sums = None
-                if 'logger' in globals():
-                    logger.debug('no daily df iteration column')
+                log.debug("Daily DF missing 'iteration' column")
         else:
             iteration_sums = None
-            if 'logger' in globals():
-                logger.debug('no daily df')
+            log.debug("No daily DF")
 
         def create_iteration_hist(df, metric, title):
             plt.rcParams.update({'font.size': 8})
             fig = plt.figure()
-            plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
+            if metric in df.columns:
+                plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
             plt.xlabel(metric.replace('_', ' ').title())
             plt.ylabel("Frequency")
             plt.title(title)
@@ -3645,23 +3403,17 @@ def generate_report(sim):
             buf.seek(0)
             return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-        def render_yearly_panel(yearly_df, iteration_sums):
-            if yearly_df is None or yearly_df.empty:
+        def render_yearly_panel(y_df, it_sums):
+            if y_df is None or y_df.empty:
                 return "<p>No yearly summary data available.</p>"
-            row = yearly_df.iloc[0]  # Only one row expected
+            row = y_df.iloc[0]
             panel_html = "<h2>Seasonal Summary (by Iteration)</h2>"
             for metric in ["entrainment", "mortality"]:
-                if metric == 'entrainment':
-                    metric_key = 'entrained'
-                else:
-                    metric_key = 'mortality'
-
-                if iteration_sums is not None and f'num_{metric_key}' in iteration_sums.columns:
-                    hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric_key}',
-                                                     f"Total {metric.title()} by Iteration")
+                metric_key = 'entrained' if metric == 'entrainment' else 'mortality'
+                if it_sums is not None and f'num_{metric_key}' in it_sums.columns:
+                    hist_b64 = create_iteration_hist(it_sums, f'num_{metric_key}', f"Total {metric.title()} by Iteration")
                 else:
                     hist_b64 = ""
-
                 mean_val = row.get(f"mean_yearly_{metric}", "N/A")
                 lcl_val  = row.get(f"lcl_yearly_{metric}", "N/A")
                 ucl_val  = row.get(f"ucl_yearly_{metric}", "N/A")
@@ -3689,24 +3441,23 @@ def generate_report(sim):
             return panel_html
 
         if yearly_df is not None and not yearly_df.empty:
-            panel_html = render_yearly_panel(yearly_df, iteration_sums)
-            report_sections.append(panel_html)
+            report_sections.append(render_yearly_panel(yearly_df, iteration_sums))
         else:
             report_sections.append("<p>No yearly summary data available.</p>")
-            if 'logger' in globals():
-                logger.debug('something went wrong, yearly df empty')
+            log.debug("Yearly DF empty or missing")
 
-        # --- DAILY HISTOGRAMS SIDE BY SIDE ---
+        # Daily histograms
         report_sections.append("<h2>Daily Histograms</h2>")
         if daily_df is not None and not daily_df.empty:
-            # Ensure daily mortality exists
-            if 'num_mortality' not in daily_df.columns and 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
-                daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
+            df = daily_df.copy()
+            if 'num_mortality' not in df.columns and {'num_survived','pop_size'} <= set(df.columns):
+                df['num_mortality'] = df['pop_size'] - df['num_survived']
 
             def create_daily_hist(data, col, title):
                 plt.rcParams.update({'font.size': 8})
                 fig = plt.figure()
-                plt.hist(data[col].dropna(), bins=20, edgecolor='black')
+                if col in data.columns:
+                    plt.hist(data[col].dropna(), bins=20, edgecolor='black')
                 plt.xlabel(col.replace('_', ' ').title())
                 plt.ylabel("Frequency")
                 plt.title(title)
@@ -3716,111 +3467,51 @@ def generate_report(sim):
                 buf.seek(0)
                 return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-            entr_img = create_daily_hist(daily_df, 'num_entrained', 'Daily Entrainment Distribution') \
-                       if 'num_entrained' in daily_df.columns else None
-            mort_img = create_daily_hist(daily_df, 'num_mortality', 'Daily Mortality Distribution') \
-                       if 'num_mortality' in daily_df.columns else None
+            entr_img = create_daily_hist(df, 'num_entrained', 'Daily Entrainment Distribution') if 'num_entrained' in df.columns else None
+            mort_img = create_daily_hist(df, 'num_mortality', 'Daily Mortality Distribution') if 'num_mortality' in df.columns else None
 
-            report_sections.append("""
-            <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
-            """)
-            if entr_img:
-                report_sections.append(f"""
-                <div style="flex:1; min-width:300px; text-align:center;">
-                    <h3>Daily Entrainment</h3>
-                    <img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />
-                </div>
-                """)
-            else:
-                report_sections.append("""
-                <div style="flex:1; min-width:300px; text-align:center;">
-                    <h3>Daily Entrainment</h3>
-                    <p>No 'num_entrained' data available.</p>
-                </div>
-                """)
+            report_sections.append("<div style='display:flex; gap:20px; justify-content:center; flex-wrap:wrap;'>")
+            # AFTER (safe):
+            entr_html = (
+                f'<img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />'
+                if entr_img else "<p>No 'num_entrained' data available.</p>"
+            )
+            
+            report_sections.append(
+                "<div style='flex:1; min-width:300px; text-align:center;'>"
+                "<h3>Daily Entrainment</h3>"
+                f"{entr_html}"
+                "</div>"
+            )
             if mort_img:
-                report_sections.append(f"""
-                <div style="flex:1; min-width:300px; text-align:center;">
-                    <h3>Daily Mortality</h3>
-                    <img src="data:image/png;base64,{mort_img}" style="max-width:100%; height:auto;" />
-                </div>
-                """)
+                report_sections.append(
+                    f"<div style='flex:1; min-width:300px; text-align:center;'><h3>Daily Mortality</h3>"
+                    f"<img src='data:image/png;base64,{mort_img}' style='max-width:100%; height:auto;' /></div>"
+                )
             report_sections.append("</div>")
         else:
             report_sections.append("<p>No daily data available.</p>")
 
-        # ---- finalize HTML ----
+        # Finalize HTML
         final_html = "\n".join(report_sections)
-        full_report = f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <title>Simulation Report</title>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    background: #f7f7f7;
-                    margin: 20px;
-                    color: #333;
-                }}
-                .container {{
-                    max-width: 1800px;
-                    margin: auto;
-                    background: #fff;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-                }}
-                h1 {{ color: #0056b3; }}
-                h2 {{
-                    color: #0056b3;
-                    border-bottom: 1px solid #ddd;
-                    padding-bottom: 4px;
-                    margin-top: 2rem;
-                }}
-                h3 {{ color: #0056b3; margin-top: 1.5rem; }}
-                p {{ line-height: 1.6; }}
-                table {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 1rem 0;
-                }}
-                th, td {{
-                    padding: 8px;
-                    border: 1px solid #ccc;
-                    text-align: left;
-                }}
-                .table-wrap {{ overflow-x: auto; }}
-                pre {{
-                    background: #f4f4f4;
-                    padding: 10px;
-                    border-radius: 5px;
-                }}
-                .download-link {{
-                    display: inline-block;
-                    margin-top: 20px;
-                    background: #007BFF;
-                    color: white;
-                    padding: 10px 15px;
-                    text-decoration: none;
-                    border-radius: 4px;
-                }}
-                .download-link:hover {{ background: #0056b3; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                {final_html}
-                <a href="/download_report_zip" class="download-link">Download Report</a>
-            </div>
-        </body>
-        </html>
-        """
+        full_report = f"""<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><title>Simulation Report</title>
+<style>
+ body {{ font-family: Arial, sans-serif; background:#f7f7f7; margin:20px; color:#333; }}
+ .container {{ max-width: 1800px; margin:auto; background:#fff; padding:20px; border-radius:8px; box-shadow:0 0 10px rgba(0,0,0,.1); }}
+ h1 {{ color:#0056b3; }} h2 {{ color:#0056b3; border-bottom:1px solid #ddd; padding-bottom:4px; margin-top:2rem; }}
+ h3 {{ color:#0056b3; margin-top:1.5rem; }} p {{ line-height:1.6; }}
+ table {{ width:100%; border-collapse:collapse; margin:1rem 0; }}
+ th,td {{ padding:8px; border:1px solid #ccc; text-align:left; }}
+ .download-link {{ display:inline-block; margin-top:20px; background:#007BFF; color:white; padding:10px 15px; text-decoration:none; border-radius:4px; }}
+ .download-link:hover {{ background:#0056b3; }}
+</style></head><body><div class="container">
+{final_html}
+<a href="/download_report_zip" class="download-link">Download Report</a>
+</div></body></html>"""
         return full_report
 
     finally:
-        # Close the HDFStore no matter what happened above
         try:
             if store is not None:
                 store.close()
@@ -3828,372 +3519,6 @@ def generate_report(sim):
             pass
 
 
-
-# def generate_report(sim):
-#     """
-#     Generate the comprehensive HTML report for the simulation.
-#     This version ensures that all plot fonts render at least size 8,
-#     rounds numeric values in the Beta Distributions table to two decimals,
-#     and plots the daily histograms (entrainment and mortality) side by side.
-#     """
-#     import os
-#     import pandas as pd
-#     import io, base64
-#     from datetime import datetime
-#     import matplotlib.pyplot as plt
-
-#     # Set global minimum font size for all plots
-#     plt.rcParams.update({'font.size': 8})
-
-#     hdf_path = os.path.join(sim.proj_dir, f"{sim.output_name}.h5")
-#     if not os.path.exists(hdf_path):
-#         return "<p>Error: HDF file not found. Please run the simulation first.</p>"
-#     logger.debug('hdf file exists %s',hdf_path)
-#     store = pd.HDFStore(hdf_path, mode='r')
-
-#     report_sections = [
-#         "<div style='margin: 10px;'>"
-#         "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
-#         "</div>",
-#         f"<h1>Simulation Report for Project: {sim.project_name if hasattr(sim, 'project_name') else 'N/A'}</h1>",
-#         f"<p><strong>Project Notes:</strong> {sim.project_notes if hasattr(sim, 'project_notes') else 'N/A'}</p>",
-#         f"<p><strong>Model Setup:</strong> {sim.model_setup if hasattr(sim, 'model_setup') else 'N/A'}</p>",
-#         f"<p><strong>Units:</strong> {sim.units_session if hasattr(sim, 'units_session') else 'N/A'}</p>",
-#         f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
-#         f"<p>HDF keys found: {store.keys()}</p>"
-#     ]
-
-#     units = sim.output_units
-#     # Helper: Wrap DataFrame HTML in a scrollable container.
-#     def enforce_horizontal(df, name=""):
-#         if df is None or df.empty:
-#             return f"<p>No {name} data available.</p>"
-#         shape_info = f"<p>{name} data shape: {df.shape}</p>"
-#         if df.shape[0] > 1 and df.shape[0] > df.shape[1]:
-#             df = df.T
-#             shape_info += f"<p>Transposed to shape: {df.shape}</p>"
-#         # For Beta Distributions, round numeric columns to 2 decimals.
-#         if name.lower() == "beta distributions":
-#             df = df.copy()
-#             for col in df.select_dtypes(include=["number"]).columns:
-#                 df[col] = df[col].round(2)
-#         table_html = df.to_html(index=False, border=1, classes="table")
-#         return shape_info + f"<div style='overflow-x:auto;'>{table_html}</div>"
-
-#     def add_section(title, key,  units):
-#         report_sections.append(f"<h2>{title}</h2>")
-#         if key in store.keys():
-#             df = store[key]
-#             if units == 'metric':
-#                 if key == '/Unit_Parameters':
-#                     df['intake_vel'] = df.intake_vel * 0.3048
-#                     df['D'] = df.D * 0.3048
-#                     df['H'] = df.H * 0.3048
-#                     df['Qopt'] = df.Qopt * 0.0283168
-#                     df['Qcap'] = df.Qcap * 0.0283168
-#                     df['B'] = df.B * 0.3048
-#                     df['D1'] = df.D1 * 0.3048
-#                     df['D2'] = df.D2 * 0.3048
-#                 elif key == '/Facilities':
-#                     df['Bypass_Flow'] = df.Bypass_Flow * 0.0283168
-#                     df['Env_Flow'] = df.Env_Flow * 0.0283168
-#                     df['Min_Op_Flow'] = df.Min_Op_Flow * 0.0283168
-                    
-#             report_sections.append(enforce_horizontal(df, title))
-#         else:
-#             report_sections.append(f"<p>No {title} data available.</p>")
-
-#     # Basic sections
-#     # add_section("Nodes", "/Nodes", units)
-#     # add_section("Edges", "/Edges", units)
-#     # add_section("Unit Parameters", "/Unit_Parameters", units)
-#     # add_section("Facilities", "/Facilities", units)
-#     # add_section("Flow Scenarios", "/Flow Scenarios", units)
-#     # add_section("Operating Scenarios", "/Operating Scenarios", units)
-#     # add_section("Population", "/Population", units)
-    
-#     #logger.debug('finished basic data sections of report')
-    
-#     # --- HYDROGRAPH SECTION: Time Series + Recurrence Histogram ---
-#     report_sections.append("<h2>Hydrograph Plots</h2>")
-#     if "/Hydrograph" in store.keys():
-#         hydrograph_df = store["/Hydrograph"]
-#         if 'datetimeUTC' in hydrograph_df.columns:
-#             hydrograph_df['datetimeUTC'] = pd.to_datetime(hydrograph_df['datetimeUTC'])
-#             if units == 'metric':
-#                 hydrograph_df['DAvgFlow_prorate'] = hydrograph_df.DAvgFlow_prorate * 0.0283168
-
-#         def create_hydro_timeseries(df):
-#             plt.rcParams.update({'font.size': 8})
-#             fig = plt.figure(figsize=(6,4))
-#             plt.plot(df['datetimeUTC'], df['DAvgFlow_prorate'], marker='.', linestyle='-')
-#             plt.xlabel("Date")
-#             plt.ylabel("Discharge")
-#             plt.title("Hydrograph Time Series")
-#             plt.xticks(rotation=45)
-#             plt.tight_layout()
-#             buf = io.BytesIO()
-#             plt.savefig(buf, format='png', bbox_inches='tight')
-#             plt.close(fig)
-#             buf.seek(0)
-#             return base64.b64encode(buf.getvalue()).decode('utf-8')
-
-#         def create_hydro_hist(df):
-#             plt.rcParams.update({'font.size': 8})
-#             fig = plt.figure(figsize=(6,4))
-#             plt.hist(df["DAvgFlow_prorate"].dropna(), bins=10, edgecolor='black')
-#             plt.xlabel("Discharge")
-#             plt.ylabel("Frequency")
-#             plt.title("Recurrence Histogram")
-#             plt.tight_layout()
-#             buf = io.BytesIO()
-#             plt.savefig(buf, format='png', bbox_inches='tight')
-#             plt.close(fig)
-#             buf.seek(0)
-#             return base64.b64encode(buf.getvalue()).decode('utf-8')
-
-#         ts_b64 = create_hydro_timeseries(hydrograph_df)
-#         hist_b64 = create_hydro_hist(hydrograph_df)
-#         report_sections.append(f"""
-#         <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
-#             <div style="flex:1; min-width:300px; text-align:center;">
-#                 <h3>Time Series</h3>
-#                 <img src="data:image/png;base64,{ts_b64}" style="max-width:100%; height:auto;" />
-#             </div>
-#             <div style="flex:1; min-width:300px; text-align:center;">
-#                 <h3>Recurrence Histogram</h3>
-#                 <img src="data:image/png;base64,{hist_b64}" style="max-width:100%; height:auto;" />
-#             </div>
-#         </div>
-#         """)
-#     else:
-#         report_sections.append("<p>No hydrograph data available.</p>")
-#     #logger.debug('finished hydrograph')
-    
-#     # --- BETA DISTRIBUTIONS ---
-#     add_section("Beta Distributions", "/Beta_Distributions", units)
-
-#     # --- YEARLY SUMMARY PANEL (Iteration-based) ---
-#     yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
-#     daily_df = store["/Daily"] if "/Daily" in store.keys() else None
-
-#     if daily_df is not None and not daily_df.empty:
-#         if 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
-#             daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
-#         if 'iteration' in daily_df.columns:
-#             iteration_sums = daily_df.groupby('iteration').agg({
-#                 'num_entrained': 'sum',
-#                 'num_mortality': 'sum'
-#             }).reset_index()
-#         else:
-#             iteration_sums = None
-#             logger.debug('no daily df')
-#     else:
-#         iteration_sums = None
-#         logger.debug('no daily df')
-
-#     def create_iteration_hist(df, metric, title):
-#         plt.rcParams.update({'font.size': 8})
-#         fig = plt.figure()
-#         plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
-#         plt.xlabel(metric.replace('_', ' ').title())
-#         plt.ylabel("Frequency")
-#         plt.title(title)
-#         buf = io.BytesIO()
-#         plt.savefig(buf, format='png', bbox_inches='tight')
-#         plt.close(fig)
-#         buf.seek(0)
-#         return base64.b64encode(buf.getvalue()).decode('utf-8')
-
-#     def render_yearly_panel(yearly_df, iteration_sums):
-#         if yearly_df is None or yearly_df.empty:
-#             return "<p>No yearly summary data available.</p>"
-#         row = yearly_df.iloc[0]  # Only one row expected
-#         panel_html = "<h2>Seasonal Summary (by Iteration)</h2>"
-#         for metric in ["entrainment", "mortality"]:
-#             if metric == 'entrainment':
-#                 metric = 'entrained'
-#             if iteration_sums is not None and f'num_{metric}' in iteration_sums.columns:
-#                 hist_b64 = create_iteration_hist(iteration_sums, f'num_{metric}', f"Total {metric.title()} by Iteration")
-#             else:
-#                 hist_b64 = ""
-#             # Use expected column keys; adjust if needed.
-#             if metric == 'entrained':
-#                 metric = 'entrainment'
-
-#             mean_val = row.get(f"mean_yearly_{metric}", "N/A")
-#             lcl_val = row.get(f"lcl_yearly_{metric}", "N/A")
-#             ucl_val = row.get(f"ucl_yearly_{metric}", "N/A")
-#             like10 = row.get(f"1_in_10_day_{metric}", "N/A")
-#             like100 = row.get(f"1_in_100_day_{metric}", "N/A")
-#             like1000 = row.get(f"1_in_1000_day_{metric}", "N/A")
-#             panel_html += f"""
-#             <div style="display:flex; flex-wrap:wrap; margin-bottom:20px; border:1px solid #ccc; padding:10px; border-radius:5px;">
-#                 <div style="flex:1; min-width:300px; padding:10px; border-right:1px solid #ddd;">
-#                     <h3>Histogram ({metric.title()})</h3>
-#                     <div style="text-align:center;">
-#                         {'<img src="data:image/png;base64,' + hist_b64 + '" style="max-width:100%; height:auto;" />' if hist_b64 else "<p>No histogram data</p>"}
-#                     </div>
-#                 </div>
-#                 <div style="flex:1; min-width:300px; padding:10px;">
-#                     <h3>Statistics ({metric.title()})</h3>
-#                     <p><strong>Average Annual:</strong> {mean_val}</p>
-#                     <p><strong>95% CI:</strong> {lcl_val} - {ucl_val}</p>
-#                     <p><strong>1 in 10 day event:</strong> {like10}</p>
-#                     <p><strong>1 in 100 day event:</strong> {like100}</p>
-#                     <p><strong>1 in 1000 day event:</strong> {like1000}</p>
-#                 </div>
-#             </div>
-#             """
-#         return panel_html
-    
-
-
-#     #logger.debug('finished creating yearly panel')
-#     if yearly_df is not None and not yearly_df.empty:
-#         panel_html = render_yearly_panel(yearly_df, iteration_sums)
-#         report_sections.append(panel_html)
-#     else:
-#         report_sections.append("<p>No yearly summary data available.</p>")
-#         logger.debug('something went wrong, yearly df empty')
-
-#     # --- DAILY HISTOGRAMS SIDE BY SIDE ---
-#     report_sections.append("<h2>Daily Histograms</h2>")
-#     if daily_df is not None and not daily_df.empty:
-#         # Ensure daily mortality exists
-#         if 'num_mortality' not in daily_df.columns and 'num_survived' in daily_df.columns and 'pop_size' in daily_df.columns:
-#             daily_df['num_mortality'] = daily_df['pop_size'] - daily_df['num_survived']
-
-#         def create_daily_hist(data, col, title):
-#             plt.rcParams.update({'font.size': 8})
-#             fig = plt.figure()
-#             plt.hist(data[col].dropna(), bins=20, edgecolor='black')
-#             plt.xlabel(col.replace('_', ' ').title())
-#             plt.ylabel("Frequency")
-#             plt.title(title)
-#             buf = io.BytesIO()
-#             plt.savefig(buf, format='png', bbox_inches='tight')
-#             plt.close(fig)
-#             buf.seek(0)
-#             return base64.b64encode(buf.getvalue()).decode('utf-8')
-
-#         entr_img = None
-#         mort_img = None
-#         if 'num_entrained' in daily_df.columns:
-#             entr_img = create_daily_hist(daily_df, 'num_entrained', 'Daily Entrainment Distribution')
-#         if 'num_mortality' in daily_df.columns:
-#             mort_img = create_daily_hist(daily_df, 'num_mortality', 'Daily Mortality Distribution')
-
-#         report_sections.append("""
-#         <div style="display:flex; gap:20px; justify-content:center; flex-wrap:wrap;">
-#         """)
-#         if entr_img:
-#             report_sections.append(f"""
-#             <div style="flex:1; min-width:300px; text-align:center;">
-#                 <h3>Daily Entrainment</h3>
-#                 <img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />
-#             </div>
-#             """)
-#         else:
-#             report_sections.append("""
-#             <div style="flex:1; min-width:300px; text-align:center;">
-#                 <h3>Daily Entrainment</h3>
-#                 <p>No 'num_entrained' data available.</p>
-#             </div>
-#             """)
-#         if mort_img:
-#             report_sections.append(f"""
-#             <div style="flex:1; min-width:300px; text-align:center;">
-#                 <h3>Daily Mortality</h3>
-#                 <img src="data:image/png;base64,{mort_img}" style="max-width:100%; height:auto;" />
-#             </div>
-#             """)
-#         report_sections.append("</div>")
-#     else:
-#         report_sections.append("<p>No daily data available.</p>")
-
-#     store.close()
-#     #logger.debug('finished daily pannel')
-#     final_html = "\n".join(report_sections)
-#     full_report = f"""
-#     <!DOCTYPE html>
-#     <html lang="en">
-#     <head>
-#         <meta charset="UTF-8">
-#         <title>Simulation Report</title>
-#         <style>
-#             body {{
-#                 font-family: Arial, sans-serif;
-#                 background: #f7f7f7;
-#                 margin: 20px;
-#                 color: #333;
-#             }}
-#             .container {{
-#                 max-width: 1800px;
-#                 margin: auto;
-#                 background: #fff;
-#                 padding: 20px;
-#                 border-radius: 8px;
-#                 box-shadow: 0 0 10px rgba(0,0,0,0.1);
-#             }}
-#             h1 {{
-#                 color: #0056b3;
-#             }}
-#             h2 {{
-#                 color: #0056b3;
-#                 border-bottom: 1px solid #ddd;
-#                 padding-bottom: 4px;
-#                 margin-top: 2rem;
-#             }}
-#             h3 {{
-#                 color: #0056b3;
-#                 margin-top: 1.5rem;
-#             }}
-#             p {{
-#                 line-height: 1.6;
-#             }}
-#             table {{
-#                 width: 100%;
-#                 border-collapse: collapse;
-#                 margin: 1rem 0;
-#             }}
-#             th, td {{
-#                 padding: 8px;
-#                 border: 1px solid #ccc;
-#                 text-align: left;
-#             }}
-#             .table-wrap {{
-#                 overflow-x: auto;
-#             }}
-#             pre {{
-#                 background: #f4f4f4;
-#                 padding: 10px;
-#                 border-radius: 5px;
-#             }}
-#             .download-link {{
-#                 display: inline-block;
-#                 margin-top: 20px;
-#                 background: #007BFF;
-#                 color: white;
-#                 padding: 10px 15px;
-#                 text-decoration: none;
-#                 border-radius: 4px;
-#             }}
-#             .download-link:hover {{
-#                 background: #0056b3;
-#             }}
-#         </style>
-#     </head>
-#     <body>
-#         <div class="container">
-#             {final_html}
-#             <a href="/download_report_zip" class="download-link">Download Report</a>
-#         </div>
-#     </body>
-#     </html>
-#     """
-#     #logger.debug('report formatted')
-#     return full_report
 
 @app.route('/download_report')
 def download_report():
@@ -4242,7 +3567,7 @@ def download_report_zip():
                 if os.path.abspath(fp) == os.path.abspath(zip_path):
                     continue
                 zipf.write(fp, arcname=os.path.relpath(fp, start=proj_dir))
-
+                
     from flask import after_this_request
     @after_this_request
     def _cleanup(resp):
@@ -4254,6 +3579,7 @@ def download_report_zip():
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return send_file(zip_path, as_attachment=True, download_name=f"simulation_report_{timestamp}.zip")
+
 
 
 # Un Comment to Test Locally
