@@ -852,37 +852,18 @@ def create_project():
 def process_hydrograph_data(raw_data):
     # Read the pasted text as a tab-delimited file without a header
     df = pd.read_csv(StringIO(raw_data), delimiter="\t", header=None)
-    
-    # Try converting the first cell of the first row to datetime.
-    # If it fails, assume the row is a header and drop it.
-    try:
-        pd.to_datetime(df.iloc[0, 0])
-        header_present = False
-    except Exception:
-        header_present = True
 
-    if header_present:
-        df = df.drop(index=0).reset_index(drop=True)
-    
-    # Rename columns to match Stryke's schema:
-    # Assume column 0 is the date and column 1 is the discharge.
+    # Always assign column names (no header expected)
     df.columns = ['datetimeUTC', 'DAvgFlow_prorate']
-    
-    # Convert the datetime column to proper datetime format.
-    # This step can be adjusted to handle non-standard datetime formats.
+
+    # Convert the datetime column to proper datetime format
     df['datetimeUTC'] = pd.to_datetime(df['datetimeUTC'], errors='coerce', infer_datetime_format=True)
-    #print ('hydrograph before to numeric:')
-    #print (df)    
-    # Convert discharge values to numeric.
+    # Convert discharge values to numeric
     df['DAvgFlow_prorate'] = pd.to_numeric(df['DAvgFlow_prorate'], errors='coerce')
-    
-    # Drop rows with invalid dates or missing discharge values.
+
+    # Drop rows with invalid dates or missing discharge values
     df.dropna(inplace=True)
-    
-    # Set the datetime column as the index if that is required downstream.
-    #df.set_index('datetimeUTC', inplace=True)
-    #print ('hydrograph:')
-    #print (df)
+
     return df
 
 @app.route('/flow_scenarios', methods=['GET', 'POST'])
@@ -1894,6 +1875,7 @@ def population():
             "name": "Lepomis, Great Lakes, Met Winter",
             "dist": "Log Normal",
             "shape": "0.9881",
+           
             "location": "0",
             "scale": "0.0033",
             "max_ent_rate": "0.18",
@@ -3468,7 +3450,7 @@ def generate_report(sim):
             entr_img = create_daily_hist(df, 'num_entrained', 'Daily Entrainment Distribution') if 'num_entrained' in df.columns else None
             mort_img = create_daily_hist(df, 'num_mortality', 'Daily Mortality Distribution') if 'num_mortality' in df.columns else None
 
-            report_sections.append("<div style='display:flex; gap:20px; justify-content:center; flex-wrap:wrap;'>")
+            report_sections.append("<div style='display:flex; gap:20px; justify-content:center; flex-wrap:wrap'>")
             # AFTER (safe):
             entr_html = (
                 f'<img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />'
@@ -3524,9 +3506,9 @@ def download_report():
     if not proj_dir:
         return "<p>Error: No project directory in session.</p>", 400
 
-    marker = os.path.join(proj_dir, "report_path.txt")
+    marker = os.path.join(proj_dir, 'report_path.txt')
     report_path = open(marker, 'r', encoding='utf-8').read().strip() if os.path.exists(marker) \
-                  else os.path.join(proj_dir, "simulation_report.html")
+                  else os.path.join(proj_dir, 'simulation_report.html')
 
     if not os.path.exists(report_path):
         return f"<p>Error: Report file not found at {report_path}.</p>", 404
@@ -3577,9 +3559,3 @@ def download_report_zip():
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return send_file(zip_path, as_attachment=True, download_name=f"simulation_report_{timestamp}.zip")
-
-
-
-# Un Comment to Test Locally
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, threaded = True, use_reloader=False)
