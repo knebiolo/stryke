@@ -62,5 +62,29 @@
             logOutput.appendChild(line);
         };
     </script>
+    
+    <h2>Live Log</h2>
+    <pre id="log" style="white-space: pre-wrap; max-height: 60vh; overflow:auto;"></pre>
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const runId = params.get('run') || "";
+        if (!runId) return;
+    
+        const logEl = document.getElementById('log');
+        function append(line) {
+          if (!logEl) return;
+          logEl.textContent += line + "\n";
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+    
+        const es = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
+        es.onmessage = (ev) => {
+          append(ev.data);
+          if (ev.data === "[Simulation Complete]") es.close();
+        };
+      })();
+    </script>
+
 </body>
 </html>

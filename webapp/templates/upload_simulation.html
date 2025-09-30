@@ -147,5 +147,62 @@
       };
     {% endif %}
   </script>
+  
+  <pre id="log" style="white-space: pre-wrap;"></pre>
+  <script>
+      const runId = "{{ run_id or request.args.get('run', '') }}";
+      if (runId) {
+        const es = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
+        es.onmessage = (ev) => {
+            const log = document.getElementById('log');
+              if (log) log.textContent += ev.data + '\n';
+              if (ev.data === "[Simulation Complete]") es.close();
+        };
+      }
+  </script>
+
+  <!-- somewhere in the page body -->
+  <h2>Live Log</h2>
+  <pre id="log" style="white-space: pre-wrap; max-height: 40vh; overflow:auto;"></pre>
+    
+  {% if run_id %}
+    <p>
+       <a id="viewResults"
+          href="{{ url_for('results') }}?run={{ run_id }}&output_file={{ output_filename }}">
+          View results
+        </a>
+        &nbsp;|&nbsp;
+        <a id="downloadH5"
+           href="{{ url_for('download') }}?run={{ run_id }}&filename={{ output_filename }}">
+          Download HDF5
+        </a>
+      </p>
+    {% endif %}
+    
+    <script>
+      (function () {
+        // On GET, run_id is usually empty; on POST it's set.
+        const runId = "{{ run_id or '' }}";
+        if (!runId) return;
+    
+        const logEl = document.getElementById('log');
+        function append(line) {
+          if (!logEl) return;
+          logEl.textContent += line + "\n";
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+    
+        const es = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
+        es.onmessage = (ev) => {
+          append(ev.data);
+          if (ev.data === "[Simulation Complete]") es.close();
+        };
+        es.onerror = () => {
+          // connection hiccups: browser will auto-retry; keep it silent
+        };
+      })();
+    </script>
+
+
 </body>
 </html>

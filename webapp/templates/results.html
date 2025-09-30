@@ -41,5 +41,12 @@
           eventSource.close();
       };
     </script>
+
+    <p>
+      <strong>Output:</strong> {{ output_file }}
+      &nbsp;–&nbsp;
+      <a href="{{ url_for('download') }}?run={{ run_id }}&filename={{ output_file }}">Download</a>
+    </p>
+
 </body>
 </html>

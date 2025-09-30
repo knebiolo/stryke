@@ -21,6 +21,7 @@ from datetime import datetime
 import zipfile
 import time
 import uuid
+from collections import defaultdict
 import re
 import pandas as pd
 from io import StringIO
@@ -59,8 +60,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../Stry
 from Stryke import stryke
 from Stryke.stryke import epri
 
-# Create a global log queue
-LOG_QUEUE = queue.Queue()
+RUN_QUEUES = defaultdict(queue.Queue)
+
+def get_queue(run_id):
+    return RUN_QUEUES[run_id]
+
 
 def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
     """
@@ -114,19 +118,64 @@ for name in ("Stryke.stryke", "stryke"):
 print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=True)
 
 
-# Create a custom stream that writes log messages to LOG_QUEUE
+# # Create a custom stream that writes log messages to LOG_QUEUE
+# class QueueStream:
+#     def __init__(self, q):
+#         self.q = q
+#     def write(self, message):
+#         if message.strip():
+#             try:
+#                 self.q.put(message)
+#             except Exception:
+#                 pass
+#     def flush(self):
+#         pass
+ 
 class QueueStream:
-    def __init__(self, q):
+    """File-like object that writes text lines into a queue.Queue for SSE."""
+    def __init__(self, q, prefix: str = ""):
         self.q = q
-    def write(self, message):
-        if message.strip():
-            try:
-                self.q.put(message)
-            except Exception:
-                pass
+        self.prefix = prefix or ""
+        self._buf = []
+        self._lock = threading.Lock()
+
+    def write(self, s):
+        if not s:
+            return 0
+        text = str(s)
+        with self._lock:
+            self._buf.append(text)
+            joined = "".join(self._buf)
+            lines = joined.splitlines(keepends=True)
+            self._buf = []
+            carry = ""
+            for line in lines:
+                if line.endswith("\n"):
+                    # strip trailing newline and emit
+                    try:
+                        self.q.put(self.prefix + line.rstrip("\n"))
+                    except Exception:
+                        pass
+                else:
+                    carry += line
+            if carry:
+                self._buf.append(carry)
+        return len(s)
+
     def flush(self):
-        pass
-    
+        with self._lock:
+            if self._buf:
+                try:
+                    self.q.put(self.prefix + "".join(self._buf))
+                except Exception:
+                    pass
+                self._buf.clear()
+
+    # compatibility no-ops
+    def close(self): self.flush()
+    def isatty(self): return False
+
+   
 class QueueLogHandler(logging.Handler):
     def __init__(self, q): super().__init__(); self.q = q
     def emit(self, record):
@@ -138,15 +187,20 @@ class QueueLogHandler(logging.Handler):
             pass
 
 # Set up logging to use QueueStream
-queue_stream = QueueStream(LOG_QUEUE)
-stream_handler = logging.StreamHandler(queue_stream)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-stream_handler.setFormatter(formatter)
+# --- replace your current global logging setup block with this ---
+# logger = logging.getLogger()
+# logger.setLevel(logging.INFO)
 
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-logger.handlers = []  # Clear any default handlers
-logger.addHandler(stream_handler)
+# # remove any existing handlers to avoid duplicates
+# for h in list(logger.handlers):
+#     logger.removeHandler(h)
+
+# stream_handler = logging.StreamHandler(sys.stdout)  # <-- key change
+# formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# stream_handler.setFormatter(formatter)
+# logger.addHandler(stream_handler)
+# ---------------------------------------------------------------
+
 
 
 # ----------------- Password Protection -----------------
@@ -154,6 +208,12 @@ app = Flask(__name__)
 app.secret_key = 'your_secret_key'
 app.config['PASSWORD'] = 'expensive5rudabega!@1'  # Set your desired password here
 
+app.secret_key = os.environ.get('FLASK_SECRET_KEY')
+if not app.secret_key:
+    app.logger.warning("FLASK_SECRET_KEY not set; using insecure dev key — set it in your environment!")
+    app.secret_key = 'dev-only-change-me' # dev fallback only
+
+app.config['PASSWORD'] = os.environ.get('APP_PASSWORD', 'dev-pass') # dev
 
 # Set session lifetime to 1 day (adjust as needed)
 app.permanent_session_lifetime = timedelta(days=1)
@@ -164,6 +224,54 @@ REQUIRED_FILE_KEYS = {
     "operating_scenarios_file": "Operating scenarios CSV",
     # add any other hard requirements here
 }
+
+# Ensure instance path exists; it's a good default for per-app writable data
+os.makedirs(app.instance_path, exist_ok=True)
+
+SESSION_ROOT = os.environ.get('SESSION_ROOT') or os.path.join(app.instance_path, 'sessions')
+os.makedirs(SESSION_ROOT, exist_ok=True)
+
+app.config.update(
+    SESSION_TYPE='filesystem',
+    SESSION_FILE_DIR=SESSION_ROOT,
+    SESSION_PERMANENT=False,
+)
+
+# def cleanup_old_data(root_dirs, older_than_hours=24, exclude=None):
+#     """Delete files/dirs older than the threshold, skipping excluded paths.
+
+#     Args:
+#         root_dirs (list[str]): top-level directories to clean.
+#         older_than_hours (int): age threshold.
+#         exclude (list[str]|None): absolute paths to skip (and their children).
+#     """
+#     exclude = set(os.path.abspath(p) for p in (exclude or []))
+#     cutoff = time.time() - (older_than_hours * 3600)
+
+#     def _is_excluded(path: str) -> bool:
+#         ap = os.path.abspath(path)
+#         return any(ap == ex or ap.startswith(ex + os.sep) for ex in exclude)
+
+#     for root in root_dirs:
+#         if not root or not os.path.isdir(root):
+#             continue
+#         for name in os.listdir(root):
+#             path = os.path.join(root, name)
+#             if _is_excluded(path):
+#                 continue
+#             try:
+#                 st = os.stat(path)
+#             except FileNotFoundError:
+#                 continue
+#             if st.st_mtime < cutoff:
+#                 try:
+#                     if os.path.isdir(path):
+#                         shutil.rmtree(path, ignore_errors=True)
+#                     else:
+#                         os.remove(path)
+#                 except Exception:
+#                     # best-effort cleaner; keep the app running
+#                     pass
 
 def _coerce_empty_to_none(v):
     if v is None:
@@ -198,21 +306,10 @@ def _validate_and_normalize_inputs(data):
 
     return norm, missing, bad
 
-@app.errorhandler(Exception)
-def handle_exception(e):
-    # Let real HTTP errors (404, 405, etc.) pass through untouched
-    if isinstance(e, HTTPException):
-        return e
-    # Log server-side exceptions with traceback, return 500
-    import traceback
-    traceback.print_exc()
-    return "Internal Server Error", 500
-
 @app.errorhandler(NotFound)
 def handle_404(e):
     # Simple 404, no scary traceback
     return "Not Found", 404
-
 
 @app.before_request
 def make_session_permanent():
@@ -220,11 +317,18 @@ def make_session_permanent():
     
 @app.errorhandler(Exception)
 def handle_exception(e):
-    # Log the full traceback
-    traceback_str = traceback.format_exc()
-    print("Unhandled Exception:", traceback_str, flush=True)
-    
-    # Optionally return a custom 500 page
+    # Let real HTTP errors (404, 405, etc.) pass through to Flask’s default pages
+    if isinstance(e, HTTPException):
+        return e
+
+    # Log full traceback server-side
+    tb = traceback.format_exc()
+    try:
+        app.logger.exception("Unhandled exception")
+    except Exception:
+        print("Unhandled exception:", tb, flush=True)
+
+    # Minimal safe response
     return "Internal Server Error", 500
 
 @app.before_request
@@ -336,38 +440,74 @@ def health():
     print("Health endpoint accessed")
     return "OK", 200
 
-def run_xls_simulation(ws, wks, output_name):
-    old_stdout = sys.stdout
-    sys.stdout = QueueStream(LOG_QUEUE)
-    try:
-        simulation_instance = stryke.simulation(ws, wks, output_name=output_name)
-        simulation_instance.run()
-        simulation_instance.summary()
-    except Exception as e:
-        print(f"Error during simulation: {e}")
-    finally:
-        sys.stdout = old_stdout
-        LOG_QUEUE.put(None)
+# Make sure these exist near your imports:
+# import os, sys, logging
+# logger = logging.getLogger(__name__)  # or your global logger
 
-def run_xls_simulation_in_background(ws, wks, output_name, data_dict=None):
-    """Background thread for running the simulation and streaming logs to LOG_QUEUE."""
-    old_stdout = sys.stdout
-    sys.stdout = QueueStream(LOG_QUEUE)
+class _SafeQueueStream:
+    """Minimal stdout proxy to push lines into a Queue."""
+    def __init__(self, q): self.q = q
+    def write(self, s):
+        if not s: 
+            return
+        # split to preserve line breaks without flooding
+        for line in str(s).splitlines():
+            try: self.q.put(line)
+            except Exception: pass
+    def flush(self): 
+        pass
+
+def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
+    import os, sys, logging
+    log = logging.getLogger(__name__)
+
+    # resolve Excel path (handles bare filename vs absolute)
+    excel_path = wks if os.path.isabs(wks) else os.path.join(ws, wks)
+    if not os.path.isdir(ws):
+        try: q.put(f"[ERROR] Invalid run directory: {ws}")
+        finally: q.put("[Simulation Complete]")
+        return
+    if not os.path.exists(excel_path):
+        try: q.put(f"[ERROR] Excel file not found: {excel_path}")
+        finally: q.put("[Simulation Complete]")
+        return
+
+    # stream all prints + logger output to this run's queue
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    sys.stdout = QueueStream(q)
+    sys.stderr = QueueStream(q)
+
+    # optional file lock (safe if filelock not installed)
+    h5_path = os.path.join(ws, f"{output_name}.h5")
     try:
-        logger.info("Starting simulation...")
-        sim = stryke.simulation(ws, wks, output_name=output_name)
-        # If your Excel path doesn’t need webapp_import data, this call is okay as-is:
+        from filelock import FileLock
+        lock = FileLock(h5_path + ".lock")
+    except Exception:
+        lock = None
+
+    try:
+        log.info("Starting simulation (XLS path)...")
+        # handle older/newer stryke signatures
+        try:
+            sim = stryke.simulation(ws, wks, output_name=output_name)
+        except TypeError:
+            sim = stryke.simulation(ws, wks)
+
         sim.webapp_import()
-        sim.run()
-        sim.summary()
-        logger.info("Simulation completed successfully.")
+        if lock:
+            with lock:
+                sim.run(); sim.summary()
+        else:
+            sim.run(); sim.summary()
+        log.info("Simulation completed successfully.")
     except Exception as e:
-        logger.exception("Simulation failed.")
-        LOG_QUEUE.put(f"[ERROR] Simulation failed: {str(e)}")
+        log.exception("Simulation failed (XLS).")
+        try: q.put(f"[ERROR] Simulation failed: {e}")
+        except Exception: pass
     finally:
-        sys.stdout = old_stdout
-        LOG_QUEUE.put("[Simulation Complete]")  # <- unified sentinel
-
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+        try: q.put("[Simulation Complete]")
+        except Exception: pass
 
 @app.route('/')
 def index():
@@ -377,13 +517,16 @@ def index():
 def upload_simulation():
     simulation_results = None
     output_filename = None
+    run_id = None
+    
+    
     if request.method == 'POST':
         if 'excel_file' not in request.files:
             flash('No file part in the request')
             return render_template('upload_simulation.html')
     
         file = request.files['excel_file']
-        if file.filename == '':
+        if not file or file.filename.strip() == '':
             flash('No file selected')
             return render_template('upload_simulation.html')
     
@@ -396,34 +539,75 @@ def upload_simulation():
         os.makedirs(user_upload_dir, exist_ok=True)
         os.makedirs(user_sim_folder, exist_ok=True)
     
+        # Save the raw upload into the user's upload inbox
         up_file_path = os.path.join(user_upload_dir, file.filename)
         file.save(up_file_path)
         flash(f'File successfully uploaded: {file.filename}')
     
-        simulation_file_path = os.path.join(user_sim_folder, file.filename)
+        # --- Create a unique run sandbox under this user's sim folder ---
+        run_id = uuid.uuid4().hex
+        run_dir = os.path.join(user_sim_folder, run_id)
+        os.makedirs(run_dir, exist_ok=True)
+    
+        # Copy the uploaded Excel into the run sandbox
+        simulation_file_path = os.path.join(run_dir, file.filename)
         shutil.copy(up_file_path, simulation_file_path)
     
-        ws = user_sim_folder
+        # Point Stryke at the run sandbox
+        ws = run_dir # per-run directory (prevents collisions)
         wks = file.filename
         output_name = 'Simulation_Output'
     
-        try:
-            simulation_thread = threading.Thread(
-                target=run_xls_simulation_in_background,
-                args=(ws, wks, output_name),  # 4th arg is optional now
-                daemon=True
-            )
-            simulation_thread.start()
-            flash("Simulation started. Live log will appear below.")
-            simulation_results = "Simulation is running..."
-            output_filename = f"{output_name}.h5"
-        except Exception as e:
-            flash(f"Error starting simulation: {e}")
-            return render_template('upload_simulation.html')
+        # So /report and other views know where to look for THIS run
+        session['proj_dir'] = run_dir
+        session['output_name'] = output_name
+        session['last_run_id'] = run_id
     
-        return render_template('upload_simulation.html',
-                               simulation_results=simulation_results,
-                               output_filename=output_filename)
+        # Bind the background worker to the per-run queue
+        q = get_queue(run_id)
+        simulation_thread = threading.Thread(
+            target=run_xls_simulation_in_background,
+            args=(ws, wks, output_name, q), # worker signature: (ws, wks, output_name, queue)
+            daemon=True
+            )
+        simulation_thread.start()
+    
+        flash('Simulation started. Live log will appear below.')
+        simulation_results = 'Simulation is running...'
+        output_filename = f'{output_name}.h5'
+    
+    # GET or after POST: render the page. run_id is None on GET, set on POST
+    return render_template(
+        'upload_simulation.html',
+        simulation_results=simulation_results,
+        output_filename=output_filename,
+        run_id=run_id
+        )
+            
+        # simulation_file_path = os.path.join(user_sim_folder, file.filename)
+        # shutil.copy(up_file_path, simulation_file_path)
+    
+        # ws = user_sim_folder
+        # wks = file.filename
+        # output_name = 'Simulation_Output'
+    
+        # try:
+        #     simulation_thread = threading.Thread(
+        #         target=run_xls_simulation_in_background,
+        #         args=(ws, wks, output_name),  # 4th arg is optional now
+        #         daemon=True
+        #     )
+        #     simulation_thread.start()
+        #     flash("Simulation started. Live log will appear below.")
+        #     simulation_results = "Simulation is running..."
+        #     output_filename = f"{output_name}.h5"
+        # except Exception as e:
+        #     flash(f"Error starting simulation: {e}")
+        #     return render_template('upload_simulation.html')
+    
+        # return render_template('upload_simulation.html',
+        #                        simulation_results=simulation_results,
+        #                        output_filename=output_filename)
 
 
 # @app.route('/download_zip')
@@ -473,72 +657,172 @@ def upload_simulation():
 
 from flask import Response, stream_with_context
 
-@app.route('/stream')
+# @app.get('/stream')
+# def stream():
+#     run_id = request.args.get('run', '')
+#     if not run_id:
+#         return "Missing ?run=<run_id>", 400
+
+#     q = get_queue(run_id)
+
+#     def event_stream():
+#         import queue as _q
+#         while True:
+#             try:
+#                 msg = q.get(timeout=20)
+#             except _q.Empty:
+#                 # keep the SSE connection alive
+#                 yield "data: [keepalive]\n\n"
+#                 continue
+
+#             # stream the log line
+#             yield f"data: {msg}\n\n"
+
+#             # close this run's stream when the worker signals done
+#             if msg == "[Simulation Complete]":
+#                 break
+
+#     # SSE headers
+#     return Response(
+#         event_stream(),
+#         mimetype="text/event-stream",
+#         headers={"Cache-Control": "no-cache"}
+#     )
+
+@app.get('/stream')
 def stream():
+    run_id = request.args.get('run', '')
+    if not run_id:
+        return "Missing ?run=<run_id>", 400
+
+    q = get_queue(run_id)
+
     def event_stream():
         import queue as _q
         while True:
             try:
-                message = LOG_QUEUE.get(timeout=15)
+                msg = q.get(timeout=20)
             except _q.Empty:
                 yield "data: [keepalive]\n\n"
                 continue
-            yield f"data: {message}\n\n"
-            if message == "[Simulation Complete]":
+            yield f"data: {msg}\n\n"
+            if msg == "[Simulation Complete]":
                 break
-    return Response(event_stream(), mimetype="text/event-stream")
 
+    return Response(
+        event_stream(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # <— important for Nginx-like proxies
+            "Connection": "keep-alive"
+        },
+    )
 
-# @app.route('/stream')
-# def stream():
-#     @stream_with_context
-#     def event_stream():
-#         yield ": connected\n\n"  # open for proxies
-#         while True:
-#             try:
-#                 message = LOG_QUEUE.get(timeout=15)
-#                 if message is None:
-#                     continue
-#                 yield f"data: {message}\n\n"
-#                 if message == "[Simulation Complete]":
-#                     break
-#             except queue.Empty:
-#                 yield "event: ping\ndata: keepalive\n\n"
+# DROP-IN: secure results + download routes scoped to a specific run sandbox
+# Add this helper once (near your routes)
 
-#     resp = Response(event_stream(), mimetype="text/event-stream")
-#     resp.headers["Cache-Control"] = "no-cache"
-#     resp.headers["X-Accel-Buffering"] = "no"
-#     resp.headers["Connection"] = "keep-alive"
-#     return resp
+def _safe_path(base_dir: str, *parts: str) -> str:
+    """Join parts to base_dir and ensure the result stays inside base_dir."""
+    base_abs = os.path.abspath(base_dir)
+    target = os.path.abspath(os.path.join(base_abs, *parts))
+    if not target.startswith(base_abs + os.sep):
+        raise PermissionError("Not allowed")
+    return target
 
-# @app.route('/stream')
-# def stream():
-#     @stream_with_context
-#     def event_stream():
-#         yield ": connected\n\n"  # open the pipe for proxies
-#         while True:
-#             try:
-#                 message = LOG_QUEUE.get(timeout=15)  # don’t idle forever
-#                 if message is None:
-#                     continue  # ignore legacy None
-#                 yield f"data: {message}\n\n"
-#                 if message == "[Simulation Complete]":
-#                     break
-#             except queue.Empty:
-#                 yield "event: ping\ndata: keepalive\n\n"  # heartbeat
-
-#     resp = Response(event_stream(), mimetype="text/event-stream")
-#     resp.headers["Cache-Control"] = "no-cache"
-#     resp.headers["X-Accel-Buffering"] = "no"
-#     resp.headers["Connection"] = "keep-alive"
-#     return resp
+def _safe_path(base_dir: str, *parts: str) -> str:
+    base_abs = os.path.abspath(base_dir)
+    target = os.path.abspath(os.path.join(base_abs, *parts))
+    if not target.startswith(base_abs + os.sep):
+        raise PermissionError("Not allowed")
+    return target
 
 @app.route('/results')
 def results():
-    output_file = request.args.get('output_file')
-    output_path = os.path.join(SIM_PROJECT_FOLDER, output_file)
-    summary_text = "Simulation ran successfully. Please download the output file below."
-    return render_template('results.html', output_file=output_file, summary=summary_text)
+    run_id = request.args.get('run', '')
+    if not run_id:
+        return "Missing ?run=<run_id>", 400
+    output_file = request.args.get('output_file', 'Simulation_Output.h5')
+
+    user_root = session.get('user_sim_folder', '')
+    if not user_root:
+        flash('Session expired. Please log in again.')
+        return redirect(url_for('login'))
+
+    run_dir = os.path.join(user_root, run_id)
+    try:
+        target_path = _safe_path(run_dir, output_file)
+    except PermissionError:
+        return "Not allowed", 403
+    if not os.path.exists(target_path):
+        return "Not found", 404
+
+    return render_template('results.html',
+                           output_file=os.path.basename(target_path),
+                           run_id=run_id,
+                           summary='Simulation ran successfully. You can download the output below.')
+
+
+# @app.route('/results')
+# def results():
+#     # require run token
+#     run_id = request.args.get('run', '')
+#     if not run_id:
+#         return "Missing ?run=<run_id>", 400
+
+#     # which file to show? default to Simulation_Output.h5
+#     output_file = request.args.get('output_file', 'Simulation_Output.h5')
+
+#     # resolve to this user's per-run sandbox
+#     user_root = session.get('user_sim_folder', '')
+#     if not user_root:
+#         flash('Session expired. Please log in again.')
+#         return redirect(url_for('login'))
+
+#     run_dir = os.path.join(user_root, run_id)
+#     try:
+#         target_path = _safe_path(run_dir, output_file)
+#     except PermissionError:
+#         return "Not allowed", 403
+
+#     if not os.path.exists(target_path):
+#         return "Not found", 404
+
+#     # Render your existing results page; keep only the filename for display
+#     return render_template(
+#         'results.html',
+#         output_file=os.path.basename(target_path),
+#         run_id=run_id,
+#         summary='Simulation ran successfully. You can download the output below.'
+#     )
+
+
+@app.route('/download')
+def download():
+    # require run token
+    run_id = request.args.get('run', '')
+    if not run_id:
+        return "Missing ?run=<run_id>", 400
+
+    filename = request.args.get('filename', '')
+    if not filename:
+        return "Missing ?filename=...", 400
+
+    user_root = session.get('user_sim_folder', '')
+    if not user_root:
+        flash('Session expired. Please log in again.')
+        return redirect(url_for('login'))
+
+    run_dir = os.path.join(user_root, run_id)
+    try:
+        target_path = _safe_path(run_dir, filename)
+    except PermissionError:
+        return "Not allowed", 403
+
+    if not os.path.exists(target_path):
+        return "Not found", 404
+
+    return send_file(target_path, as_attachment=True)
 
 @app.route('/fit', methods=['GET', 'POST'])
 def fit_distributions():
@@ -2908,18 +3192,6 @@ def model_setup_summary():
     )
     print ('model setup summary complete', flush = True)
 
-def _attach_queue_logger(log_queue):
-    h = QueueLogHandler(log_queue)
-    h.setLevel(logging.INFO)
-    fmt = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    h.setFormatter(fmt)
-    # avoid duplicates if called twice
-    for existing in logger.handlers:
-        if isinstance(existing, QueueLogHandler):
-            break
-    else:
-        logger.addHandler(h)
-
 def _close_hdf5_handles(obj):
     """Best-effort: flush/close any HDF5/HDFStore handles hanging off the sim object."""
     candidates = []
@@ -2959,69 +3231,84 @@ def _close_hdf5_handles(obj):
             pass
 
 
-def run_simulation_in_background_custom(data_dict, log_queue):
-    start_ts = datetime.now()
+# === UI-driven worker: uses per-run queue `q`, not LOG_QUEUE ===
+# Call signature from /run_simulation route: run_simulation_in_background_custom(data_dict, q)
+
+def run_simulation_in_background_custom(data_dict: dict, q: queue.Queue):
+    """Background thread for UI-driven runs.
+
+    Expects data_dict to include at least:
+      - proj_dir (str): per-run sandbox path
+      - output_name (str)
+      - other fields your Stryke factory reads (project_name, facilities, ...)
+    """
     old_stdout = sys.stdout
-    sys.stdout = QueueStream(log_queue)  # route print() to SSE
+    sys.stdout = QueueStream(q)
     try:
-        print(f"[INFO] Simulation process started at {start_ts.isoformat()}", flush=True)
+        logger.info("Starting simulation (UI path)...")
 
-        proj_dir = data_dict.get('proj_dir')
-        if not proj_dir:
-            raise ValueError("proj_dir missing")
-        os.makedirs(proj_dir, exist_ok=True)
-        print(f"[INFO] Project directory: {proj_dir}", flush=True)
+        proj_dir    = data_dict['proj_dir']
+        output_name = data_dict['output_name']
 
-        print("[INFO] Creating simulation object...", flush=True)
-        #sim = stryke.simulation(proj_dir=proj_dir, output_name="WebAppModel", wks=None)
-        output_name = data_dict.get('output_name', 'WebAppModel')
-        sim = stryke.simulation(proj_dir=proj_dir, output_name=output_name, wks=None)
-        sim.webapp_import(data_dict, output_name=output_name)
+        # If your Stryke factory for UI path differs, keep your original build here.
+        # Many apps pass a dict to a convenience constructor; adapt as needed.
+        sim = stryke.simulation_from_ui(data_dict) if hasattr(stryke, 'simulation_from_ui') \
+              else stryke.simulation(proj_dir, data_dict.get('wks', ''), output_name=output_name)
 
-        print("[INFO] Importing model inputs...", flush=True)
-        #sim.webapp_import(data_dict, output_name="WebAppModel")
-        sim.project_name  = data_dict.get('project_name')  or 'N/A'
-        sim.project_notes = data_dict.get('project_notes') or 'N/A'
-        sim.model_setup   = data_dict.get('model_setup')   or 'N/A'
-        sim.units_session = data_dict.get('units')         or 'N/A'
+        # Optional: guard HDF5 writes against accidental double-clicks
+        h5_path = os.path.join(proj_dir, f"{output_name}.h5")
+        try:
+            from filelock import FileLock
+            lock = FileLock(h5_path + ".lock")
+        except Exception:
+            lock = None
 
-        print("[INFO] Running simulation...", flush=True)
-        sim.run()
+        sim.webapp_import()
+        if lock:
+            with lock:
+                sim.run()
+                sim.summary()
+        else:
+            sim.run()
+            sim.summary()
 
-        print("[INFO] Building summary...", flush=True)
-        sim.summary()
-
-        print("[INFO] Generating report HTML...", flush=True)
-        report_html = generate_report(sim)
-        report_path = os.path.join(proj_dir, "simulation_report.html")
-        with open(report_path, "w", encoding="utf-8") as f:
-            f.write(report_html)
-        with open(os.path.join(proj_dir, "report_path.txt"), "w", encoding="utf-8") as f:
-            f.write(report_path)
-        print(f"[SUCCESS] Report written to {report_path}", flush=True)
-
+        logger.info("Simulation completed successfully (UI path).")
     except Exception as e:
-        print(f"[ERROR] {type(e).__name__}: {e}", flush=True)
-        logger.exception("Simulation failed in background worker.")
-
+        logger.exception("Simulation failed (UI path).")
+        try:
+            q.put(f"[ERROR] Simulation failed: {e}")
+        except Exception:
+            pass
     finally:
         sys.stdout = old_stdout
         try:
-            log_queue.put("[Simulation Complete]")  # unified sentinel
-            _close_hdf5_handles(sim)
+            q.put("[Simulation Complete]")
         except Exception:
             pass
 
+
 @app.route('/run_simulation', methods=['POST'], endpoint='run_simulation')
 def run_simulation():
-    # in run_simulation()
+    # Unique name for artifacts
     output_name = f"WebAppModel_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    session['output_name'] = output_name  # so /report can find it later
-    data_dict = {
-        'proj_dir': session.get('proj_dir'),
-        # ... existing fields ...
-        'output_name': output_name,
-    }
+    session['output_name'] = output_name
+
+    # --- NEW: per-run sandbox under the user's sim folder ---
+    base = session.get('user_sim_folder')
+    if not base:
+        flash("Session expired or project not initialized.")
+        return redirect(url_for('index'))
+
+    run_id  = uuid.uuid4().hex
+    run_dir = os.path.join(base, run_id)
+    os.makedirs(run_dir, exist_ok=True)
+
+    # Point this run at its own directory so .h5, report, etc. don't collide
+    session['proj_dir'] = run_dir   # so /report reads the right report for THIS run
+    session['last_run_id'] = run_id # handy for templates/logs pages
+
+    #get the per-run queue (from #1)
+    q = get_queue(run_id)
 
     proj_dir = session.get('proj_dir')
     if not proj_dir:
@@ -3047,31 +3334,34 @@ def run_simulation():
             graph_data = json.load(f)
 
     data_dict = {
-        'proj_dir':      proj_dir,
-        'project_name':  session.get('project_name'),
-        'project_notes': session.get('project_notes'),
-        'model_setup':   session.get('model_setup'),
-        'units':         session.get('units'),
-        'facilities':    session.get('facilities_data'),
-        'unit_parameters_file':   session.get('unit_params_file'),
+        'proj_dir':       proj_dir,
+        'project_name':   session.get('project_name'),
+        'project_notes':  session.get('project_notes'),
+        'model_setup':    session.get('model_setup'),
+        'units':          session.get('units'),
+        'facilities':     session.get('facilities_data'),
+        'unit_parameters_file':    session.get('unit_params_file'),
         'operating_scenarios_file': session.get('op_scen_file'),
-        'population':    pop_df,
+        'population':     pop_df,
         'flow_scenarios': session.get('flow_scenario'),
         'hydrograph_file': session.get('hydrograph_file'),
-        'graph_data':     graph_data,
-        'graph_summary':  graph_summary,
-        'units_system':   session.get('units', 'imperial'),
+        'graph_data':      graph_data,
+        'graph_summary':   graph_summary,
+        'units_system':    session.get('units', 'imperial'),
         'simulation_mode': session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing'),
+        'output_name':     output_name,
     }
 
+    #pass the per-run queue (q), not LOG_QUEUE
     t = threading.Thread(target=run_simulation_in_background_custom,
-                         args=(data_dict, LOG_QUEUE),
+                         args=(data_dict, q),
                          daemon=True)
     t.start()
     flash("Simulation started! Check logs for progress.")
 
-    # send user to a page that listens to /stream
-    return redirect(url_for('simulation_logs'))
+    #Include run token so the logs page can open /stream?run=...
+    return redirect(url_for('simulation_logs', run=run_id))
+
 
 # @app.route('/simulation_logs')
 # def simulation_logs():

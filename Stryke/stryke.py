@@ -151,6 +151,10 @@ def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
                 df[col] = pd.to_numeric(df[col], errors="coerce")
     return df
 
+def read_csv_if_exists(*args, **kwargs):
+    return _read_csv_if_exists_compat(*args, **kwargs)
+
+
 class simulation():
     ''' Python class object that initiates, runs, and holds data for a facility
     specific simulation'''

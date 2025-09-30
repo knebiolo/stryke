@@ -21,5 +21,8 @@ EXPOSE 5000
 
 # Command to run the application using Gunicorn.
 # Note that app.py is located in the webapp folder.
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --workers=2 --threads=2 webapp.app:app"]
+# CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --workers=2 --threads=2 webapp.app:app"]
+
+# Use PORT if the platform sets it; default 5000 for local
+CMD sh -c 'gunicorn --workers 1 --threads 4 --timeout 0 --bind 0.0.0.0:${PORT:-5000} webapp.app:app'
 
