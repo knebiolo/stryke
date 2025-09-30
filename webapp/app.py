@@ -991,7 +991,7 @@ def facilities():
         #print("POST form data:", request.form)
 
         # Determine simulation mode and number of facilities.
-        sim_mode = session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing')
+        sim_mode = session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment')
         num_facilities = 1 if sim_mode in ["single_unit_survival_only", "single_unit_simulated_entrainment"] \
                           else int(request.form.get('num_facilities', 1))
 
@@ -2664,7 +2664,7 @@ def population():
                     if length_mean_input:
                         try:
                             length_mean_in = float(length_mean_input)
-                            if units == 'metric': 
+                            if units == 'metric' : 
                                 length_mean_in /= 25.4
                             pop_data["length location"] = length_mean_in
                         except Exception as e:
@@ -2999,18 +2999,13 @@ def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
         log.info("Starting simulation (UI path)...")
 
         # Build the simulation from UI data. Prefer a convenience ctor if present.
+        # Try to use simulation_from_ui if available, else fallback
+        wks = data_dict.get('wks', '')
         try:
-            sim = stryke.simulation_from_ui(data_dict)  # newer style
-        except AttributeError:
-            # Fallback for older Stryke APIs
-            wks = data_dict.get('wks', '')
-            try:
-                sim = stryke.simulation(proj_dir, wks, output_name=output_name)
-            except TypeError:
-                # Oldest signature without output_name kw
-                sim = stryke.simulation(proj_dir, wks)
-
-        sim.webapp_import()
+            sim = stryke.simulation(proj_dir, wks, output_name=output_name)
+        except TypeError:
+            sim = stryke.simulation(proj_dir, wks)
+        sim.webapp_import(data_dict, output_name)
 
         if lock:
             with lock:
