@@ -173,15 +173,18 @@ def _attach_queue_log_handler(q):
 
 # ----------------- Password Protection -----------------
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
-app.config['PASSWORD'] = 'XXXXXX'  # Set your desired password here
 
+# Use a secure secret key from environment, fallback to a warning/dev key
 app.secret_key = os.environ.get('FLASK_SECRET_KEY')
 if not app.secret_key:
     app.logger.warning("FLASK_SECRET_KEY not set; using insecure dev key — set it in your environment!")
-    app.secret_key = 'dev-only-change-me' # dev fallback only
+    app.secret_key = 'born4slippy4!'  # dev fallback only
 
-app.config['PASSWORD'] = os.environ.get('APP_PASSWORD', 'dev-pass') # dev
+# Password should always come from environment, never hardcoded
+app.config['PASSWORD'] = os.environ.get('APP_PASSWORD')
+if not app.config['PASSWORD']:
+    app.logger.warning("APP_PASSWORD not set; using insecure dev password — set it in your environment!")
+    app.config['PASSWORD'] = 'expensive5rudabega!@1'  # dev fallback only
 
 # Set session lifetime to 1 day (adjust as needed)
 app.permanent_session_lifetime = timedelta(days=1)

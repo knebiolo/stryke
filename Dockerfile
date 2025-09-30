@@ -19,6 +19,10 @@ ENV PYTHONPATH="/app:${PYTHONPATH}"
 # Expose the port (Railway sets the PORT environment variable)
 EXPOSE 5000
 
+# Environmental Variables
+ENV FLASK_SECRET_KEY='born4slippy4!'
+ENV APP_PASSWORD='expensive5rudabega!@1'
+
 # Command to run the application using Gunicorn.
 # Note that app.py is located in the webapp folder.
 # CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT --workers=2 --threads=2 webapp.app:app"]
