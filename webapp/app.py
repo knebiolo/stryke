@@ -430,7 +430,7 @@ def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
         except TypeError:
             sim = stryke.simulation(ws, wks)
 
-        sim.webapp_import()
+        sim.webapp_import(data_dict, output_name)
         if lock:
             with lock:
                 sim.run(); sim.summary()
@@ -2998,7 +2998,7 @@ def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
                 sim.run()
                 sim.summary()
         else:
-            hydro_file_path = session.get('hydrograph_file')
+            hydro_file_path = data_dict.get('hydrograph_file')
             if hydro_file_path and os.path.exists(hydro_file_path):
                 df_check = pd.read_csv(hydro_file_path)
                 print("Hydrograph CSV columns:", df_check.columns.tolist(), flush=True)
