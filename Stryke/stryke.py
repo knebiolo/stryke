@@ -1484,14 +1484,14 @@ class simulation():
                 df = self.input_hydrograph_df
                 # apply prorate
                 try:
-                    df['DAvgFlow_prorate'] = df.Discharge * prorate
-                    df['datetimeUTC'] = pd.to_datetime(flow_df.Date)
+                        df['DAvgFlow_prorate'] = df['Discharge'] * prorate
+                        df['datetimeUTC'] = pd.to_datetime(df['Date'])
                 except AttributeError:
                     pass
                 # convert to datetime
                 # extract year
-                df['year'] = pd.DatetimeIndex(flow_df['datetimeUTC']).year
-                df = df[df.year == flow_year]
+                    df['year'] = pd.DatetimeIndex(df['datetimeUTC']).year
+                    df = df[df['year'] == flow_year]
                 # get months
                 df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month
                 for i in scen_months:
