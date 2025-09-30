@@ -1480,18 +1480,21 @@ class simulation():
                     flow_df = pd.concat([flow_df, df[df.month == i]])
             
             # if not, use the hydrograph data in the Hydrology sheet
-            else: 
-                df = self.input_hydrograph_df
-                # apply prorate
-                try:
-                        df['DAvgFlow_prorate'] = df['Discharge'] * prorate
-                        df['datetimeUTC'] = pd.to_datetime(df['Date'])
-                except AttributeError:
+            else:
+                df = self.input_hydrograph_df.copy()
+                # If 'Discharge' and 'Date' columns exist, use them (Hydrology sheet)
+                if 'Discharge' in df.columns and 'Date' in df.columns:
+                    df['DAvgFlow_prorate'] = df['Discharge'] * prorate
+                    df['datetimeUTC'] = pd.to_datetime(df['Date'])
+                # If 'DAvgFlow_prorate' and 'datetimeUTC' exist, use them (uploaded hydrograph)
+                elif 'DAvgFlow_prorate' in df.columns and 'datetimeUTC' in df.columns:
+                    # Already prorated and datetime converted by webapp
                     pass
-                # convert to datetime
+                else:
+                    raise KeyError("Hydrograph DataFrame must have either ['Discharge', 'Date'] or ['DAvgFlow_prorate', 'datetimeUTC'] columns.")
                 # extract year
-                    df['year'] = pd.DatetimeIndex(df['datetimeUTC']).year
-                    df = df[df['year'] == flow_year]
+                df['year'] = pd.DatetimeIndex(df['datetimeUTC']).year
+                df = df[df['year'] == flow_year]
                 # get months
                 df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month
                 for i in scen_months:
