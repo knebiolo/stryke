@@ -70,8 +70,7 @@ rng = default_rng()
 import logging
 logger = logging.getLogger(__name__)
 
-# Now pass the session to hydrofunctions if possible
-
+DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostics
 
 # Get the directory of the current script
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -385,6 +384,17 @@ class simulation():
         self.hdf.flush()
     
     def webapp_import(self, data_dict, output_name):
+        DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostics
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] webapp_import called with output_name: {output_name}")
+            print(f"[DIAG] proj_dir: {data_dict.get('proj_dir', os.getcwd())}")
+            print(f"[DIAG] data_dict keys: {list(data_dict.keys())}")
+            for k, v in data_dict.items():
+                print(f"  {k}: type={type(v)}")
+        hdf_path = os.path.join(data_dict.get('proj_dir', os.getcwd()), f"{output_name}.h5")
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] HDF5 output path: {hdf_path}")
+            print(f"[DIAG] HDF5 path exists before write: {os.path.exists(hdf_path)}")
         """
         Imports data for a new simulation from in-memory/webapp sources,
         and writes data to an HDF5 file.
@@ -399,16 +409,28 @@ class simulation():
         # Convert graph summary data to DataFrames.
         graph_summary = data_dict.get('graph_summary', {})
         self.nodes = to_dataframe(graph_summary.get('Nodes', []))
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] Nodes DataFrame shape: {self.nodes.shape}")
+            print(f"[DIAG] Nodes DataFrame columns: {self.nodes.columns.tolist()}")
+            print(f"[DIAG] Nodes DataFrame head:\n{self.nodes.head()}")
         try:
             self.edges = to_dataframe(graph_summary.get('Edges', []))
-        except:
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Edges DataFrame shape: {self.edges.shape}")
+                print(f"[DIAG] Edges DataFrame columns: {self.edges.columns.tolist()}")
+                print(f"[DIAG] Edges DataFrame head:\n{self.edges.head()}")
+        except Exception as e:
             logger.info("Single Unit Scenario Identified, No Movement")
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Edges DataFrame construction failed: {e}")
         self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
         self.surv_fun_dict = self.surv_fun_df.to_dict('index')
     
         
         # Build the simulation graph.
         sim_graph_data = data_dict.get('simulation_graph')
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] simulation_graph in data_dict: {sim_graph_data is not None}")
         if sim_graph_data is not None:
             G = json_graph.node_link_graph(sim_graph_data)
         else:
@@ -424,27 +446,44 @@ class simulation():
                 except (ValueError, TypeError):
                     weight = 1.0
                 G.add_edge(source, target, Weight=weight)
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] Graph nodes: {G.number_of_nodes()}")
+            print(f"[DIAG] Graph edges: {G.number_of_edges()}")
         
         if "graph_data" in data_dict:
             G = json_graph.node_link_graph(data_dict["graph_data"])
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] graph_data loaded. Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
         
         try:
             path_list = list(nx.all_shortest_paths(G, 'river_node_0', 'river_node_1'))
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Shortest path list: {path_list}")
         except nx.NetworkXNoPath:
             logger.info("No path found between river_node_0 and river_node_1")
+            if DIAGNOSTICS_ENABLED:
+                print("[DIAG] No path found between river_node_0 and river_node_1")
         except nx.NodeNotFound as e:
             logger.info("NodeNotFound:")
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] NodeNotFound: {e}")
         
         if len(self.nodes) > 1:
             try:
                 paths = list(nx.all_shortest_paths(G, 'river_node_0', 'river_node_1'))
                 max_len = max(len(path) for path in paths)
                 self.moves = np.arange(0, max_len + 1, 1)
+                if DIAGNOSTICS_ENABLED:
+                    print(f"[DIAG] Moves array: {self.moves}")
             except nx.NetworkXNoPath:
                 logger.warning("No path found between river_node_0 and river_node_1.")
                 self.moves = np.zeros(1, dtype=np.int32)
+                if DIAGNOSTICS_ENABLED:
+                    print("[DIAG] Moves array set to zeros due to no path.")
         else:
             self.moves = np.zeros(1, dtype=np.int32)
+            if DIAGNOSTICS_ENABLED:
+                print("[DIAG] Moves array set to zeros due to single node.")
         self.graph = G
         
 
@@ -466,17 +505,33 @@ class simulation():
             if self.unit_params is not None:
                 self.unit_params['Unit_Name'] = self.unit_params.Facility + ' - Unit ' + self.unit_params.Unit.astype('str')
                 self.unit_params.set_index('Unit_Name', inplace=True)
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Unit params DataFrame shape: {self.unit_params.shape}")
+                print(f"[DIAG] Unit params DataFrame columns: {self.unit_params.columns.tolist()}")
+                print(f"[DIAG] Unit params DataFrame head:\n{self.unit_params.head()}")
         elif "unit_parameters" in data_dict:
             self.unit_params = to_dataframe(data_dict["unit_parameters"])
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Unit params DataFrame shape: {self.unit_params.shape}")
+                print(f"[DIAG] Unit params DataFrame columns: {self.unit_params.columns.tolist()}")
+                print(f"[DIAG] Unit params DataFrame head:\n{self.unit_params.head()}")
 
         # 4. Facilities.
         if "facilities" in data_dict:
             self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Facility params DataFrame shape: {self.facility_params.shape}")
+                print(f"[DIAG] Facility params DataFrame columns: {self.facility_params.columns.tolist()}")
+                print(f"[DIAG] Facility params DataFrame head:\n{self.facility_params.head()}")
 
         # 5. Flow Scenarios.
         if "flow_scenarios" in data_dict:
             self.flow_scenarios_df = to_dataframe(data_dict["flow_scenarios"], numeric_cols=['FlowYear', 'Prorate'])
             self.flow_scenarios = self.flow_scenarios_df["Scenario"].unique()
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Flow scenarios DataFrame shape: {self.flow_scenarios_df.shape}")
+                print(f"[DIAG] Flow scenarios DataFrame columns: {self.flow_scenarios_df.columns.tolist()}")
+                print(f"[DIAG] Flow scenarios DataFrame head:\n{self.flow_scenarios_df.head()}")
         
         # 6. Operating Scenarios.
         if "operating_scenarios_file" in data_dict:
@@ -485,11 +540,17 @@ class simulation():
                 numeric_cols=['Hours', 'Location', 'Prob Not Operating', 'Scale', 'Shape', 'Unit']
             )
             #logger.info('operating scenarios columns', self.operating_scenarios_df.columns.to_list())
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Operating scenarios DataFrame shape: {self.operating_scenarios_df.shape}")
+                print(f"[DIAG] Operating scenarios DataFrame columns: {self.operating_scenarios_df.columns.tolist()}")
+                print(f"[DIAG] Operating scenarios DataFrame head:\n{self.operating_scenarios_df.head()}")
         else:
             self.operating_scenarios_df = None
         
         if self.operating_scenarios_df is not None and "Scenario" in self.operating_scenarios_df.columns:
             self.op_scenarios = self.operating_scenarios_df["Scenario"].unique()
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] op_scenarios: {self.op_scenarios}")
         else:
             self.op_scenarios = []
         
@@ -502,10 +563,18 @@ class simulation():
                                                                'length location', 'length scale', 'length shape',
                                                                'location', 'max_ent_rate', 'occur_prob', 'scale', 'shape'])
             #logger.info('population dataframe columns:', self.pop.columns.to_list())
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Population DataFrame shape: {self.pop.shape}")
+                print(f"[DIAG] Population DataFrame columns: {self.pop.columns.tolist()}")
+                print(f"[DIAG] Population DataFrame head:\n{self.pop.head()}")
         # 8. Hydrograph.
         if "hydrograph_file" in data_dict:
             self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
-            print (self.input_hydrograph_df)
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Hydrograph DataFrame shape: {self.input_hydrograph_df.shape if self.input_hydrograph_df is not None else 'None'}")
+                if self.input_hydrograph_df is not None:
+                    print(f"[DIAG] Hydrograph DataFrame columns: {self.input_hydrograph_df.columns.tolist()}")
+                    print(f"[DIAG] Hydrograph DataFrame head:\n{self.input_hydrograph_df.head()}")
 
         
         # # 9. Unit Conversion.
@@ -517,8 +586,12 @@ class simulation():
         # 10. Create HDF5 file and store DataFrames.
         if os.path.exists(hdf_path):
             os.remove(hdf_path)
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Existing HDF5 file removed: {hdf_path}")
         hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
         self.hdf = pd.HDFStore(hdf_path, mode='w')
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] HDF5 file opened for writing: {hdf_path}")
         for key, df in [("Flow Scenarios", getattr(self, "flow_scenarios_df", None)),
                         ("Operating Scenarios", getattr(self, "operating_scenarios_df", None)),
                         ("Population", getattr(self, "pop", None)),
@@ -529,11 +602,19 @@ class simulation():
                         ("Hydrograph", getattr(self, "input_hydrograph_df", None))]:
             if df is not None:
                 self.hdf[key] = df
+                if DIAGNOSTICS_ENABLED:
+                    print(f"[DIAG] Wrote {key} to HDF5. Shape: {df.shape}")
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] HDF5 file flushed.")
         self.hdf.flush()
         self.hdf.close()
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] HDF5 file closed.")
         
         # Save the HDFStore file path for later use in run()
         self.hdf_path = hdf_path
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] Final HDF5 path stored: {self.hdf_path}")
         
         if hasattr(self, "unit_params") and self.unit_params is not None:
             if "Qcap" in self.unit_params.columns and "Facility" in self.unit_params.columns:
