@@ -1988,6 +1988,17 @@ class simulation():
             else:
                 fixed_discharge = scen_df.iat[0, scen_df.columns.get_loc('Flow')]
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df, fixed_discharge=fixed_discharge)
+
+            # Diagnostics for flow_df (hydrograph)
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] flow_df shape: {flow_df.shape}")
+                print(f"[DIAG] flow_df columns: {list(flow_df.columns)}")
+                print(f"[DIAG] flow_df head:\n{flow_df.head()}")
+                print(f"[DIAG] flow_df tail:\n{flow_df.tail()}")
+                print(f"[DIAG] flow_df date range: {flow_df['datetimeUTC'].min()} to {flow_df['datetimeUTC'].max()}" if 'datetimeUTC' in flow_df.columns else "[DIAG] No datetimeUTC column in flow_df")
+                print(f"[DIAG] flow_df DAvgFlow_prorate min/max: {flow_df['DAvgFlow_prorate'].min()} / {flow_df['DAvgFlow_prorate'].max()}" if 'DAvgFlow_prorate' in flow_df.columns else "[DIAG] No DAvgFlow_prorate column in flow_df")
+
+            
             for spc in species:
                 spc_dat = self.pop[(self.pop['Scenario'] == scenario) & (self.pop.Species == spc)]
                 if spc_dat.empty:
@@ -2016,7 +2027,11 @@ class simulation():
                     for flow_row in flow_df.iterrows():
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
                         day = flow_row[1]['datetimeUTC']
-    
+
+                        if DIAGNOSTICS_ENABLED:
+                            # Diagnostics for flow_row and curr_Q
+                            print(f"[DIAG] curr_Q: {curr_Q}")
+
                         # Build Q_dict.
                         Q_dict = {'curr_Q': curr_Q}
                         min_Q_dict = {}
@@ -2249,12 +2264,23 @@ class simulation():
                                 daily_row_dict['num_survived'] = total_survived_entrained
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
+                                if DIAGNOSTICS_ENABLED:
+                                    print(f"[DIAG] About to write 'Daily' DataFrame: shape={daily.shape}, columns={list(daily.columns)}", flush=True)
+                                    print(f"[DIAG] DataFrame head:\n{daily.head()}", flush=True)
+                                
                                 daily.to_hdf(self.hdf,
                                              key='Daily',
                                              mode='a',
                                              format='table',
                                              append=True)
+                                
+                                if DIAGNOSTICS_ENABLED:
+                                    print(f"[DIAG] Wrote 'Daily' to HDF5. Flushing...", flush=True)
                                 self.hdf.flush()
+
+                                if DIAGNOSTICS_ENABLED:
+                                    print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
+                                
                             else:
                                 if self.output_units == 'metric':
                                     curr_Q_report = curr_Q * 0.02831683199881
@@ -2272,12 +2298,19 @@ class simulation():
                                     'num_survived': [np.int64(0)]
                                 }
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
+                                if DIAGNOSTICS_ENABLED:
+                                    print(f"[DIAG] About to write 'Daily' DataFrame (no fish): shape={daily.shape}, columns={list(daily.columns)}", flush=True)
+                                    print(f"[DIAG] DataFrame head:\n{daily.head()}", flush=True)
                                 daily.to_hdf(self.hdf,
                                              key='Daily',
                                              mode='a',
                                              format='table',
                                              append=True)
+                                if DIAGNOSTICS_ENABLED:                                
+                                    print(f"[DIAG] Wrote 'Daily' to HDF5 (no fish). Flushing...", flush=True)
                                 #self.hdf.flush()
+                                if DIAGNOSTICS_ENABLED:
+                                    print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
                         
                         logger.info("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
                 self.hdf.flush()
@@ -2285,6 +2318,8 @@ class simulation():
                 
             logger.info("Completed Simulations - view results")
             self.hdf.flush()
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Final HDF5 keys before close: {self.hdf.keys()}", flush=True)
             self.hdf.close()
 
 
@@ -2304,6 +2339,9 @@ class simulation():
         
         # Use a context manager to open the HDF file for reading so it closes automatically.
         with pd.HDFStore(hdf_path, mode='r') as store:
+            if DIAGNOSTICS_ENABLED:    
+                print(f"[DIAG] Opened HDF5 file for summary: {hdf_path}", flush=True)
+                print(f"[DIAG] HDF5 keys present: {store.keys()}", flush=True)
             # create some empty holders
             self.beta_dict = {}
     
@@ -2317,7 +2355,11 @@ class simulation():
     
             # get units (if needed)
             units = store['Unit_Parameters'].index
-    
+            if DIAGNOSTICS_ENABLED:
+                if 'Daily' not in store.keys():
+                    print(f"[DIAG][ERROR] 'Daily' table is missing from HDF5!", flush=True)
+                else:
+                    print(f"[DIAG] 'Daily' table found in HDF5. Shape: {store['Daily'].shape}", flush=True)
             self.daily_summary = store['Daily']
             self.daily_summary.iloc[:,6:] = self.daily_summary.iloc[:,6:].astype(float)
     
