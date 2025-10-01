@@ -21,6 +21,7 @@ Flask
 Flask-Session==0.6.0
 gunicorn
 Werkzeug
+filelock
 
 # Database & APIs
 requests

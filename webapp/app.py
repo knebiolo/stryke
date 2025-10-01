@@ -36,6 +36,7 @@ import logging
 import logging.handlers
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 import tables
+import filelock
 from werkzeug.exceptions import HTTPException, NotFound
 
 
