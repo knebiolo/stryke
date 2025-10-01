@@ -1,3 +1,4 @@
+DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostic prints
 # -*- coding: utf-8 -*-
 """
 Created on Tue Feb  4 19:48:03 2025
@@ -39,6 +40,7 @@ import tables
 import filelock
 from werkzeug.exceptions import HTTPException, NotFound
 
+DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostic prints
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -1270,15 +1272,28 @@ def operating_scenarios():
 def get_operating_scenarios():
     import pandas as pd
     import os
+    if DIAGNOSTICS_ENABLED:
+        print("[DIAG] get_operating_scenarios called. Session keys:")
+        for k in session.keys():
+            print(f"  {k}")
     operating_scenarios = []
     if 'op_scen_file' in session:
         os_file = session['op_scen_file']
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] op_scen_file: {os_file}")
+            print(f"[DIAG] File exists: {os.path.exists(os_file)}")
         if os.path.exists(os_file):
             df_ops = pd.read_csv(os_file)
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Operating scenarios DataFrame shape: {df_ops.shape}")
+                print(f"[DIAG] Operating scenarios DataFrame columns: {df_ops.columns.tolist()}")
+                print(f"[DIAG] Operating scenarios DataFrame head:\n{df_ops.head()}")
             # Optionally, select only the columns you need for the dropdown or display
             # For example, if you only need 'Scenario' and 'Unit', you could do:
             # df_ops = df_ops[['Scenario', 'Unit']]
             operating_scenarios = df_ops.to_dict(orient='records')
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] Returning {len(operating_scenarios)} operating scenarios.")
     return jsonify(operating_scenarios)
 
 @app.route('/graph_editor', methods=['GET'])
@@ -1405,16 +1420,29 @@ def save_graph():
 
 @app.route('/get_unit_parameters', methods=['GET'])
 def get_unit_parameters():
-    unit_parameters = []
-    if 'unit_params_file' in session:
-        unit_params_file = session['unit_params_file']
-        if os.path.exists(unit_params_file):
-            df_unit = pd.read_csv(unit_params_file)
-            # Trim to only the columns needed for the dropdown
-            if 'Facility' in df_unit.columns and 'Unit' in df_unit.columns:
-                df_unit = df_unit[['Facility', 'Unit']]
-            unit_parameters = df_unit.to_dict(orient='records')
-    return jsonify(unit_parameters)
+        if DIAGNOSTICS_ENABLED:
+            print("[DIAG] get_unit_parameters called. Session keys:")
+            for k in session.keys():
+                print(f"  {k}")
+        unit_parameters = []
+        if 'unit_params_file' in session:
+            unit_params_file = session['unit_params_file']
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] unit_params_file: {unit_params_file}")
+                print(f"[DIAG] File exists: {os.path.exists(unit_params_file)}")
+            if os.path.exists(unit_params_file):
+                df_unit = pd.read_csv(unit_params_file)
+                if DIAGNOSTICS_ENABLED:
+                    print(f"[DIAG] Unit parameters DataFrame shape: {df_unit.shape}")
+                    print(f"[DIAG] Unit parameters DataFrame columns: {df_unit.columns.tolist()}")
+                    print(f"[DIAG] Unit parameters DataFrame head:\n{df_unit.head()}")
+                # Trim to only the columns needed for the dropdown
+                if 'Facility' in df_unit.columns and 'Unit' in df_unit.columns:
+                    df_unit = df_unit[['Facility', 'Unit']]
+                unit_parameters = df_unit.to_dict(orient='records')
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Returning {len(unit_parameters)} unit parameters.")
+        return jsonify(unit_parameters)
 
 
 @app.route('/population', methods=['GET', 'POST'])
@@ -2962,11 +2990,19 @@ def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
     # ---- Validate inputs up front
     proj_dir = data_dict.get('proj_dir')
     output_name = data_dict.get('output_name', 'Simulation_Output')
+    if DIAGNOSTICS_ENABLED:
+        print(f"[DIAG] proj_dir: {proj_dir}", flush=True)
+        print(f"[DIAG] output_name: {output_name}", flush=True)
+        print(f"[DIAG] hydrograph_file: {data_dict.get('hydrograph_file')}", flush=True)
+        print(f"[DIAG] wks: {data_dict.get('wks', '')}", flush=True)
     if not proj_dir or not os.path.isdir(proj_dir):
-        try: q.put(f"[ERROR] Invalid proj_dir: {proj_dir!r}")
+        try:
+            q.put(f"[ERROR] Invalid proj_dir: {proj_dir!r}")
         finally:
-            try: q.put("[Simulation Complete]"); 
-            except Exception: pass
+            try:
+                q.put("[Simulation Complete]")
+            except Exception:
+                pass
         return
 
     # ---- Route all print()/logger output to this run's queue
@@ -2984,9 +3020,6 @@ def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
 
     try:
         log.info("Starting simulation (UI path)...")
-
-        # Build the simulation from UI data. Prefer a convenience ctor if present.
-        # Try to use simulation_from_ui if available, else fallback
         wks = data_dict.get('wks', '')
         try:
             sim = stryke.simulation(proj_dir, wks, output_name=output_name)
@@ -2994,24 +3027,49 @@ def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
             sim = stryke.simulation(proj_dir, wks)
         sim.webapp_import(data_dict, output_name)
 
+        hydro_file_path = data_dict.get('hydrograph_file')
+        if DIAGNOSTICS_ENABLED:
+            if hydro_file_path and os.path.exists(hydro_file_path):
+                print(f"[DIAG] Hydrograph file found: {hydro_file_path}", flush=True)
+                df_check = pd.read_csv(hydro_file_path)
+                print(f"[DIAG] Hydrograph CSV columns: {df_check.columns.tolist()}", flush=True)
+                print(f"[DIAG] Hydrograph CSV head:\n{df_check.head()}", flush=True)
+            else:
+                print(f"[DIAG] Hydrograph file missing or path invalid: {hydro_file_path}", flush=True)
+
+        if DIAGNOSTICS_ENABLED:
+            print("[DIAG] Starting simulation run...", flush=True)
         if lock:
             with lock:
                 sim.run()
+                if DIAGNOSTICS_ENABLED:
+                    print("[DIAG] Simulation run complete.", flush=True)
                 sim.summary()
+                if DIAGNOSTICS_ENABLED:
+                    print("[DIAG] Simulation summary complete.", flush=True)
         else:
-            hydro_file_path = data_dict.get('hydrograph_file')
-            if hydro_file_path and os.path.exists(hydro_file_path):
-                df_check = pd.read_csv(hydro_file_path)
-                print("Hydrograph CSV columns:", df_check.columns.tolist(), flush=True)
-                print("Hydrograph CSV head:", df_check.head(), flush=True)
             sim.run()
+            if DIAGNOSTICS_ENABLED:
+                print("[DIAG] Simulation run complete.", flush=True)
             sim.summary()
+            if DIAGNOSTICS_ENABLED:
+                print("[DIAG] Simulation summary complete.", flush=True)
+
+        if DIAGNOSTICS_ENABLED:
+            if os.path.exists(h5_path):
+                print(f"[DIAG] Output HDF5 file created: {h5_path}", flush=True)
+            else:
+                print(f"[DIAG] Output HDF5 file NOT found: {h5_path}", flush=True)
 
         log.info("Simulation completed successfully (UI path).")
 
     except Exception as e:
         # Make sure the traceback hits logs and the SSE stream
         log.exception("Simulation failed (UI path).")
+        if DIAGNOSTICS_ENABLED:
+            import traceback
+            print(f"[ERROR] Simulation failed: {e}", flush=True)
+            print(traceback.format_exc(), flush=True)
         try: q.put(f"[ERROR] Simulation failed: {e}")
         except Exception: pass
 
