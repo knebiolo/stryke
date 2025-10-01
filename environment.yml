@@ -25,6 +25,7 @@ dependencies:
   - tables
   - tzdata
   - pytz
+  - filelock
   # Optional: hydrofunctions (if used in your code)
   - hydrofunctions
 prefix: C:\Users\knebiolo\.conda\envs\stryke
