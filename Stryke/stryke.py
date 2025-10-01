@@ -505,6 +505,7 @@ class simulation():
         # 8. Hydrograph.
         if "hydrograph_file" in data_dict:
             self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
+            print (self.input_hydrograph_df)
 
         
         # # 9. Unit Conversion.
@@ -1460,9 +1461,13 @@ class simulation():
         hydrograph data based on a proration factor or simulating a hydrograph with a
         constant discharge rate across the specified months.
         """
+        import logging
+        logger = logging.getLogger("Stryke.create_hydrograph")
         flow_df = pd.DataFrame()
-        
+            
         scen_df = flow_scenarios_df[flow_scenarios_df.Scenario == scen]
+        logger.info(f"create_hydrograph called with discharge_type={discharge_type}, scen={scen}, scen_months={scen_months}")
+        logger.info(f"scen_df shape: {scen_df.shape}, columns: {scen_df.columns.tolist()}")
         #logger.info('scenario dataframe %s', scen_df.shape)
         # if the discharge type is hydrograph - import hydrography and transform using prorate factor
         if discharge_type == 'hydrograph':
@@ -1482,23 +1487,33 @@ class simulation():
             # if not, use the hydrograph data in the Hydrology sheet
             else:
                 df = self.input_hydrograph_df.copy()
+                logger.info(f"Hydrograph input DataFrame columns: {df.columns.tolist()}")
+                logger.info(f"Hydrograph input DataFrame head:\n{df.head()}\nShape: {df.shape}")
                 # If 'Discharge' and 'Date' columns exist, use them (Hydrology sheet)
                 if 'Discharge' in df.columns and 'Date' in df.columns:
                     df['DAvgFlow_prorate'] = df['Discharge'] * prorate
                     df['datetimeUTC'] = pd.to_datetime(df['Date'])
+                    logger.info("Hydrology sheet detected. Applied proration and datetime conversion.")
                 # If 'DAvgFlow_prorate' and 'datetimeUTC' exist, use them (uploaded hydrograph)
                 elif 'DAvgFlow_prorate' in df.columns and 'datetimeUTC' in df.columns:
-                    # Already prorated and datetime converted by webapp
-                    pass
+                    logger.info("Webapp hydrograph detected. Columns already processed.")
                 else:
+                    logger.error(f"Hydrograph DataFrame missing required columns. Columns: {df.columns.tolist()}")
                     raise KeyError("Hydrograph DataFrame must have either ['Discharge', 'Date'] or ['DAvgFlow_prorate', 'datetimeUTC'] columns.")
                 # extract year
                 df['year'] = pd.DatetimeIndex(df['datetimeUTC']).year
+                logger.info(f"Filtering hydrograph for flow_year={flow_year}")
                 df = df[df['year'] == flow_year]
+                logger.info(f"After year filter: shape={df.shape}")
                 # get months
-                df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month
-                for i in scen_months:
-                    flow_df = pd.concat([flow_df, df[df.month == i]])
+                df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month.astype(int)
+                scen_months_int = [int(m) for m in scen_months]
+                logger.info(f"Filtering months: {scen_months_int}")
+                for i in scen_months_int:
+                    month_df = df[df['month'] == i]
+                    logger.info(f"Month {i}: rows={month_df.shape[0]}")
+                    flow_df = pd.concat([flow_df, month_df])
+                logger.info(f"Final flow_df shape: {flow_df.shape}")
             #print (flow_df)
         
         # if it is a fixed discharge - simulate a hydrograph
@@ -1526,6 +1541,7 @@ class simulation():
                 #flow_df = flow_df.append(df)
                 flow_df = pd.concat([df, flow_df])
         
+        logger.info(f"Returning hydrograph DataFrame with shape: {flow_df.shape}")
         return flow_df
     
     def daily_hours(self, Q_dict, scenario, operations = 'independent'):
