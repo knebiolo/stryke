@@ -11,12 +11,14 @@
         }
 
         #logOutput {
-            height: 400px;
+            height: 500px;
             overflow-y: auto;
             border: 1px solid #ccc;
             background: #f8f8f8;
             padding: 10px;
             font-family: monospace;
+            font-size: 12px;
+            line-height: 1.4;
         }
 
         #resultsButton {
@@ -24,7 +26,7 @@
             margin-top: 20px;
             padding: 10px 20px;
             font-size: 16px;
-            background-color: #007bff;
+            background-color: #28a745;
             color: white;
             border: none;
             border-radius: 4px;
@@ -32,7 +34,7 @@
         }
 
         #resultsButton:hover {
-            background-color: #0056b3;
+            background-color: #218838;
         }
     </style>
 </head>
@@ -42,7 +44,11 @@
     <button id="resultsButton" onclick="window.location.href='/report'">View Results</button> 
     <script>
         const logOutput = document.getElementById("logOutput");
-        const eventSource = new EventSource("/stream");
+        const resultsButton = document.getElementById("resultsButton");
+        const params = new URLSearchParams(window.location.search);
+        const runId = params.get('run') || "";
+        
+        const eventSource = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
 
         eventSource.onmessage = function(event) {
             const line = document.createElement("div");
@@ -50,9 +56,12 @@
             logOutput.appendChild(line);
             logOutput.scrollTop = logOutput.scrollHeight;
 
-            if (event.data.trim() === "[Simulation Complete]") {
+            // Check if simulation is complete
+            if (event.data.includes("[Simulation Complete]") || 
+                event.data.includes("Completed Simulations") ||
+                event.data.includes("view results")) {
                 eventSource.close();
-                document.getElementById("resultsButton").style.display = "inline-block";
+                resultsButton.style.display = "inline-block";
             }
         };
 
@@ -60,30 +69,8 @@
             const line = document.createElement("div");
             line.textContent = "[ERROR] Connection lost or server unavailable.";
             logOutput.appendChild(line);
+            eventSource.close();
         };
-    </script>
-    
-    <h2>Live Log</h2>
-    <pre id="log" style="white-space: pre-wrap; max-height: 60vh; overflow:auto;"></pre>
-    <script>
-      (function () {
-        const params = new URLSearchParams(window.location.search);
-        const runId = params.get('run') || "";
-        if (!runId) return;
-    
-        const logEl = document.getElementById('log');
-        function append(line) {
-          if (!logEl) return;
-          logEl.textContent += line + "\n";
-          logEl.scrollTop = logEl.scrollHeight;
-        }
-    
-        const es = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
-        es.onmessage = (ev) => {
-          append(ev.data);
-          if (ev.data === "[Simulation Complete]") es.close();
-        };
-      })();
     </script>
 
 </body>
