@@ -2347,6 +2347,11 @@ class simulation():
                                 daily_row_dict['num_survived'] = total_survived_entrained
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
+                                
+                                # Print daily summary for user tracking
+                                if DIAGNOSTICS_ENABLED:
+                                    print(f"Day {day} | Flow: {curr_Q_report:.1f} | Entrained: {total_entrained} | Survived: {total_survived_entrained}", flush=True)
+                                
                                 if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     print(f"[DIAG] About to write 'Daily' DataFrame: shape={daily.shape}, columns={list(daily.columns)}", flush=True)
                                     print(f"[DIAG] DataFrame head:\n{daily.head()}", flush=True)
@@ -2384,6 +2389,11 @@ class simulation():
                                     'num_survived': [np.int64(0)]
                                 }
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
+                                
+                                # Print daily summary for user tracking
+                                if DIAGNOSTICS_ENABLED:
+                                    print(f"Day {day} | Flow: {curr_Q_report:.1f} | No fish present", flush=True)
+                                
                                 if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     print(f"[DIAG] About to write 'Daily' DataFrame (no fish): shape={daily.shape}, columns={list(daily.columns)}", flush=True)
                                     print(f"[DIAG] DataFrame head:\n{daily.head()}", flush=True)
@@ -2448,7 +2458,7 @@ class simulation():
             # get units (if needed)
             units = store['Unit_Parameters'].index
             if DIAGNOSTICS_ENABLED:
-                if 'Daily' in store.keys():
+                if '/Daily' in store.keys():
                     print(f"[DIAG] 'Daily' table found in HDF5. Shape: {store['Daily'].shape}", flush=True)
                 else:
                     print(f"[DIAG][ERROR] 'Daily' table is missing from HDF5!", flush=True)
