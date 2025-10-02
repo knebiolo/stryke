@@ -1545,6 +1545,8 @@ class simulation():
         import logging
         logger = logging.getLogger("Stryke.create_hydrograph")
         flow_df = pd.DataFrame()
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] create_hydrograph called: discharge_type={discharge_type}, scen={scen}, scen_months={scen_months}", flush=True)
             
         scen_df = flow_scenarios_df[flow_scenarios_df.Scenario == scen]
         logger.info(f"create_hydrograph called with discharge_type={discharge_type}, scen={scen}, scen_months={scen_months}")
@@ -1560,10 +1562,12 @@ class simulation():
             
             # if a gage number is present, fetch the usgs gage data
             if sum(char.isdigit() for char in gage) > 1:
-                
                 df = self.get_USGS_hydrograph(gage, prorate, flow_year)
+                print(f"[DIAG] USGS hydrograph DataFrame shape: {df.shape}, columns: {df.columns.tolist()}", flush=True)
                 for i in scen_months:
-                    flow_df = pd.concat([flow_df, df[df.month == i]])
+                    month_df = df[df.month == i]
+                    print(f"[DIAG] USGS hydrograph month {i}: rows={month_df.shape[0]}", flush=True)
+                    flow_df = pd.concat([flow_df, month_df])
             
             # if not, use the hydrograph data in the Hydrology sheet
             else:
@@ -1605,6 +1609,7 @@ class simulation():
                                  7:31,8:31,9:30,
                                  10:31,11:30,12:31}
             sim_hydro_dict = {}
+            print(f"[DIAG] create_hydrograph: fixed discharge={fixed_discharge}", flush=True)
             
             # for every month 
             for month in scen_months:
@@ -1612,10 +1617,14 @@ class simulation():
                 for day in np.arange(1,days+1,1):
                     date = "2023-" + str(month) + "-" + str(day)
                     sim_hydro_dict[date] = fixed_discharge
+                if DIAGNOSTICS_ENABLED:
+                    print(f"[DIAG] Simulated hydrograph dict keys: {list(sim_hydro_dict.keys())[:5]} ...", flush=True)
                             
                 df = pd.DataFrame.from_dict(sim_hydro_dict,orient = 'index')  
                 df.reset_index(inplace = True, drop = False)
-                df.rename(columns = {'index':'datetimeUTC',0:'DAvgFlow_prorate'},inplace = True) 
+                df.rename(columns = {'index':'datetimeUTC',0:'DAvgFlow_prorate'},inplace = True)
+                if DIAGNOSTICS_ENABLED:
+                    print(f"[DIAG] Simulated hydrograph DataFrame shape: {df.shape}, columns: {df.columns.tolist()}", flush=True)
                 df['month'] = pd.to_datetime(df.datetimeUTC).dt.month
                 if np.any(df.DAvgFlow_prorate.values < 0):
                     logger.debug ('prorated daily average flow value not found')
@@ -1652,6 +1661,9 @@ class simulation():
         the operation of one unit depends on another. For Run-Of-River facilities,
         units operate 24/7, while peaking facilities may vary.
         """
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] daily_hours called: scenario={scenario}, Q_dict keys={list(Q_dict.keys())}", flush=True)
+
 
         ops_df = self.operating_scenarios_df[self.operating_scenarios_df.Scenario == scenario]
         #ops_df.set_index('Unit', inplace = True)
@@ -1676,6 +1688,9 @@ class simulation():
         cum_Q = 0. # current amount of discharge passing through powerhouse
         # for each unit either simulate hours operated or write hours to dictionary
         for facility in facilities:
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] daily_hours: facility={facility}, curr_Q={Q_dict['curr_Q']}, min_Q={Q_dict['min_Q'][facility]}, sta_cap={Q_dict['sta_cap'][facility]}", flush=True)
+ 
             curr_Q = Q_dict['curr_Q']   # current discharge
             min_Q = Q_dict['min_Q'][facility]     # minimum operating discharge
             sta_cap = Q_dict['sta_cap'][facility] # station capacity
@@ -1808,6 +1823,11 @@ class simulation():
         The entrainment rate is drawn from the specified distribution and adjusted
         for feasibility based on historical data.
         """
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] population_sim called: output_units={output_units}, curr_Q={curr_Q}", flush=True)
+            print(f"[DIAG] population_sim: spc_df shape={spc_df.shape}, columns={spc_df.columns.tolist()}", flush=True)
+
+
         shape_col_num = spc_df.columns.get_loc('shape')
         loc_col_num = spc_df.columns.get_loc('location')
         scale_col_num = spc_df.columns.get_loc('scale')
