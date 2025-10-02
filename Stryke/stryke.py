@@ -2711,6 +2711,14 @@ class simulation():
     
                 summary_text = output_buffer.getvalue()
                 self.summary_text = summary_text
+                
+                # Print the captured summary stats so they appear in logs
+                if summary_text:
+                    print("\n" + "="*60, flush=True)
+                    print("SIMULATION SUMMARY STATISTICS", flush=True)
+                    print("="*60, flush=True)
+                    print(summary_text, flush=True)
+                    print("="*60 + "\n", flush=True)
     
         # At this point the HDFStore opened in read mode is closed.
         # Now open the file in append mode to write the summary DataFrames.
