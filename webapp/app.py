@@ -170,9 +170,19 @@ def _attach_queue_log_handler(q):
     targets = [logging.getLogger(__name__), logging.getLogger("Stryke"), logging.getLogger("Stryke.stryke")]
     for lg in targets:
         lg.addHandler(h)
-        # Avoid duplicate console logs from propagation if needed:
-        # lg.propagate = False
+        # ✅ Disable propagation to prevent cross-contamination with root logger
+        lg.propagate = False
     return h, targets
+
+def _detach_queue_log_handler(h, targets):
+    """Remove per-run logging handler and restore logger state."""
+    for lg in targets:
+        try:
+            lg.removeHandler(h)
+            # ✅ Re-enable propagation after cleanup
+            lg.propagate = True
+        except Exception:
+            pass
 
 # ----------------- Password Protection -----------------
 app = Flask(__name__)
@@ -655,8 +665,11 @@ def fit_distributions():
     log_text = ""
     plot_filename = ""
     
-    # Use the session-specific simulation folder if available; otherwise, fallback to the global folder.
-    sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
+    # ✅ Enforce session folder requirement - no fallback to global folder
+    sim_folder = g.get("user_sim_folder")
+    if not sim_folder:
+        flash('Session expired. Please log in again.')
+        return redirect(url_for('login'))
     
     if request.method == 'POST':
         try:
@@ -747,24 +760,25 @@ def fit_distributions():
                 sys.stdout = old_stdout
     
             # Generate and save the first plot.
-            plt.clf()
+            # ✅ Use explicit figure to prevent matplotlib state bleed-over
+            fig1 = plt.figure(figsize=(10, 6))
             fish.plot()
             plot_filename = 'fitting_results.png'
             plot_path = os.path.join(sim_folder, plot_filename)
-            plt.savefig(plot_path)
-            plt.close()
+            fig1.savefig(plot_path)
+            plt.close(fig1)
             
             # Generate and save the histogram.
-            plt.clf()
-            plt.figure(figsize=(5, 3))
+            # ✅ Use explicit figure to prevent matplotlib state bleed-over
+            fig2 = plt.figure(figsize=(5, 3))
             plt.hist(fish.lengths.tolist(), bins=30, edgecolor='black', alpha=0.7)
             plt.xlabel("Fish Length (cm)")
             plt.ylabel("Frequency")
             plt.title("Distribution of Fish Lengths")
             other_filename = 'fish_lengths.png'
             other_plot_path = os.path.join(sim_folder, other_filename)
-            plt.savefig(other_plot_path)
-            plt.close()
+            fig2.savefig(other_plot_path)
+            plt.close(fig2)
             
             summary_text = (
                 "Distribution fitting complete for filters: "
@@ -3009,6 +3023,7 @@ def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
     old_stdout, old_stderr = sys.stdout, sys.stderr
     sys.stdout = QueueStream(q)
     sys.stderr = QueueStream(q)
+    h, targets = _attach_queue_log_handler(q)
 
     # ---- Optional HDF5 lock (safe if filelock not installed)
     h5_path = os.path.join(proj_dir, f"{output_name}.h5")
@@ -3074,6 +3089,8 @@ def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
         except Exception: pass
 
     finally:
+        # ✅ CRITICAL: Remove log handlers to prevent cross-user contamination
+        _detach_queue_log_handler(h, targets)
         # Always restore stdio and close the SSE stream cleanly
         sys.stdout, sys.stderr = old_stdout, old_stderr
         try: q.put("[Simulation Complete]")
