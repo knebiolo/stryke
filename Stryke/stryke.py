@@ -412,6 +412,7 @@ class simulation():
         self.output_name = output_name
         self.output_units = data_dict.get('units_system')
         self.sim_mode = data_dict.get('simulation_mode')
+        self.model_setup = data_dict.get('model_setup', 'N/A')
         self.proj_dir = data_dict.get("proj_dir", os.getcwd())
         hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
         # Set wks_dir for Excel export compatibility (web app uses HDF5 path as reference)
@@ -2582,6 +2583,9 @@ class simulation():
     
                 self.beta_df = pd.DataFrame.from_dict(data=self.beta_dict, orient='index',
                                                        columns=['scenario number','species','state','survival rate','variance','ll','ul'])
+                # For report display, create a Units-only version
+                self.beta_df_units_only = self.beta_df[['state', 'survival rate', 'variance', 'll', 'ul']].copy()
+                self.beta_df_units_only.rename(columns={'state': 'Unit', 'survival rate': 'Mean', 'variance': 'Variance', 'll': 'Lower 95% CI', 'ul': 'Upper 95% CI'}, inplace=True)
                 # try:
                 #     self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
                 # except:
@@ -2719,6 +2723,7 @@ class simulation():
         with pd.HDFStore(hdf_path, mode='a') as store:
             store.put("Daily_Summary", self.daily_summary, format="table", data_columns=True)
             store.put("Beta_Distributions", self.beta_df, format="table", data_columns=True)
+            store.put("Beta_Distributions_Units", self.beta_df_units_only, format="table", data_columns=True)
             store.put("Yearly_Summary", self.cum_sum, format="table", data_columns=True)
     
         return
