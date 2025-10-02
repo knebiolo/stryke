@@ -2465,12 +2465,14 @@ class simulation():
             self.daily_summary = store['Daily']
             self.daily_summary.iloc[:,6:] = self.daily_summary.iloc[:,6:].astype(float)
     
-            # Capture printed output
-            output_buffer = io.StringIO()
-            with redirect_stdout(output_buffer):
-                logger.info("iterate through species and scenarios and summarize")
-                for i in species:
-                    for j in scens:
+            # Print summary statistics header
+            print("\n" + "="*60, flush=True)
+            print("SIMULATION SUMMARY STATISTICS", flush=True)
+            print("="*60, flush=True)
+            
+            logger.info("iterate through species and scenarios and summarize")
+            for i in species:
+                for j in scens:
                         try:
                             dat = store['simulations/%s/%s' % (j, i)]
                         except:
@@ -2709,16 +2711,8 @@ class simulation():
                 except Exception as e:
                     logger.warning(f'Unexpected error writing to Excel: {e}')
     
-                summary_text = output_buffer.getvalue()
-                self.summary_text = summary_text
-                
-                # Print the captured summary stats so they appear in logs
-                if summary_text:
-                    print("\n" + "="*60, flush=True)
-                    print("SIMULATION SUMMARY STATISTICS", flush=True)
-                    print("="*60, flush=True)
-                    print(summary_text, flush=True)
-                    print("="*60 + "\n", flush=True)
+            # Close summary statistics section
+            print("="*60 + "\n", flush=True)
     
         # At this point the HDFStore opened in read mode is closed.
         # Now open the file in append mode to write the summary DataFrames.

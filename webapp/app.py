@@ -3076,7 +3076,23 @@ def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
             else:
                 print(f"[DIAG] Output HDF5 file NOT found: {h5_path}", flush=True)
 
+        # Generate HTML report
+        if DIAGNOSTICS_ENABLED:
+            print("[DIAG] Generating HTML report...", flush=True)
+        report_html = generate_report(sim)
+        report_path = os.path.join(proj_dir, 'simulation_report.html')
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(report_html)
+        # Write marker file for report path
+        with open(os.path.join(proj_dir, 'report_path.txt'), 'w', encoding='utf-8') as f:
+            f.write(report_path)
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] Report written to: {report_path}", flush=True)
+        
         log.info("Simulation completed successfully (UI path).")
+        print("\n" + "="*60, flush=True)
+        print("SIMULATION COMPLETE - Click 'View Results' to see the report", flush=True)
+        print("="*60, flush=True)
 
     except Exception as e:
         # Make sure the traceback hits logs and the SSE stream
