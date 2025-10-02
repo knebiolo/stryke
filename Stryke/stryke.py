@@ -55,8 +55,8 @@ import networkx as nx
 from networkx.readwrite import json_graph
 #from Stryke.hydrofunctions import hydrofunctions as hf
 import hydrofunctions as hf
-from .barotrauma import baro_surv_prob, calc_v, calc_k_viscosity, calc_friction, calc_h_loss, calc_p_2, calc_p_1
-#from Stryke.barotrauma import baro_surv_prob, calc_v, calc_k_viscosity, calc_friction, calc_h_loss, calc_p_2, calc_p_1
+from .barotrauma import baro_injury_prob, baro_surv_prob, calc_v, calc_k_viscosity, calc_friction, calc_h_loss, calc_p_2, calc_p_1
+#from Stryke.barotrauma import baro_injury_prob, baro_surv_prob, calc_v, calc_k_viscosity, calc_friction, calc_h_loss, calc_p_2, calc_p_1
 import requests
 #import geopandas as gp
 import statsmodels.api as sm
@@ -339,6 +339,12 @@ class simulation():
             self.unit_params['B'] = self.unit_params.B * 3.28084
             self.unit_params['D1'] = self.unit_params.D1 * 3.28084
             self.unit_params['D2'] = self.unit_params.D2 * 3.28084
+            # Convert barotrauma parameters from meters to feet
+            self.unit_params['fb_depth'] = self.unit_params.fb_depth * 3.28084
+            self.unit_params['ps_D'] = self.unit_params.ps_D * 3.28084
+            self.unit_params['ps_length'] = self.unit_params.ps_length * 3.28084
+            self.unit_params['submergence_depth'] = self.unit_params.submergence_depth * 3.28084
+            # roughness is in mm, no conversion needed
             self.facility_params['Rack Spacing'] = self.facility_params['Rack Spacing']*0.0328084
         else:
             self.facility_params['Rack Spacing'] = self.facility_params['Rack Spacing']/12.
@@ -747,7 +753,8 @@ class simulation():
                                                  np.sin(a_a)/(np.pi * rR)) # IPD: conversion to radians is redundant and incorrect ~ corrected 2/5/20
         # need to take cosine and sine of angle alpha a (a_a)
     
-        return 1 - (p_strike)
+        # Clip to valid probability range [0, 1]
+        return np.clip(1 - p_strike, 0.0, 1.0)
     
     def Propeller(self,length, param_dict):
         """
@@ -833,7 +840,8 @@ class simulation():
         p_strike = _lambda * (N * length / D) * ((np.cos(a_a)/(8 * Qwd)) +\
                                                  np.sin(a_a)/(np.pi * rR))
     
-        return 1 - (p_strike)
+        # Clip to valid probability range [0, 1]
+        return np.clip(1 - p_strike, 0.0, 1.0)
     
     def Francis(self,length, param_dict):
         """
@@ -917,7 +925,8 @@ class simulation():
         # Probability of mortality from blade strike (M^d)
         p_strike = _lambda * (N * length / D) * ((np.sin(alpha) * (B / D1)) / (2 * Qwd) + np.cos(alpha) / np.pi)
     
-        return 1 - p_strike  # Survival probability
+        # Clip to valid probability range [0, 1]
+        return np.clip(1 - p_strike, 0.0, 1.0)  # Survival probability
     
     def Pump(self,length, param_dict):
         r''' pump mode calculations from fish entrainment analysis report:
@@ -946,9 +955,11 @@ class simulation():
         beta_p = np.arctan((0.707 * np.pi/8)/(Qpwd * np.power(D1/D2,3)))
     
         # probability of strike * length of fish
-        p_strike = gamma * (N / (0.707 * D2)) * (((np.sin(beta_p) * (B/D1))/(2*Qpwd)) + (np.cos(beta_p)/np.pi))
+        # ✅ Fixed: Incorporate fish length in p_strike to match Franke methodology
+        p_strike = gamma * (N * length / (0.707 * D2)) * (((np.sin(beta_p) * (B/D1))/(2*Qpwd)) + (np.cos(beta_p)/np.pi))
     
-        return 1 - (p_strike * length)
+        # Clip to valid probability range [0, 1]
+        return np.clip(1 - p_strike, 0.0, 1.0)
     
     # def barotrauma(self,discharge,K,fish_depth,h_D, beta_0, beta_1, calculate = False):
     #     """
@@ -1112,9 +1123,12 @@ class simulation():
             if surv_fun == 'a priori':
                 try:
                     prob = surv_dict[route]
-                except:
-                    logger.debug (f'Problem with a priori survival function for {route}')
-                    print(surv_dict, flush = True)
+                except KeyError as e:
+                    logger.debug(f'Problem with a priori survival function for {route}: {e}')
+                    logger.debug(f'Available routes in surv_dict: {list(surv_dict.keys())}')
+                    prob = 1.
+                except Exception as e:
+                    logger.error(f'Unexpected error in a priori survival for {route}: {e}')
                     prob = 1.
     
             else:
@@ -1154,44 +1168,63 @@ class simulation():
                     strike_surv_prob = self.Pump(length, param_dict)
                     
                 
-                if barotrauma == True:                   
-                    # get constants
-                    g = constants.g
-                    p_atm = constants.atm
-                    density = 998.2 # kg/m^3 for water @ 20C
-                    vertical_habitat_value = self.pop['vertical_habitat'].item()
-                    if vertical_habitat_value == 'Pelagic':
-                        d_1 = 0.01
-                        d_2 = 0.33
-                    elif vertical_habitat_value == 'Benthic':
-                        d_1 = 0.8
-                        d_2 = 1
-                    else:
-                        d_1 = 0.01
-                        d_2 = 1
-                        
-                    # get regression slope and intercept (beta 1 and beta 0)
-                    beta_0 = self.pop['beta_0'].item()
-                    beta_1 = self.pop['beta_1'].item()
-                    
-                    # get forebay depth and create depth range for habitat preference
-                    depth_1 = self.unit_params['fb_depth'][route] * d_1 * 0.3048
-                    depth_2 = self.unit_params['fb_depth'][route] * d_2 * 0.3048
-                    fish_depth = np.random.uniform(depth_1,depth_2,1)[0]
-                    
-                    # get submergence depth 
-                    h_D = self.unit_params['submergence_depth'][route]
-                    
-                    # calculate pressure ratio
-                    p_1 = p_atm + density*g*fish_depth
-                    p_2 = p_atm + density*g*h_D
-                    p_ratio = p_1/p_2
-                    
-                    # calculate survival rate
-                    baro_prob = baro_surv_prob(p_ratio, beta_0, beta_1)
-    
-                    # survival probability considering blade strike and barotrauma
-                    baro_surv = 1. - baro_prob  
+                if barotrauma == True:
+                    # Validate required barotrauma parameters are present
+                    try:
+                        if route not in self.unit_params.index:
+                            logger.warning(f'Route {route} not found in unit_params, skipping barotrauma calculation')
+                            baro_surv = 1.0
+                        elif pd.isna(self.unit_params.loc[route, 'fb_depth']) or pd.isna(self.unit_params.loc[route, 'submergence_depth']):
+                            logger.warning(f'Missing barotrauma parameters for {route}: fb_depth or submergence_depth is NaN')
+                            baro_surv = 1.0
+                        else:
+                            # get constants
+                            g = constants.g
+                            p_atm = constants.atm
+                            density = 998.2 # kg/m^3 for water @ 20C
+                            
+                            vertical_habitat_value = self.pop['vertical_habitat'].item()
+                            if vertical_habitat_value == 'Pelagic':
+                                d_1 = 0.01
+                                d_2 = 0.33
+                            elif vertical_habitat_value == 'Benthic':
+                                d_1 = 0.8
+                                d_2 = 1
+                            else:
+                                d_1 = 0.01
+                                d_2 = 1
+                                
+                            # get regression slope and intercept (beta 1 and beta 0)
+                            beta_0 = self.pop['beta_0'].item()
+                            beta_1 = self.pop['beta_1'].item()
+                            
+                            # get forebay depth and create depth range for habitat preference
+                            # Note: fb_depth already converted to feet in __init__ if metric
+                            depth_1 = self.unit_params['fb_depth'][route] * d_1
+                            depth_2 = self.unit_params['fb_depth'][route] * d_2
+                            fish_depth = np.random.uniform(depth_1,depth_2,1)[0]
+                            
+                            # get submergence depth (already in feet if metric conversion applied)
+                            h_D = self.unit_params['submergence_depth'][route]
+                            
+                            # Convert depths from feet to meters for pressure calculation
+                            fish_depth_m = fish_depth * 0.3048
+                            h_D_m = h_D * 0.3048
+                            
+                            # calculate pressure ratio using SI units
+                            p_1 = p_atm + density*g*fish_depth_m
+                            p_2 = p_atm + density*g*h_D_m
+                            p_ratio = p_1/p_2
+                            
+                            # calculate injury/mortality probability from barotrauma
+                            # Note: baro_injury_prob returns P(injury), not P(survival)
+                            baro_injury = baro_injury_prob(p_ratio, beta_0, beta_1)
+            
+                            # survival probability considering blade strike and barotrauma
+                            baro_surv = 1.0 - baro_injury
+                    except Exception as e:
+                        logger.error(f'Error calculating barotrauma for route {route}: {e}')
+                        baro_surv = 1.0  
                 else:
                     baro_surv = 1.
                 
@@ -1206,8 +1239,9 @@ class simulation():
                 prob = scalarize(prob)
             try:
                 return np.float32(prob)
-            except:
-                logger.debug (f'check, {prob} cant be converted to number')
+            except (ValueError, TypeError) as e:
+                logger.error(f'Cannot convert probability {prob} to float32: {e}')
+                return np.float32(1.0)  # Default to 100% survival on conversion error
     
     # create function that builds networkx graph object from nodes and edges in project database
     def create_route(self):
@@ -1631,6 +1665,19 @@ class simulation():
                 #flow_df = flow_df.append(df)
                 flow_df = pd.concat([df, flow_df])
         
+        # Validate that hydrograph is not empty
+        if flow_df.empty:
+            error_msg = (
+                f"ERROR: Hydrograph is empty after filtering for scenario '{scen}'.\n"
+                f"Requested months: {scen_months}, year: {flow_year if discharge_type == 'hydrograph' else 'N/A'}\n"
+                f"Available data months: {self.input_hydrograph_df['datetimeUTC'].dt.month.unique().tolist() if 'datetimeUTC' in self.input_hydrograph_df.columns else 'Unknown'}\n"
+                f"Available data years: {self.input_hydrograph_df['datetimeUTC'].dt.year.unique().tolist() if 'datetimeUTC' in self.input_hydrograph_df.columns else 'Unknown'}\n"
+                f"Please ensure your hydrograph data covers the requested time period."
+            )
+            logger.error(error_msg)
+            print(f"[DIAG][ERROR] {error_msg}", flush=True)
+            raise ValueError(error_msg)
+        
         logger.info(f"Returning hydrograph DataFrame with shape: {flow_df.shape}")
         return flow_df
     
@@ -1671,7 +1718,11 @@ class simulation():
         
         try:
             seasonal_facs = self.facility_params[self.facility_params.Scenario == scenario]
-        except:
+        except (KeyError, AttributeError) as e:
+            logger.debug(f'No Scenario column in facility_params or scenario {scenario} not found: {e}')
+            seasonal_facs = self.facility_params
+        except Exception as e:
+            logger.warning(f'Unexpected error filtering facility_params by scenario: {e}')
             seasonal_facs = self.facility_params
         #seasonal_facs.set_index('Facility', inplace = True)
         # loop over units, build some dictionaries
@@ -1884,6 +1935,13 @@ class simulation():
         a hydroelectric facility. Diagnostic print statements are included to help
         trace parameter values and workflow progress.
         """
+        # Reopen HDF5 file for append mode (it was closed after webapp_import)
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] run() called. Reopening HDF5 file: {self.hdf_path}", flush=True)
+        self.hdf = pd.HDFStore(self.hdf_path, mode='a')
+        if DIAGNOSTICS_ENABLED:
+            print(f"[DIAG] HDF5 file reopened successfully. Current keys: {self.hdf.keys()}", flush=True)
+        
         # Create route and associated data.
         self.create_route()
         #logger.debug('starting simulation')
@@ -2299,7 +2357,10 @@ class simulation():
                                 self.hdf.flush()
 
                                 if DIAGNOSTICS_ENABLED:
-                                    print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
+                                    try:
+                                        print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
+                                    except Exception as e:
+                                        print(f"[DIAG] Could not retrieve HDF5 keys: {e}", flush=True)
                                 
                             else:
                                 if self.output_units == 'metric':
@@ -2330,16 +2391,22 @@ class simulation():
                                     print(f"[DIAG] Wrote 'Daily' to HDF5 (no fish). Flushing...", flush=True)
                                 #self.hdf.flush()
                                 if DIAGNOSTICS_ENABLED:
-                                    print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
+                                    try:
+                                        print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
+                                    except Exception as e:
+                                        print(f"[DIAG] Could not retrieve HDF5 keys: {e}", flush=True)
                         
                         logger.info("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
                 self.hdf.flush()
                 logger.info("Completed Scenario %s for Species %s",scen,species)
                 
             logger.info("Completed Simulations - view results")
-            self.hdf.flush()
             if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Final HDF5 keys before close: {self.hdf.keys()}", flush=True)
+                try:
+                    print(f"[DIAG] Final HDF5 keys before close: {self.hdf.keys()}", flush=True)
+                except Exception as e:
+                    print(f"[DIAG] Could not retrieve HDF5 keys (file may be closed): {e}", flush=True)
+            self.hdf.flush()
             self.hdf.close()
 
 
@@ -2480,7 +2547,8 @@ class simulation():
                                                      loc=st_params[2], scale=st_params[3])
                                     ucl = beta.ppf(0.975, a=st_params[0], b=st_params[1],
                                                      loc=st_params[2], scale=st_params[3])
-                                except:
+                                except (ValueError, RuntimeError) as e:
+                                    logger.warning(f'Beta fitting failed for state {m}: {e}. Using default values.')
                                     st_median = 0.
                                     st_std = 0.
                                     lcl = 0.
@@ -2617,8 +2685,10 @@ class simulation():
                         self.beta_df.to_excel(writer, sheet_name='beta fit')
                         self.daily_summary.to_excel(writer, sheet_name='daily summary')
                         self.cum_sum.to_excel(writer, sheet_name='yearly summary')
-                except:
-                    logger.info('Web App run detected, please download report')
+                except (PermissionError, FileNotFoundError) as e:
+                    logger.info(f'Cannot write to Excel file (likely web app run): {e}')
+                except Exception as e:
+                    logger.warning(f'Unexpected error writing to Excel: {e}')
     
                 summary_text = output_buffer.getvalue()
                 self.summary_text = summary_text
@@ -2721,7 +2791,11 @@ class hydrologic():
                     self.DAvgFlow = self.DAvgFlow.append(df)
     
                     print ("stream gage %s with a drainage area of %s square kilometers added to flow data."%(i,drain_sqkm))
-                except:
+                except (KeyError, ValueError, IndexError) as e:
+                    logger.warning(f'Failed to load stream gage {i}: {e}')
+                    continue
+                except Exception as e:
+                    logger.error(f'Unexpected error loading stream gage {i}: {e}')
                     continue
 
     def seasonal_exceedance(self, seasonal_dict, exceedence, HUC = None):

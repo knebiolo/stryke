@@ -75,7 +75,7 @@ def calc_h_loss(f, ps_l, ps_d, v):
     f: friction factor
     ps_l: length of penstock
     ps_d: diameter of penstock
-    v_head: velocity head at turbine inlet
+    v: flow velocity (m/s)
     
     outputs:
     h_loss: total head loss due to friction
@@ -83,8 +83,8 @@ def calc_h_loss(f, ps_l, ps_d, v):
     """
     g = scipy.constants.g
     
-    # calculate velocity head
-    v_head = ((v*v)/2*g)
+    # calculate velocity head - FIXED: added parentheses for correct order of operations
+    v_head = ((v*v)/(2*g))
     
     # calculate head loss
     h_loss = f*(ps_l/ps_d)*v_head
@@ -136,24 +136,29 @@ def calc_p_1(p_2, h_1, h_2, density, v_1, v_2, h_loss):
     
     return p_1
 
-def baro_surv_prob(p_ratio, beta_0, beta_1):
+def baro_injury_prob(p_ratio, beta_0, beta_1):
     """
-    Calculates the barotrauma-related survival probablilty using a biological
-    response model.
+    Calculates the barotrauma-related INJURY/MORTALITY probability using a biological
+    response model from Pflugrath et al. 2021.
     
     inputs:
-    p_ratio: the pressure ratio between p1 and p2.
-    beta_0: specific coefficient for each endpoint determined by the logistic regression analysis
-    beta_1: specific coefficient for each endpoint determined by the logistic regression analysis
+    p_ratio: the pressure ratio between p1 (acclimation depth) and p2 (draft tube).
+    beta_0: species-specific coefficient from logistic regression analysis
+    beta_1: species-specific coefficient from logistic regression analysis
         
     output:
-    endpoint: the selected endpoint (i.e., injury, mortal injury, or immediate
-                                     mortality)
+    endpoint: probability of injury/mortality (NOT survival)
+              To get survival probability, use: survival = 1 - baro_injury_prob(...)
     """
     
     endpoint = np.exp(beta_0 + beta_1 * np.log(p_ratio)) / (1 + np.exp(beta_0 + beta_1 * np.log(p_ratio)))
     
     return endpoint
+
+# Maintain backward compatibility with old function name
+def baro_surv_prob(p_ratio, beta_0, beta_1):
+    """Deprecated: Use baro_injury_prob() instead. This returns injury probability, not survival."""
+    return baro_injury_prob(p_ratio, beta_0, beta_1)
     
 
 # if __name__ == "__main__":
