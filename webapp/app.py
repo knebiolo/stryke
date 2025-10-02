@@ -3464,8 +3464,11 @@ def generate_report(sim):
         else:
             report_sections.append("<p>No hydrograph data available.</p>")
 
-        # Beta distributions
-        add_section("Beta Distributions", "/Beta_Distributions", units)
+        # Beta distributions - use Units-only table for cleaner display
+        if "/Beta_Distributions_Units" in store.keys():
+            add_section("Beta Distributions by Unit", "/Beta_Distributions_Units", units)
+        else:
+            add_section("Beta Distributions", "/Beta_Distributions", units)
 
         # Yearly summary panel (iteration-based)
         yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
@@ -3530,9 +3533,9 @@ def generate_report(sim):
                         <h3>Statistics ({metric.title()})</h3>
                         <p><strong>Average Annual:</strong> {mean_val}</p>
                         <p><strong>95% CI:</strong> {lcl_val} - {ucl_val}</p>
-                        <p><strong>1 in 10 day event:</strong> {like10}</p>
-                        <p><strong>1 in 100 day event:</strong> {like100}</p>
-                        <p><strong>1 in 1000 day event:</strong> {like1000}</p>
+                        <p><strong>1 in 10 {metric} event:</strong> {like10}</p>
+                        <p><strong>1 in 100 {metric} event:</strong> {like100}</p>
+                        <p><strong>1 in 1000 {metric} event:</strong> {like1000}</p>
                     </div>
                 </div>
                 """
@@ -3555,7 +3558,9 @@ def generate_report(sim):
                 plt.rcParams.update({'font.size': 8})
                 fig = plt.figure()
                 if col in data.columns:
-                    plt.hist(data[col].dropna(), bins=20, edgecolor='black')
+                    # Include zeros by filling NaN with 0 instead of dropping
+                    values = data[col].fillna(0)
+                    plt.hist(values, bins=20, edgecolor='black')
                 plt.xlabel(col.replace('_', ' ').title())
                 plt.ylabel("Frequency")
                 plt.title(title)
