@@ -70,7 +70,10 @@ rng = default_rng()
 import logging
 logger = logging.getLogger(__name__)
 
-DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostics
+# Diagnostic Control Flags
+DIAGNOSTICS_ENABLED = True   # Set to False to disable ALL diagnostics
+VERBOSE_DIAGNOSTICS = False  # Set to True for per-iteration/per-day details (SLOW!)
+                             # When False: Only shows summaries and important events
 
 # Get the directory of the current script
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -411,6 +414,8 @@ class simulation():
         self.sim_mode = data_dict.get('simulation_mode')
         self.proj_dir = data_dict.get("proj_dir", os.getcwd())
         hdf_path = os.path.join(self.proj_dir, f"{output_name}.h5")
+        # Set wks_dir for Excel export compatibility (web app uses HDF5 path as reference)
+        self.wks_dir = hdf_path
         
         # Convert graph summary data to DataFrames.
         graph_summary = data_dict.get('graph_summary', {})
@@ -1708,7 +1713,7 @@ class simulation():
         the operation of one unit depends on another. For Run-Of-River facilities,
         units operate 24/7, while peaking facilities may vary.
         """
-        if DIAGNOSTICS_ENABLED:
+        if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
             print(f"[DIAG] daily_hours called: scenario={scenario}, Q_dict keys={list(Q_dict.keys())}", flush=True)
 
 
@@ -1874,7 +1879,7 @@ class simulation():
         The entrainment rate is drawn from the specified distribution and adjusted
         for feasibility based on historical data.
         """
-        if DIAGNOSTICS_ENABLED:
+        if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
             print(f"[DIAG] population_sim called: output_units={output_units}, curr_Q={curr_Q}", flush=True)
             print(f"[DIAG] population_sim: spc_df shape={spc_df.shape}, columns={spc_df.columns.tolist()}", flush=True)
 
@@ -2106,7 +2111,7 @@ class simulation():
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
                         day = flow_row[1]['datetimeUTC']
 
-                        if DIAGNOSTICS_ENABLED:
+                        if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                             # Diagnostics for flow_row and curr_Q
                             print(f"[DIAG] curr_Q: {curr_Q}")
 
@@ -2342,7 +2347,7 @@ class simulation():
                                 daily_row_dict['num_survived'] = total_survived_entrained
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
-                                if DIAGNOSTICS_ENABLED:
+                                if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     print(f"[DIAG] About to write 'Daily' DataFrame: shape={daily.shape}, columns={list(daily.columns)}", flush=True)
                                     print(f"[DIAG] DataFrame head:\n{daily.head()}", flush=True)
                                 
@@ -2352,11 +2357,11 @@ class simulation():
                                              format='table',
                                              append=True)
                                 
-                                if DIAGNOSTICS_ENABLED:
+                                if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     print(f"[DIAG] Wrote 'Daily' to HDF5. Flushing...", flush=True)
                                 self.hdf.flush()
 
-                                if DIAGNOSTICS_ENABLED:
+                                if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     try:
                                         print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
                                     except Exception as e:
@@ -2379,7 +2384,7 @@ class simulation():
                                     'num_survived': [np.int64(0)]
                                 }
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
-                                if DIAGNOSTICS_ENABLED:
+                                if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     print(f"[DIAG] About to write 'Daily' DataFrame (no fish): shape={daily.shape}, columns={list(daily.columns)}", flush=True)
                                     print(f"[DIAG] DataFrame head:\n{daily.head()}", flush=True)
                                 daily.to_hdf(self.hdf,
@@ -2387,10 +2392,10 @@ class simulation():
                                              mode='a',
                                              format='table',
                                              append=True)
-                                if DIAGNOSTICS_ENABLED:                                
+                                if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:                                
                                     print(f"[DIAG] Wrote 'Daily' to HDF5 (no fish). Flushing...", flush=True)
                                 #self.hdf.flush()
-                                if DIAGNOSTICS_ENABLED:
+                                if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     try:
                                         print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
                                     except Exception as e:
@@ -2443,10 +2448,10 @@ class simulation():
             # get units (if needed)
             units = store['Unit_Parameters'].index
             if DIAGNOSTICS_ENABLED:
-                if 'Daily' not in store.keys():
-                    print(f"[DIAG][ERROR] 'Daily' table is missing from HDF5!", flush=True)
-                else:
+                if 'Daily' in store.keys():
                     print(f"[DIAG] 'Daily' table found in HDF5. Shape: {store['Daily'].shape}", flush=True)
+                else:
+                    print(f"[DIAG][ERROR] 'Daily' table is missing from HDF5!", flush=True)
             self.daily_summary = store['Daily']
             self.daily_summary.iloc[:,6:] = self.daily_summary.iloc[:,6:].astype(float)
     
@@ -2680,11 +2685,15 @@ class simulation():
                 logger.info("  1-in-1000 day: %.4f", summary['1_in_1000_day_mortality']) 
                     
                 # Optionally, write these DataFrames to Excel (if needed)
+                # Only try if wks_dir is an Excel file (not HDF5)
                 try:
-                    with pd.ExcelWriter(self.wks_dir, engine='openpyxl', mode='a') as writer:
-                        self.beta_df.to_excel(writer, sheet_name='beta fit')
-                        self.daily_summary.to_excel(writer, sheet_name='daily summary')
-                        self.cum_sum.to_excel(writer, sheet_name='yearly summary')
+                    if self.wks_dir and self.wks_dir.endswith(('.xlsx', '.xls')):
+                        with pd.ExcelWriter(self.wks_dir, engine='openpyxl', mode='a') as writer:
+                            self.beta_df.to_excel(writer, sheet_name='beta fit')
+                            self.daily_summary.to_excel(writer, sheet_name='daily summary')
+                            self.cum_sum.to_excel(writer, sheet_name='yearly summary')
+                    else:
+                        logger.info('Web app mode detected - Excel export skipped (results in HDF5 only)')
                 except (PermissionError, FileNotFoundError) as e:
                     logger.info(f'Cannot write to Excel file (likely web app run): {e}')
                 except Exception as e:
