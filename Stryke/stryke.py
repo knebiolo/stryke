@@ -39,6 +39,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)  # Let it use full width
 pd.set_option('display.colheader_justify', 'left')
 import os
+from collections import defaultdict
 import matplotlib
 matplotlib.use('Agg')
 
@@ -1335,7 +1336,8 @@ class simulation():
                  Q_dict,
                  op_order,
                  cap_dict,
-                 unit_fac_dict):
+                 unit_fac_dict,
+                 route_flow_recorder=None):
         """
         Simulates the movement of a fish through a hydroelectric project's
         infrastructure, considering operational conditions, the fish's swimming
@@ -1357,7 +1359,7 @@ class simulation():
 
         locs = []
         probs = []
-    
+        route_flows = []
 
         contains_U = np.char.find(nbors, 'U') >= 0
         found_spill = np.char.find(nbors, 'spill') >= 0
@@ -1381,28 +1383,32 @@ class simulation():
     
                     # Determine usable production flow
                     if curr_Q > min_Q:
-                        excess = curr_Q - (sta_cap + env_Q + bypass_Q)
-                        prod_Q = max(curr_Q - env_Q - bypass_Q - max(excess, 0), 0.0)
+                        available_for_prod = curr_Q - env_Q - bypass_Q
+                        prod_Q = min(max(available_for_prod, 0.0), sta_cap)  # Can't exceed station capacity
                     else:
                         prod_Q = 0.0
     
-                    # Reintroduce operation order logic
-                    unit_cap = Q_dict.get(i, 0.0)
+                    # Apply operation order logic: units start up in priority sequence
+                    unit_cap = Q_dict.get(i, 0.0)  # Unit's maximum capacity
                     order = op_order[i]
+                    
+                    # Calculate flow already allocated to higher-priority units in same facility
                     prev_units = [
                         u for u in op_order
                         if unit_fac_dict.get(u, None) == facility and op_order[u] < order
                     ]
                     prev_Q = sum(Q_dict.get(pu, 0.0) for pu in prev_units)
     
+                    # Allocate remaining production flow to this unit, up to its capacity
                     if prev_Q >= prod_Q:
                         u_Q = 0.0  # Not enough flow left for this unit
                     else:
-                        u_Q = min(prod_Q - prev_Q, unit_cap)
+                        u_Q = min(prod_Q - prev_Q, unit_cap)  # Flow available to this unit
     
                     prob = u_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
+                    route_flows.append(u_Q)
     
                 else:  # Bypass path
                     facility = unit_fac_dict.get(i, None)
@@ -1410,35 +1416,42 @@ class simulation():
                     prob = bypass_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
+                    route_flows.append(bypass_Q)
     
         elif np.any(found_spill):
             facilities = self.facility_params[self.facility_params.Spillway.isin(nbors)].index
             total_sta_cap = sum(sta_cap_dict.get(f, 0.0) for f in facilities)
             total_env_Q = sum(env_Q_dict.get(f, 0.0) for f in facilities)
             total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities)
+            min_Q_ref = 0.0
 
             for i in nbors:
                 #logger.debug(f"neighbor: {i}")
                 if 'U' in i:  # Only unit nodes have min_Q
-                    min_Q = min_Q_dict.get(i, 0.0)
-                    if curr_Q <= min_Q:
-                        prob = 0.0
+                    min_Q_ref = min_Q_dict.get(i, 0.0)
+                    prob = 0.0
+                    flow_val = Q_dict.get(i, 0.0)
 
                 elif 'spill' in i:
                     # Handle spill logic independently
-                    if curr_Q <= min_Q:
+                    if curr_Q <= min_Q_ref:
                         prob = 1.0
-                    if curr_Q >= total_sta_cap + total_env_Q + total_bypass_Q:
-                        spill_Q = curr_Q - total_sta_cap - total_bypass_Q
+                        flow_val = curr_Q
+                    elif curr_Q >= total_sta_cap + total_env_Q + total_bypass_Q:
+                        spill_Q = curr_Q - total_sta_cap - total_env_Q - total_bypass_Q
                         prob = max(spill_Q / curr_Q, 0.0)
+                        flow_val = max(spill_Q, 0.0)
                     else:
                         p_env = total_env_Q / curr_Q if curr_Q > 0 else 0.0
                         prob = p_env
+                        flow_val = total_env_Q
                 else:
                     prob = 1.0  # fallback/default for unknown node types?
+                    flow_val = prob * curr_Q
     
                 locs.append(i)
                 probs.append(prob)
+                route_flows.append(flow_val)
 
         else:
             # Fallback: edge weights from graph
@@ -1446,14 +1459,23 @@ class simulation():
                 locs.append(i)
                 edge_weight = graph[location][i].get("weight", 1.0)
                 probs.append(edge_weight)
+                route_flows.append(edge_weight * curr_Q if curr_Q > 0 else 0.0)
     
         # Normalize probabilities
         locs = np.array(locs, dtype=str).flatten()  # force flat array of strings
         probs = np.array(probs, dtype=float).flatten()
+        route_flows = np.array(route_flows, dtype=float).flatten()
         if probs.sum() > 0:
             probs /= probs.sum()
         else:
             probs = np.ones(len(probs)) / len(probs)
+        if route_flow_recorder is not None and locs.size == route_flows.size:
+            for route_name, flow_value in zip(locs, route_flows):
+                try:
+                    flow_float = float(flow_value)
+                except (TypeError, ValueError):
+                    continue
+                route_flow_recorder[route_name] = flow_float
             
         # print("locs:", locs)
         # print("probs:", probs)
@@ -1461,7 +1483,6 @@ class simulation():
 
         try:
             new_loc = np.random.choice(locs, p=probs).item()
-
         except Exception as e:
             print("Choice failed:", e)
             new_loc = location
@@ -1947,6 +1968,7 @@ class simulation():
         self.hdf = pd.HDFStore(self.hdf_path, mode='a')
         if DIAGNOSTICS_ENABLED:
             print(f"[DIAG] HDF5 file reopened successfully. Current keys: {self.hdf.keys()}", flush=True)
+        self._route_flow_logged_keys = set()
         
         # Create route and associated data.
         self.create_route()
@@ -2208,6 +2230,21 @@ class simulation():
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
                                     
+                                self._route_flow_daily = defaultdict(float)
+                                self._route_flow_context = {
+                                    'scenario': scenario,
+                                    'iteration': int(i),
+                                    'day': pd.to_datetime(day),
+                                    'curr_Q': float(curr_Q)
+                                }
+                                route_flow_key = (
+                                    self._route_flow_context['scenario'],
+                                    self._route_flow_context['iteration'],
+                                    self._route_flow_context['day']
+                                )
+                                self._route_flow_context['key'] = route_flow_key
+                                route_flow_recorder = self._route_flow_daily
+
                                 #logger.info('Starting movement')
                                 
                                 def scalarize(x):
@@ -2274,7 +2311,8 @@ class simulation():
                                             speed = scalarize(speed)
                                             return self.movement(location, status, speed,
                                                                  self.graph, intake_vel_dict, Q_dict,
-                                                                 op_order_dict, q_cap_dict, unit_fac_dict)
+                                                                 op_order_dict, q_cap_dict, unit_fac_dict,
+                                                                 route_flow_recorder=route_flow_recorder)
                                 
                                         v_movement = np.vectorize(safe_movement)
                                         move = v_movement(current_location, survival, swim_speed)
@@ -2412,6 +2450,36 @@ class simulation():
                                     except Exception as e:
                                         print(f"[DIAG] Could not retrieve HDF5 keys: {e}", flush=True)
                         
+                        route_flow_key = None
+                        if hasattr(self, "_route_flow_context"):
+                            route_flow_key = self._route_flow_context.get('key')
+                        if getattr(self, "_route_flow_daily", None) is not None and route_flow_key is not None:
+                            if route_flow_key not in self._route_flow_logged_keys:
+                                route_records = []
+                                context = self._route_flow_context
+                                for route_name, flow_val in self._route_flow_daily.items():
+                                    try:
+                                        flow_float = float(flow_val)
+                                    except (TypeError, ValueError):
+                                        continue
+                                    route_records.append({
+                                        'scenario': context['scenario'],
+                                        'iteration': context['iteration'],
+                                        'day': context['day'],
+                                        'route': route_name,
+                                        'discharge_cfs': flow_float
+                                    })
+                                if route_records:
+                                    route_flow_df = pd.DataFrame(route_records)
+                                    route_flow_df['day'] = pd.to_datetime(route_flow_df['day'])
+                                    route_flow_df.to_hdf(self.hdf,
+                                                         key='Route_Flows',
+                                                         mode='a',
+                                                         format='table',
+                                                         append=True)
+                                self._route_flow_logged_keys.add(route_flow_key)
+                        self._route_flow_daily = defaultdict(float)
+
                         logger.info("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
                 self.hdf.flush()
                 logger.info("Completed Scenario %s for Species %s",scen,species)
@@ -2583,9 +2651,9 @@ class simulation():
     
                 self.beta_df = pd.DataFrame.from_dict(data=self.beta_dict, orient='index',
                                                        columns=['scenario number','species','state','survival rate','variance','ll','ul'])
-                # For report display, create a Units-only version
-                self.beta_df_units_only = self.beta_df[['state', 'survival rate', 'variance', 'll', 'ul']].copy()
-                self.beta_df_units_only.rename(columns={'state': 'Unit', 'survival rate': 'Mean', 'variance': 'Variance', 'll': 'Lower 95% CI', 'ul': 'Upper 95% CI'}, inplace=True)
+                # For report display, create a passage route version (excludes 'whole' project summary, includes all units and interior nodes)
+                self.beta_df_units_only = self.beta_df[self.beta_df['state'] != 'whole'][['state', 'survival rate', 'variance', 'll', 'ul']].copy()
+                self.beta_df_units_only.rename(columns={'state': 'Passage Route', 'survival rate': 'Mean', 'variance': 'Variance', 'll': 'Lower 95% CI', 'ul': 'Upper 95% CI'}, inplace=True)
                 # try:
                 #     self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
                 # except:
@@ -2599,6 +2667,7 @@ class simulation():
                 cum_sum_dict = {
                     'species': [],
                     'scenario': [],
+                    'prob_entrainment': [],
                     'mean_yearly_entrainment': [],
                     'lcl_yearly_entrainment': [],
                     'ucl_yearly_entrainment': [],
@@ -2622,6 +2691,7 @@ class simulation():
                         daily_counts = day_dat.num_entrained.values
                         n_actual_days = len(daily_counts)
                         if n_actual_days == 0:
+                            cum_sum_dict['prob_entrainment'].append(0.)
                             cum_sum_dict['mean_yearly_entrainment'].append(0.)
                             cum_sum_dict['lcl_yearly_entrainment'].append(0.)
                             cum_sum_dict['ucl_yearly_entrainment'].append(0.)
@@ -2635,37 +2705,43 @@ class simulation():
                             cum_sum_dict['1_in_100_day_mortality'].append(0.)
                             cum_sum_dict['1_in_1000_day_mortality'].append(0.)
                             continue
-                        df = day_dat[['day','iteration','num_entrained','num_survived']]
+                        df = day_dat[['day','iteration','num_entrained','num_survived','pop_size']]
                         if 'num_mortalities' not in df.columns:
                             df['num_mortalities'] = df['num_entrained'] - df['num_survived']
-                            
+                        
+                        # Calculate probability of entrainment: total entrained / total population
+                        total_entrained = df['num_entrained'].sum()
+                        total_population = df['pop_size'].sum()
+                        prob_entr = total_entrained / total_population if total_population > 0 else 0.0
+                        
                         # Assuming bootstrap_mean_ci and summarize_ci are available
                         entrained_mean, entrained_lower, entrained_upper = bootstrap_mean_ci(df['num_entrained'])
                         killed_mean, killed_lower, killed_upper = bootstrap_mean_ci(df['num_mortalities'])
                         
-                        # calculate extreme 1 in x day values
+                        # Calculate daily extreme values (including zeros) - actual daily distribution
                         return_periods = [10, 100, 1000]
                         quantile_levels = {T: 1 - 1/T for T in return_periods}
-                        extreme_entrained = {T: df['num_entrained'].quantile(q) for T, q in quantile_levels.items()}
-                        extreme_killed = {T: df['num_mortalities'].quantile(q) for T, q in quantile_levels.items()}
+                        daily_extreme_entrained = {T: df['num_entrained'].quantile(q) for T, q in quantile_levels.items()}
+                        daily_extreme_killed = {T: df['num_mortalities'].quantile(q) for T, q in quantile_levels.items()}
                         
                         # calculate year total 
                         year_tots = df.groupby(['iteration'])[['num_entrained','num_mortalities']].sum()
                         
                         # summarize
                         summary = year_tots.apply(summarize_ci)
+                        cum_sum_dict['prob_entrainment'].append(prob_entr)
                         cum_sum_dict['mean_yearly_entrainment'].append(summary.at['mean','num_entrained'])
                         cum_sum_dict['lcl_yearly_entrainment'].append(summary.at['lower_95_CI','num_entrained'])
                         cum_sum_dict['ucl_yearly_entrainment'].append(summary.at['upper_95_CI','num_entrained'])
-                        cum_sum_dict['1_in_10_day_entrainment'].append(extreme_entrained[10])
-                        cum_sum_dict['1_in_100_day_entrainment'].append(extreme_entrained[100])
-                        cum_sum_dict['1_in_1000_day_entrainment'].append(extreme_entrained[1000])
+                        cum_sum_dict['1_in_10_day_entrainment'].append(daily_extreme_entrained[10])
+                        cum_sum_dict['1_in_100_day_entrainment'].append(daily_extreme_entrained[100])
+                        cum_sum_dict['1_in_1000_day_entrainment'].append(daily_extreme_entrained[1000])
                         cum_sum_dict['mean_yearly_mortality'].append(summary.at['mean','num_mortalities'])
                         cum_sum_dict['lcl_yearly_mortality'].append(summary.at['lower_95_CI','num_mortalities'])
                         cum_sum_dict['ucl_yearly_mortality'].append(summary.at['upper_95_CI','num_mortalities'])
-                        cum_sum_dict['1_in_10_day_mortality'].append(extreme_killed[10])
-                        cum_sum_dict['1_in_100_day_mortality'].append(extreme_killed[100])
-                        cum_sum_dict['1_in_1000_day_mortality'].append(extreme_killed[1000])
+                        cum_sum_dict['1_in_10_day_mortality'].append(daily_extreme_killed[10])
+                        cum_sum_dict['1_in_100_day_mortality'].append(daily_extreme_killed[100])
+                        cum_sum_dict['1_in_1000_day_mortality'].append(daily_extreme_killed[1000])
 
                 logger.info("Yearly summary complete.")
     

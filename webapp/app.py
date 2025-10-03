@@ -1406,14 +1406,14 @@ def save_graph():
         with open(full_path, 'w', encoding='utf-8') as f:
             json.dump(graph_data, f, ensure_ascii=False)
 
-        node_link_path = os.path.join(proj_dir, 'graph_node_link.json')
+        node_link_path = os.path.join(proj_dir, 'graph_node_link.json');
         with open(node_link_path, 'w', encoding='utf-8') as f:
-            json.dump(sim_graph_data, f, ensure_ascii=False)
+            json.dump(sim_graph_data, f, ensure_ascii=False);
 
-        nodes_csv = os.path.join(proj_dir, 'graph_nodes.csv')
-        edges_csv = os.path.join(proj_dir, 'graph_edges.csv')
-        pd.DataFrame(summary_nodes).to_csv(nodes_csv, index=False)
-        pd.DataFrame(summary_edges).to_csv(edges_csv, index=False)
+        nodes_csv = os.path.join(proj_dir, 'graph_nodes.csv');
+        edges_csv = os.path.join(proj_dir, 'graph_edges.csv');
+        pd.DataFrame(summary_nodes).to_csv(nodes_csv, index=False);
+        pd.DataFrame(summary_edges).to_csv(edges_csv, index=False);
     except Exception as e:
         log.exception("Failed writing graph artifacts")
         return jsonify(success=False, error=f"Write error: {e}"), 500
@@ -2879,305 +2879,11 @@ def model_setup_summary():
     #print("Flow scenarios:", flow_scenarios)
 
     # --- Graph Data ---
-    graph_summary = session.get('graph_summary', {"Nodes": [], "Edges": []})
-    graph_nodes = graph_summary.get('Nodes', [])
-    graph_edges = graph_summary.get('Edges', [])
-    #print("Graph summary (Nodes):", graph_nodes)
-    #print("Graph summary (Edges):", graph_edges)
-
-    # --- Other Data ---
-    facilities_data = session.get('facilities_data', [])
-    population_parameters = []
-
-    pop_csv_path = session.get('population_csv_path')
-    proj_dir = session.get('proj_dir')
-    
-    if not pop_csv_path and proj_dir:
-        candidate = os.path.join(proj_dir, "population_params.csv")
-        if os.path.exists(candidate):
-            pop_csv_path = candidate
-            session['population_csv_path'] = candidate  # repopulate pointer
-            session.modified = True
-    
-    population_parameters = []
-    if pop_csv_path and os.path.exists(pop_csv_path):
-        df_pop = pd.read_csv(pop_csv_path)
-        population_parameters = df_pop.to_dict(orient='records')
-    else:
-        # last-ditch fallback
-        population_parameters = session.get('population_data_for_sim', [])
-
-    # pop_csv_path = session.get('population_csv_path')
-    
-    # if pop_csv_path:
-    #     print("Found population CSV file in session:", pop_csv_path, flush=True)
-    #     if os.path.exists(pop_csv_path):
-    #         try:
-    #             df_pop = pd.read_csv(pop_csv_path)
-    #             population_parameters = df_pop.to_dict(orient='records')
-    #         except Exception as e:
-    #             print("Error reading population CSV file:", e, flush=True)
-    #     else:
-    #         print("Population CSV file not found on disk:", pop_csv_path, flush=True)
-    # else:
-    #     print("No population CSV file key in session.", flush=True)
-    #     # Use any in-memory data if we have it
-    #     population_parameters = session.get('population_data_for_sim', [])
-
-    simulation_graph = session.get('simulation_graph', {})
-    #print ('Loaded simulation graph:', simulation_graph, flush = True)
-    
-    summary_data = {
-        "Facilities": facilities_data,
-        "Unit Parameters": unit_parameters,
-        "Operating Scenarios": operating_scenarios,
-        "Population": population_parameters,
-        "Flow Scenarios": flow_scenarios,
-        "Graph Summary": graph_summary,
-        "Simulation Graph": simulation_graph
-    }
-
-    return render_template(
-        "model_summary.html",
-        summary_data=summary_data,
-        unit_columns=unit_columns,
-        unit_parameters=unit_parameters,
-        operating_scenarios=operating_scenarios,
-        flow_scenarios=flow_scenarios,
-        graph_nodes=graph_nodes,
-        graph_edges=graph_edges,
-        facilities_data=facilities_data,
-        population_parameters=population_parameters
-    )
-    print ('model setup summary complete', flush = True)
-
-def _close_hdf5_handles(obj):
-    """Best-effort: flush/close any HDF5/HDFStore handles hanging off the sim object."""
-    candidates = []
-    for name in dir(obj):
-        # avoid dunder & bound methods
-        if name.startswith("_"):
-            continue
-        try:
-            attr = getattr(obj, name)
-        except Exception:
-            continue
-        candidates.append(attr)
-
-    for a in candidates:
-        try:
-            # pandas
-            if hasattr(pd, "HDFStore") and isinstance(a, pd.HDFStore):
-                try: a.flush()
-                except Exception: pass
-                try: a.close()
-                except Exception: pass
-            # PyTables file
-            if tables and getattr(tables, "File", None) and isinstance(a, tables.File):
-                try: a.flush()
-                except Exception: pass
-                try: a.close()
-                except Exception: pass
-            # h5py
-            import h5py
-            if isinstance(a, h5py.File):
-                try: a.flush()
-                except Exception: pass
-                try: a.close()
-                except Exception: pass
-        except Exception:
-            # ignore any introspection weirdness
-            pass
-
-def run_simulation_in_background_custom(data_dict: dict, q: "queue.Queue"):
-    """
-    Background thread for UI-driven runs.
-    Expects at least:
-      - proj_dir (str): per-run sandbox path
-      - output_name (str)
-      - other fields your Stryke factory reads (project_name, facilities, ...)
-    """
-    import os, sys, logging
-
-    log = logging.getLogger(__name__)  # <-- local logger (safe in a thread)
-
-    # ---- Validate inputs up front
-    proj_dir = data_dict.get('proj_dir')
-    output_name = data_dict.get('output_name', 'Simulation_Output')
-    if DIAGNOSTICS_ENABLED:
-        print(f"[DIAG] proj_dir: {proj_dir}", flush=True)
-        print(f"[DIAG] output_name: {output_name}", flush=True)
-        print(f"[DIAG] hydrograph_file: {data_dict.get('hydrograph_file')}", flush=True)
-        print(f"[DIAG] wks: {data_dict.get('wks', '')}", flush=True)
-    if not proj_dir or not os.path.isdir(proj_dir):
-        try:
-            q.put(f"[ERROR] Invalid proj_dir: {proj_dir!r}")
-        finally:
-            try:
-                q.put("[Simulation Complete]")
-            except Exception:
-                pass
-        return
-
-    # ---- Route all print()/logger output to this run's queue
-    old_stdout, old_stderr = sys.stdout, sys.stderr
-    sys.stdout = QueueStream(q)
-    sys.stderr = QueueStream(q)
-    h, targets = _attach_queue_log_handler(q)
-
-    # ---- Optional HDF5 lock (safe if filelock not installed)
-    h5_path = os.path.join(proj_dir, f"{output_name}.h5")
-    try:
-        from filelock import FileLock
-        lock = FileLock(h5_path + ".lock")
-    except Exception:
-        lock = None
-
-    try:
-        log.info("Starting simulation (UI path)...")
-        wks = data_dict.get('wks', '')
-        try:
-            sim = stryke.simulation(proj_dir, wks, output_name=output_name)
-        except TypeError:
-            sim = stryke.simulation(proj_dir, wks)
-        sim.webapp_import(data_dict, output_name)
-
-        hydro_file_path = data_dict.get('hydrograph_file')
-        if DIAGNOSTICS_ENABLED:
-            if hydro_file_path and os.path.exists(hydro_file_path):
-                print(f"[DIAG] Hydrograph file found: {hydro_file_path}", flush=True)
-                df_check = pd.read_csv(hydro_file_path)
-                print(f"[DIAG] Hydrograph CSV columns: {df_check.columns.tolist()}", flush=True)
-                print(f"[DIAG] Hydrograph CSV head:\n{df_check.head()}", flush=True)
-            else:
-                print(f"[DIAG] Hydrograph file missing or path invalid: {hydro_file_path}", flush=True)
-
-        if DIAGNOSTICS_ENABLED:
-            print("[DIAG] Starting simulation run...", flush=True)
-        if lock:
-            with lock:
-                sim.run()
-                if DIAGNOSTICS_ENABLED:
-                    print("[DIAG] Simulation run complete.", flush=True)
-                sim.summary()
-                if DIAGNOSTICS_ENABLED:
-                    print("[DIAG] Simulation summary complete.", flush=True)
-        else:
-            sim.run()
-            if DIAGNOSTICS_ENABLED:
-                print("[DIAG] Simulation run complete.", flush=True)
-            sim.summary()
-            if DIAGNOSTICS_ENABLED:
-                print("[DIAG] Simulation summary complete.", flush=True)
-
-        if DIAGNOSTICS_ENABLED:
-            if os.path.exists(h5_path):
-                print(f"[DIAG] Output HDF5 file created: {h5_path}", flush=True)
-            else:
-                print(f"[DIAG] Output HDF5 file NOT found: {h5_path}", flush=True)
-
-        # Generate HTML report
-        if DIAGNOSTICS_ENABLED:
-            print("[DIAG] Generating HTML report...", flush=True)
-        report_html = generate_report(sim)
-        report_path = os.path.join(proj_dir, 'simulation_report.html')
-        with open(report_path, 'w', encoding='utf-8') as f:
-            f.write(report_html)
-        # Write marker file for report path
-        with open(os.path.join(proj_dir, 'report_path.txt'), 'w', encoding='utf-8') as f:
-            f.write(report_path)
-        if DIAGNOSTICS_ENABLED:
-            print(f"[DIAG] Report written to: {report_path}", flush=True)
-        
-        log.info("Simulation completed successfully (UI path).")
-        print("\n" + "="*60, flush=True)
-        print("SIMULATION COMPLETE - Click 'View Results' to see the report", flush=True)
-        print("="*60, flush=True)
-
-    except Exception as e:
-        # Make sure the traceback hits logs and the SSE stream
-        log.exception("Simulation failed (UI path).")
-        if DIAGNOSTICS_ENABLED:
-            import traceback
-            print(f"[ERROR] Simulation failed: {e}", flush=True)
-            print(traceback.format_exc(), flush=True)
-        try: q.put(f"[ERROR] Simulation failed: {e}")
-        except Exception: pass
-
-    finally:
-        # ✅ CRITICAL: Remove log handlers to prevent cross-user contamination
-        _detach_queue_log_handler(h, targets)
-        # Always restore stdio and close the SSE stream cleanly
-        sys.stdout, sys.stderr = old_stdout, old_stderr
-        try: q.put("[Simulation Complete]")
-        except Exception: pass
-
-@app.route('/run_simulation', methods=['POST'], endpoint='run_simulation')
-def run_simulation():
-    log = current_app.logger
-
-    # Unique name for artifacts
-    output_name = f"WebAppModel_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    session['output_name'] = output_name
-
-    # --- per-run sandbox under the user's sim folder ---
-    base = session.get('user_sim_folder')
-    if not base:
-        flash("Session expired or project not initialized.")
-        return redirect(url_for('index'))
-
-    run_id  = uuid.uuid4().hex
-    run_dir = os.path.join(base, run_id)
-    os.makedirs(run_dir, exist_ok=True)
-
-    # Point this run at its own directory so .h5, report, etc. don't collide
-    session['proj_dir'] = run_dir   # so /report reads the right report for THIS run
-    session['last_run_id'] = run_id # handy for templates/logs pages
-
-    # get the per-run queue (from #1)
-    q = get_queue(run_id)
-
-    proj_dir = session.get('proj_dir')
-    if not proj_dir:
-        flash("Session expired or project not initialized.")
-        return redirect(url_for('index'))
-
-    # Guarantee hydrograph CSV is written to the current run_dir
-    hydrograph_data = session.get('hydrograph_data')
-    scenario_type = session.get('scenario_type')
-    if scenario_type == 'hydrograph' and hydrograph_data and hydrograph_data.strip():
-        try:
-            df_hydro = process_hydrograph_data(hydrograph_data)
-        except Exception as e:
-            flash(f"Hydrograph error: {e}")
-            return redirect(url_for('flow_scenarios'))
-        units = session.get('units', 'metric')
-        df_hydro['DAvgFlow_prorate'] = pd.to_numeric(df_hydro['DAvgFlow_prorate'], errors='coerce')
-        if units == 'metric':
-            df_hydro['DAvgFlow_prorate'] = df_hydro['DAvgFlow_prorate'] * 35.3147
-        hydro_file_path = os.path.join(run_dir, 'hydrograph.csv')
-        df_hydro.to_csv(hydro_file_path, index=False)
-        session['hydrograph_file'] = hydro_file_path
-
-    # population CSV is optional; don’t crash if missing
-    pop_df = None
-    pop_csv = session.get('population_csv_path')
-    if pop_csv:
-        try:
-            pop_df = pd.read_csv(pop_csv, low_memory=False)
-        except Exception as e:
-            log.exception("Failed reading population CSV")
-            # still proceed; log to the SSE stream as well
-            try:
-                q.put(f"[WARN] population_csv_path unreadable: {e}")
-            except Exception:
-                pass
-
-    # Graph (optional)
-    graph_data = None
+    log = logging.getLogger(__name__)
     graph_summary = session.get('graph_summary')
     gf = session.get('graph_files') or {}
     node_link_path = gf.get('node_link')
+    graph_data = {}
     if node_link_path and os.path.exists(node_link_path):
         try:
             with open(node_link_path, 'r', encoding='utf-8') as f:
@@ -3185,33 +2891,144 @@ def run_simulation():
         except Exception:
             log.exception('Failed reading node_link graph file: %s', node_link_path)
 
-    data_dict = {
-        'proj_dir':        proj_dir,
-        'project_name':    session.get('project_name'),
-        'project_notes':   session.get('project_notes'),
-        'model_setup':     session.get('model_setup'),
-        'units':           session.get('units'),
-        'facilities':      session.get('facilities_data'),
-        'unit_parameters_file':     session.get('unit_params_file'),
-        'operating_scenarios_file': session.get('op_scen_file'),
-        'population':      pop_df,
-        'flow_scenarios':  session.get('flow_scenario'),
-        'hydrograph_file': session.get('hydrograph_file'),
-        'graph_data':      graph_data,
-        'graph_summary':   graph_summary,
-        'units_system':    session.get('units', 'imperial'),
-        'simulation_mode': session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing'),
-        'output_name':     output_name,
-    }
+    # --- Population Data ---
+    pop_df = []
+    if 'population_data_for_sim' in session:
+        pop_df = session['population_data_for_sim']
 
+    # --- Prepare data for template ---
+    proj_dir = session.get('proj_dir', '')
+    output_name = session.get('project_name', 'unnamed_project')
+    
+    # Return template with all collected data
+    return render_template('model_summary.html',
+                         unit_parameters=unit_parameters,
+                         unit_columns=unit_columns,
+                         operating_scenarios=operating_scenarios,
+                         flow_scenarios=flow_scenarios,
+                         population_data=pop_df,
+                         graph_summary=graph_summary,
+                         project_name=session.get('project_name'),
+                         project_notes=session.get('project_notes'),
+                         model_setup=session.get('model_setup'),
+                         units=session.get('units'))
+
+def run_simulation_in_background_custom(data_dict, q):
+    """Background worker for UI-driven simulations."""
+    import os, sys, logging
+    log = logging.getLogger(__name__)
+
+    # stream all prints + logger output to this run's queue
+    old_stdout, old_stderr = sys.stdout, sys.stderr
+    sys.stdout = QueueStream(q)
+    sys.stderr = QueueStream(q)
+    h, targets = _attach_queue_log_handler(q)
+
+    try:
+        log.info("Starting UI-driven simulation...")
+        proj_dir = data_dict.get('proj_dir')
+        output_name = data_dict.get('output_name', 'simulation_output')
+        
+        if not proj_dir or not os.path.exists(proj_dir):
+            raise ValueError(f"Invalid project directory: {proj_dir}")
+            
+        # Create simulation instance
+        sim = stryke.simulation(proj_dir, output_name, existing=False)
+        
+        # Import webapp data
+        sim.webapp_import(data_dict, output_name)
+        
+        # Run simulation
+        sim.run()
+        sim.summary()
+        
+        log.info("Simulation completed successfully.")
+    except Exception as e:
+        log.exception("Simulation failed (UI-driven).")
+        try:
+            q.put(f"[ERROR] Simulation failed: {e}")
+        except Exception:
+            pass
+    finally:
+        # restore stdio
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+        # detach handler so it doesn't leak to future runs
+        for lg in targets:
+            try:
+                lg.removeHandler(h)
+            except Exception:
+                pass
+        try:
+            q.put("[Simulation Complete]")
+        except Exception:
+            pass
+
+@app.route('/run_simulation', methods=['POST'])
+def run_simulation():
+    """Start a simulation run from the model summary page."""
+    import uuid
+    
+    # Generate unique run ID
+    run_id = uuid.uuid4().hex
+    q = get_queue(run_id)
+    
+    # Get project directory and output name
+    proj_dir = session.get('proj_dir')
+    output_name = session.get('project_name', 'simulation_output')
+    
+    if not proj_dir:
+        flash("No project directory found. Please start from the beginning.")
+        return redirect(url_for('index'))
+        
+    # Store run info in session
+    session['last_run_id'] = run_id
+    session['output_name'] = output_name
+    
+    # Prepare data dictionary
+    log = logging.getLogger(__name__)
+    graph_summary = session.get('graph_summary')
+    gf = session.get('graph_files') or {}
+    node_link_path = gf.get('node_link')
+    graph_data = {}
+    if node_link_path and os.path.exists(node_link_path):
+        try:
+            with open(node_link_path, 'r', encoding='utf-8') as f:
+                graph_data = json.load(f)
+        except Exception:
+            log.exception('Failed reading node_link graph file: %s', node_link_path)
+    
+    # Population data
+    pop_df = []
+    if 'population_data_for_sim' in session:
+        pop_df = session['population_data_for_sim']
+    
+    data_dict = {
+        'proj_dir': proj_dir,
+        'project_name': session.get('project_name'),
+        'project_notes': session.get('project_notes'),
+        'model_setup': session.get('model_setup'),
+        'units': session.get('units'),
+        'facilities': session.get('facilities_data'),
+        'unit_parameters_file': session.get('unit_params_file'),
+        'operating_scenarios_file': session.get('op_scen_file'),
+        'population': pop_df,
+        'flow_scenarios': session.get('flow_scenario'),
+        'hydrograph_file': session.get('hydrograph_file'),
+        'graph_data': graph_data,
+        'graph_summary': graph_summary,
+        'units_system': session.get('units', 'imperial'),
+        'simulation_mode': session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing'),
+        'output_name': output_name,
+    }
+    
     # Start the UI-driven worker with the per-run queue
     t = threading.Thread(target=run_simulation_in_background_custom,
                          args=(data_dict, q),
                          daemon=True)
     t.start()
     flash("Simulation started! Check logs for progress.")
-
-    # Include run token so the logs page can open /stream?run=...
+    
+    # Redirect to logs page
     return redirect(url_for('simulation_logs', run=run_id))
 
 @app.route("/simulation_logs")
@@ -3356,6 +3173,68 @@ def generate_report(sim):
 
         log.debug("HDF opened: %s", hdf_path)
 
+        # --- Executive Summary Metrics ---
+        yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
+        daily_df = store["/Daily"] if "/Daily" in store.keys() else None
+        pop_df = store["/Population"] if "/Population" in store.keys() else None
+
+        total_fish = None
+        if pop_df is not None:
+            for col_name in ("Pop_Size", "Population", "PopSize", "pop_size", "Individuals", "count"):
+                if col_name in pop_df.columns:
+                    total_fish = pop_df[col_name].sum()
+                    break
+        if total_fish is None and daily_df is not None and not daily_df.empty and {"species", "iteration", "pop_size"} <= set(daily_df.columns):
+            total_fish = daily_df.groupby(["species", "iteration"])["pop_size"].first().sum()
+        if total_fish is None:
+            total_fish = 0
+
+        mean_entr = mean_mort = prob_entr = 0.0
+        overall_surv = 100.0
+        if yearly_df is not None and not yearly_df.empty:
+            first_row = yearly_df.iloc[0]
+            mean_entr = float(first_row.get("mean_yearly_entrainment", 0.0) or 0.0)
+            mean_mort = float(first_row.get("mean_yearly_mortality", 0.0) or 0.0)
+            prob_entr = float(first_row.get("prob_entrainment", 0.0) or 0.0)
+
+        total_entr = total_surv = 0.0
+        if daily_df is not None and not daily_df.empty:
+            total_entr = float(daily_df.get("num_entrained", pd.Series(dtype=float)).sum())
+            total_surv = float(daily_df.get("num_survived", pd.Series(dtype=float)).sum())
+            if total_entr > 0:
+                overall_surv = (total_surv / total_entr) * 100.0
+
+        exec_summary_html = "<h2>Executive Summary</h2>"
+        if any([total_fish, mean_entr, mean_mort, total_entr]):
+            exec_summary_html += (
+                f"""
+            <div style=\"display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:15px; margin:20px 0;\">
+                <div style=\"padding:15px; background:#e8f4f8; border-left:4px solid #0056b3; border-radius:5px;\">
+                    <div style=\"font-size:12px; color:#666; text-transform:uppercase;\">Total Fish Simulated</div>
+                    <div style=\"font-size:28px; font-weight:bold; color:#0056b3;\">{int(total_fish):,}</div>
+                </div>
+                <div style=\"padding:15px; background:#fff3cd; border-left:4px solid #ffc107; border-radius:5px;\">
+                    <div style=\"font-size:12px; color:#666; text-transform:uppercase;\">Probability of Entrainment</div>
+                    <div style=\"font-size:28px; font-weight:bold; color:#ffc107;\">{prob_entr:.2%}</div>
+                </div>
+                <div style=\"padding:15px; background:#d4edda; border-left:4px solid #28a745; border-radius:5px;\">
+                    <div style=\"font-size:12px; color:#666; text-transform:uppercase;\">Overall Passage Survival</div>
+                    <div style=\"font-size:28px; font-weight:bold; color:#28a745;\">{overall_surv:.1f}%</div>
+                </div>
+                <div style=\"padding:15px; background:#f8d7da; border-left:4px solid #dc3545; border-radius:5px;\">
+                    <div style=\"font-size:12px; color:#666; text-transform:uppercase;\">Mean Annual Entrainment</div>
+                    <div style=\"font-size:28px; font-weight:bold; color:#dc3545;\">{int(mean_entr):,}</div>
+                </div>
+                <div style=\"padding:15px; background:#e2e3e5; border-left:4px solid #6c757d; border-radius:5px;\">
+                    <div style=\"font-size:12px; color:#666; text-transform:uppercase;\">Mean Annual Mortality</div>
+                    <div style=\"font-size:28px; font-weight:bold; color:#6c757d;\">{int(mean_mort):,}</div>
+                </div>
+            </div>
+            """
+            )
+        else:
+            exec_summary_html += "<p>Summary metrics not available.</p>"
+
         report_sections = [
             "<div style='margin: 10px;'>"
             "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
@@ -3365,6 +3244,7 @@ def generate_report(sim):
             f"<p><strong>Model Setup:</strong> {getattr(sim, 'model_setup', 'N/A')}</p>",
             f"<p><strong>Units:</strong> {getattr(sim, 'units_session', 'N/A')}</p>",
             f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
+            exec_summary_html,
             f"<p>HDF keys found: {store.keys()}</p>",
         ]
 
@@ -3464,91 +3344,278 @@ def generate_report(sim):
         else:
             report_sections.append("<p>No hydrograph data available.</p>")
 
-        # Beta distributions - use Units-only table for cleaner display
+        # Species Information
+        if pop_df is not None and not pop_df.empty:
+            report_sections.append("<h2>Species Information</h2>")
+            species_cols = [c for c in ("Species", "Common_Name", "Length_mean", "Length_sd", "Ucrit_mean", "Ucrit_sd", "Population") if c in pop_df.columns]
+            if species_cols:
+                species_summary = pop_df[species_cols].drop_duplicates()
+                report_sections.append(f"<div style='overflow-x:auto;'>{species_summary.to_html(index=False, border=1)}</div>")
+            else:
+                report_sections.append("<p>Species metadata not available.</p>")
+        else:
+            report_sections.append("<p>No species information available.</p>")
+
+        # Facility and Operating Data
+        add_section("Facility Parameters", "/Facilities", units)
+        add_section("Unit Parameters", "/Unit_Parameters", units)
+        add_section("Operating Scenarios", "/Operating Scenarios", units)
+
+        # Probability of Entrainment section
+        report_sections.append("<h2>Probability of Entrainment</h2>")
+        if yearly_df is not None and not yearly_df.empty and 'prob_entrainment' in yearly_df.columns:
+            prob_entr = yearly_df.iloc[0]['prob_entrainment']
+            report_sections.append(f"""
+            <div style="padding:15px; background:#e8f4f8; border-left:4px solid #0056b3; border-radius:5px; margin:20px 0;">
+                <p style="font-size:18px; margin:0;"><strong>Overall Probability of Entrainment:</strong> {prob_entr:.4f} ({prob_entr*100:.2f}%)</p>
+                <p style="margin:5px 0 0 0; color:#555;">This represents the proportion of fish that become entrained across all days and iterations.</p>
+            </div>
+            """)
+        else:
+            report_sections.append("<p>Probability of entrainment data not available.</p>")
+
+        # Beta distributions - show all passage routes (units and interior nodes)
         if "/Beta_Distributions_Units" in store.keys():
-            add_section("Beta Distributions by Unit", "/Beta_Distributions_Units", units)
+            add_section("Survival Probability by Passage Route", "/Beta_Distributions_Units", units)
         else:
             add_section("Beta Distributions", "/Beta_Distributions", units)
+
+        # Flow vs Outcomes Analysis
+        report_sections.append("<h2>Flow vs Entrainment/Mortality Relationships</h2>")
+        if daily_df is not None and not daily_df.empty and 'flow' in daily_df.columns:
+            df_flow = daily_df.copy()
+            if 'num_mortality' not in df_flow.columns and {'num_survived', 'pop_size'} <= set(df_flow.columns):
+                df_flow['num_mortality'] = df_flow['pop_size'] - df_flow['num_survived']
+
+            def create_scatter(data, y_col, title):
+                plt.rcParams.update({'font.size': 8})
+                fig = plt.figure(figsize=(5, 4))
+                plt.scatter(data['flow'], data[y_col], alpha=0.45, s=18, edgecolors='none')
+                plt.xlabel('Flow')
+                plt.ylabel(y_col.replace('_', ' ').title())
+                plt.title(title)
+                plt.tight_layout()
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                plt.close(fig)
+                buf.seek(0)
+                return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+            scatter_entr = create_scatter(df_flow, 'num_entrained', 'Flow vs Entrainment') if 'num_entrained' in df_flow.columns else None
+            scatter_mort = create_scatter(df_flow, 'num_mortality', 'Flow vs Mortality') if 'num_mortality' in df_flow.columns else None
+
+            chart_html = "<div style=\"display:flex; gap:20px; justify-content:center; flex-wrap:wrap\">"
+            if scatter_entr:
+                chart_html += (
+                    "<div style='flex:1; min-width:300px; text-align:center;'>"
+                    "<h3>Entrainment vs Flow</h3>"
+                    f"<img src=\"data:image/png;base64,{scatter_entr}\" style='max-width:100%; height:auto;' />"
+                    "</div>"
+                )
+            if scatter_mort:
+                chart_html += (
+                    "<div style='flex:1; min-width:300px; text-align:center;'>"
+                    "<h3>Mortality vs Flow</h3>"
+                    f"<img src=\"data:image/png;base64,{scatter_mort}\" style='max-width:100%; height:auto;' />"
+                    "</div>"
+                )
+            chart_html += "</div>"
+            report_sections.append(chart_html)
+        else:
+            report_sections.append("<p>Flow relationship data not available.</p>")
+
+        # Passage Route Usage Analysis
+        report_sections.append("<h2>Passage Route Usage</h2>")
+        simulation_keys = [k for k in store.keys() if k.startswith('/simulations/')]
+        combined_route_counts = pd.Series(dtype=float)
+        units_label = "m³/s" if units == 'metric' else "cfs"
+        route_flow_df = store["/Route_Flows"] if "/Route_Flows" in store.keys() else None
+        if isinstance(route_flow_df, pd.DataFrame) and not route_flow_df.empty:
+            route_flow_df = route_flow_df.copy()
+        else:
+            route_flow_df = None
+        need_estimated_flow = route_flow_df is None
+        discharge_records = []
+        flow_conversion = 0.0283168 if units == 'metric' else 1.0
+
+        for key in simulation_keys:
+            sim_data = store[key]
+            if not isinstance(sim_data, pd.DataFrame):
+                continue
+            state_cols = [c for c in sim_data.columns if c.startswith('state_')]
+            if not state_cols:
+                continue
+
+            final_state_col = state_cols[-1]
+            sim_data = sim_data.dropna(subset=[final_state_col])
+            if sim_data.empty:
+                continue
+
+            route_counts = sim_data[final_state_col].value_counts()
+            combined_route_counts = combined_route_counts.add(route_counts, fill_value=0)
+
+            if need_estimated_flow and {'iteration', 'day', 'flow'} <= set(sim_data.columns):
+                sim_sub = sim_data[['iteration', 'day', 'flow', final_state_col]].copy()
+                sim_sub['flow_converted'] = sim_sub['flow'].astype(float) * flow_conversion
+
+                per_day_totals = (
+                    sim_sub.groupby(['iteration', 'day']).size().rename('total_fish').reset_index()
+                )
+                per_day_flows = (
+                    sim_sub.groupby(['iteration', 'day'])['flow_converted'].first().reset_index()
+                )
+                route_day_counts = (
+                    sim_sub.groupby(['iteration', 'day', final_state_col])
+                    .size()
+                    .rename('route_count')
+                    .reset_index()
+                )
+                route_day_counts = route_day_counts.merge(per_day_totals, on=['iteration', 'day'], how='left')
+                route_day_counts = route_day_counts.merge(per_day_flows, on=['iteration', 'day'], how='left')
+                route_day_counts = route_day_counts[route_day_counts['total_fish'] > 0]
+
+                if not route_day_counts.empty:
+                    route_day_counts['estimated_discharge'] = (
+                        route_day_counts['route_count'] / route_day_counts['total_fish']
+                    ) * route_day_counts['flow_converted']
+                    route_day_counts.rename(columns={final_state_col: 'Passage Route'}, inplace=True)
+                    discharge_records.append(route_day_counts[['Passage Route', 'route_count', 'total_fish', 'estimated_discharge']])
+
+        if not combined_route_counts.empty:
+            combined_route_counts = combined_route_counts.sort_values(ascending=False)
+            plt.rcParams.update({'font.size': 8})
+            fig, ax1 = plt.subplots(figsize=(6, 6))
+            colors = plt.cm.Set3(np.linspace(0, 1, len(combined_route_counts)))
+            ax1.pie(
+                combined_route_counts.values,
+                labels=combined_route_counts.index,
+                autopct='%1.1f%%',
+                colors=colors,
+                startangle=90
+            )
+            ax1.set_title('Fish Passage Distribution by Route')
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            pie_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+            route_table = pd.DataFrame({
+                'Passage Route': combined_route_counts.index,
+                'Number of Fish': combined_route_counts.values.astype(int),
+                'Percentage': (combined_route_counts.values / combined_route_counts.sum() * 100).round(1)
+            })
+
+            report_sections.append(
+                "<div style='display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;'>"
+                "<div style='flex:1; min-width:300px; text-align:center;'>"
+                f"<img src=\"data:image/png;base64,{pie_b64}\" style='max-width:100%; height:auto;' />"
+                "</div>"
+                "<div style='flex:1; min-width:320px;'>"
+                "<h3>Route Usage Summary</h3>"
+                f"{route_table.to_html(index=False, border=1)}"
+                "</div>"
+                "</div>"
+            )
+        else:
+            report_sections.append("<p>Route usage data not available.</p>")
+
+        discharge_heading = "Actual Discharge by Passage Route" if not need_estimated_flow else "Estimated Discharge by Passage Route"
+        discharge_summary = None
+        if route_flow_df is not None and {'route', 'discharge_cfs'}.issubset(route_flow_df.columns):
+            processed_flows = route_flow_df.copy()
+            processed_flows['route'] = processed_flows['route'].astype(str)
+            processed_flows['day'] = pd.to_datetime(processed_flows['day'], errors='coerce')
+            processed_flows['discharge_value'] = processed_flows['discharge_cfs'].astype(float)
+            if units == 'metric':
+                processed_flows['discharge_value'] = processed_flows['discharge_value'] * 0.0283168
+            discharge_summary = processed_flows.groupby('route').agg(
+                total_discharge=('discharge_value', 'sum'),
+                mean_discharge=('discharge_value', 'mean'),
+                median_discharge=('discharge_value', 'median'),
+                days_observed=('day', 'nunique')
+            ).reset_index().rename(columns={'route': 'Passage Route'})
+        elif discharge_records:
+            discharge_df = pd.concat(discharge_records, ignore_index=True)
+            discharge_summary = discharge_df.groupby('Passage Route').agg(
+                total_discharge=('estimated_discharge', 'sum'),
+                mean_discharge=('estimated_discharge', 'mean'),
+                median_discharge=('estimated_discharge', 'median'),
+                days_observed=('estimated_discharge', 'count'),
+                total_route_fish=('route_count', 'sum')
+            ).reset_index()
+        
+        report_sections.append(f"<h3>{discharge_heading}</h3>")
+        if discharge_summary is not None and not discharge_summary.empty:
+            discharge_summary = discharge_summary.sort_values('total_discharge', ascending=False)
+            total_fish_all_routes = combined_route_counts.sum()
+            if total_fish_all_routes and total_fish_all_routes > 0:
+                discharge_summary['Fish Share (%)'] = discharge_summary['Passage Route'].map(
+                    lambda r: (combined_route_counts.get(r, 0.0) / total_fish_all_routes) * 100
+                ).fillna(0).round(1)
+            elif 'total_route_fish' in discharge_summary.columns:
+                route_totals = discharge_summary['total_route_fish'].sum()
+                discharge_summary['Fish Share (%)'] = discharge_summary['total_route_fish'].div(route_totals).fillna(0).mul(100).round(1)
+            else:
+                discharge_summary['Fish Share (%)'] = 0.0
+
+            display_cols = [
+                'Passage Route',
+                'Fish Share (%)',
+                f'Mean Discharge ({units_label})',
+                f'Median Discharge ({units_label})',
+                f'Total Discharge ({units_label}·day)',
+                'Days Sampled'
+            ]
+
+            discharge_display = discharge_summary.rename(columns={
+                'mean_discharge': f'Mean Discharge ({units_label})',
+                'median_discharge': f'Median Discharge ({units_label})',
+                'total_discharge': f'Total Discharge ({units_label}·day)',
+                'days_observed': 'Days Sampled'
+            })
+
+            for col in [f'Mean Discharge ({units_label})', f'Median Discharge ({units_label})', f'Total Discharge ({units_label}·day)']:
+                discharge_display[col] = discharge_display[col].map(lambda x: f"{x:,.2f}")
+            discharge_display['Fish Share (%)'] = discharge_display['Fish Share (%)'].map(lambda x: f"{x:.1f}")
+            if 'Days Sampled' in discharge_display.columns:
+                discharge_display['Days Sampled'] = discharge_display['Days Sampled'].fillna(0).astype(int)
+
+            report_sections.append(
+                "<div style='display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;'>"
+                "<div style='flex:1; min-width:320px;'>"
+                f"{discharge_display[display_cols].to_html(index=False, border=1)}"
+                "</div>"
+            )
+
+            top_routes = discharge_summary.head(10).reset_index(drop=True)
+            plt.rcParams.update({'font.size': 8})
+            fig, ax = plt.subplots(figsize=(7, max(3, len(top_routes) * 0.4)))
+            ax.barh(top_routes['Passage Route'], top_routes['total_discharge'], color='#5a9bd4')
+            ax.set_xlabel(f'Total Discharge ({units_label}·day)')
+            ax.set_ylabel('Passage Route')
+            ax.set_title('Top Routes by Discharge')
+            ax.invert_yaxis()
+            plt.tight_layout()
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            discharge_bar_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+            report_sections[-1] += (
+                "<div style='flex:1; min-width:320px; text-align:center;'>"
+                f"<img src=\"data:image/png;base64,{discharge_bar_b64}\" style='max-width:100%; height:auto;' />"
+                "</div>"
+                "</div>"
+            )
+        else:
+            report_sections.append("<p>Insufficient data to report discharge by passage route.</p>")
 
         # Yearly summary panel (iteration-based)
         yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
         daily_df  = store["/Daily"] if "/Daily" in store.keys() else None
 
-        if daily_df is not None and not daily_df.empty:
-            df = daily_df.copy()
-            if {'num_survived', 'pop_size'} <= set(df.columns) and 'num_mortality' not in df.columns:
-                df['num_mortality'] = df['pop_size'] - df['num_survived']
-            if 'iteration' in df.columns:
-                iteration_sums = df.groupby('iteration').agg({
-                    'num_entrained': 'sum',
-                    'num_mortality': 'sum'
-                }).reset_index()
-            else:
-                iteration_sums = None
-                log.debug("Daily DF missing 'iteration' column")
-        else:
-            iteration_sums = None
-            log.debug("No daily DF")
-
-        def create_iteration_hist(df, metric, title):
-            plt.rcParams.update({'font.size': 8})
-            fig = plt.figure()
-            if metric in df.columns:
-                plt.hist(df[metric].dropna(), bins=10, edgecolor='black')
-            plt.xlabel(metric.replace('_', ' ').title())
-            plt.ylabel("Frequency")
-            plt.title(title)
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', bbox_inches='tight')
-            plt.close(fig)
-            buf.seek(0)
-            return base64.b64encode(buf.getvalue()).decode('utf-8')
-
-        def render_yearly_panel(y_df, it_sums):
-            if y_df is None or y_df.empty:
-                return "<p>No yearly summary data available.</p>"
-            row = y_df.iloc[0]
-            panel_html = "<h2>Seasonal Summary (by Iteration)</h2>"
-            for metric in ["entrainment", "mortality"]:
-                metric_key = 'entrained' if metric == 'entrainment' else 'mortality'
-                if it_sums is not None and f'num_{metric_key}' in it_sums.columns:
-                    hist_b64 = create_iteration_hist(it_sums, f'num_{metric_key}', f"Total {metric.title()} by Iteration")
-                else:
-                    hist_b64 = ""
-                mean_val = row.get(f"mean_yearly_{metric}", "N/A")
-                lcl_val  = row.get(f"lcl_yearly_{metric}", "N/A")
-                ucl_val  = row.get(f"ucl_yearly_{metric}", "N/A")
-                like10   = row.get(f"1_in_10_day_{metric}", "N/A")
-                like100  = row.get(f"1_in_100_day_{metric}", "N/A")
-                like1000 = row.get(f"1_in_1000_day_{metric}", "N/A")
-                panel_html += f"""
-                <div style="display:flex; flex-wrap:wrap; margin-bottom:20px; border:1px solid #ccc; padding:10px; border-radius:5px;">
-                    <div style="flex:1; min-width:300px; padding:10px; border-right:1px solid #ddd;">
-                        <h3>Histogram ({metric.title()})</h3>
-                        <div style="text-align:center;">
-                            {'<img src="data:image/png;base64,' + hist_b64 + '" style="max-width:100%; height:auto;" />' if hist_b64 else "<p>No histogram data</p>"}
-                        </div>
-                    </div>
-                    <div style="flex:1; min-width:300px; padding:10px;">
-                        <h3>Statistics ({metric.title()})</h3>
-                        <p><strong>Average Annual:</strong> {mean_val}</p>
-                        <p><strong>95% CI:</strong> {lcl_val} - {ucl_val}</p>
-                        <p><strong>1 in 10 {metric} event:</strong> {like10}</p>
-                        <p><strong>1 in 100 {metric} event:</strong> {like100}</p>
-                        <p><strong>1 in 1000 {metric} event:</strong> {like1000}</p>
-                    </div>
-                </div>
-                """
-            return panel_html
-
-        if yearly_df is not None and not yearly_df.empty:
-            report_sections.append(render_yearly_panel(yearly_df, iteration_sums))
-        else:
-            report_sections.append("<p>No yearly summary data available.</p>")
-            log.debug("Yearly DF empty or missing")
-
-        # Daily histograms
-        report_sections.append("<h2>Daily Histograms</h2>")
         if daily_df is not None and not daily_df.empty:
             df = daily_df.copy()
             if 'num_mortality' not in df.columns and {'num_survived','pop_size'} <= set(df.columns):
@@ -3594,6 +3661,115 @@ def generate_report(sim):
             report_sections.append("</div>")
         else:
             report_sections.append("<p>No daily data available.</p>")
+
+        # Time Series Plots
+        report_sections.append("<h2>Daily Entrainment and Mortality Over Time</h2>")
+        if daily_df is not None and not daily_df.empty and 'day' in daily_df.columns:
+            df_ts = daily_df.copy()
+            if 'num_mortality' not in df_ts.columns and {'num_survived', 'pop_size'} <= set(df_ts.columns):
+                df_ts['num_mortality'] = df_ts['pop_size'] - df_ts['num_survived']
+
+            daily_avg = df_ts.groupby('day').agg({
+                'num_entrained': 'mean',
+                'num_mortality': 'mean',
+                'flow': 'mean'
+            }).reset_index()
+            daily_avg['day'] = pd.to_datetime(daily_avg['day'], errors='coerce')
+            daily_avg.sort_values('day', inplace=True)
+
+            def create_timeseries(data, y_col, title, color):
+                plt.rcParams.update({'font.size': 8})
+                fig, ax1 = plt.subplots(figsize=(8, 4))
+                ax1.plot(data['day'], data[y_col], color=color, marker='.', linestyle='-', linewidth=1)
+                ax1.set_xlabel('Date')
+                ax1.set_ylabel(y_col.replace('_', ' ').title(), color=color)
+                ax1.tick_params(axis='y', labelcolor=color)
+                ax1.tick_params(axis='x', rotation=45)
+
+                if 'flow' in data.columns:
+                    ax2 = ax1.twinx()
+                    ax2.plot(data['day'], data['flow'], color='gray', alpha=0.3, linewidth=1)
+                    ax2.set_ylabel('Flow', color='gray')
+                    ax2.tick_params(axis='y', labelcolor='gray')
+
+                plt.title(title)
+                plt.tight_layout()
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight')
+                plt.close(fig)
+                buf.seek(0)
+                return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+            ts_entr = create_timeseries(daily_avg, 'num_entrained', 'Daily Average Entrainment Over Time', '#ff8c00') if 'num_entrained' in daily_avg.columns else None
+            ts_mort = create_timeseries(daily_avg, 'num_mortality', 'Daily Average Mortality Over Time', '#dc3545') if 'num_mortality' in daily_avg.columns else None
+
+            if ts_entr or ts_mort:
+                report_sections.append("<div style='display:flex; flex-direction:column; gap:20px;'>")
+                if ts_entr:
+                    report_sections.append(
+                        "<div style='text-align:center;'>"
+                        f"<img src=\"data:image/png;base64,{ts_entr}\" style='max-width:100%; height:auto;' />"
+                        "</div>"
+                    )
+                if ts_mort:
+                    report_sections.append(
+                        "<div style='text-align:center;'>"
+                        f"<img src=\"data:image/png;base64,{ts_mort}\" style='max-width:100%; height:auto;' />"
+                        "</div>"
+                    )
+                report_sections.append("</div>")
+                report_sections.append("<p style='color:#666; font-style:italic;'>Flow (gray line) plotted on secondary axis for context.</p>")
+            else:
+                report_sections.append("<p>Time series charts could not be created.</p>")
+        else:
+            report_sections.append("<p>Time series data not available.</p>")
+
+        # Daily histograms
+        report_sections.append("<h2>Daily Distribution Histograms</h2>")
+        if daily_df is not None and not daily_df.empty:
+            df_hist = daily_df.copy()
+            if 'num_mortality' not in df_hist.columns and {'num_survived', 'pop_size'} <= set(df_hist.columns):
+                df_hist['num_mortality'] = df_hist['pop_size'] - df_hist['num_survived']
+
+            # Include zeros by filling NaN with 0 instead of dropping
+            df_hist['num_entrained'] = df_hist['num_entrained'].fillna(0)
+            df_hist['num_mortality'] = df_hist['num_mortality'].fillna(0)
+
+            entr_hist = df_hist['num_entrained'].astype(int).value_counts().sort_index()
+            mort_hist = df_hist['num_mortality'].astype(int).value_counts().sort_index()
+
+            entr_bins = np.arange(0, entr_hist.index.max() + 2) - 0.5
+            mort_bins = np.arange(0, mort_hist.index.max() + 2) - 0.5
+
+            plt.rcParams.update({'font.size': 8})
+            fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 8))
+            ax1.hist(df_hist['num_entrained'], bins=entr_bins, edgecolor='black')
+            ax1.set_xlabel("Number of Fish Entrained")
+            ax1.set_ylabel("Frequency")
+            ax1.set_title("Daily Entrainment Distribution")
+            ax1.grid(axis='y')
+
+            ax2.hist(df_hist['num_mortality'], bins=mort_bins, edgecolor='black')
+            ax2.set_xlabel("Number of Fish Mortality")
+            ax2.set_ylabel("Frequency")
+            ax2.set_title("Daily Mortality Distribution")
+            ax2.grid(axis='y')
+
+            plt.tight_layout()
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+            hist_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+            report_sections.append(
+                "<div style='text-align:center;'>"
+                "<h3>Daily Entrainment and Mortality Histograms</h3>"
+                f"<img src=\"data:image/png;base64,{hist_b64}\" style='max-width:100%; height:auto;' />"
+                "</div>"
+            )
+        else:
+            report_sections.append("<p>No daily data available for histograms.</p>")
 
         # Finalize HTML
         final_html = "\n".join(report_sections)
