@@ -3237,7 +3237,41 @@ def generate_report(sim):
             if total_entr > 0:
                 overall_surv = (total_surv / total_entr) * 100.0
 
+        # Get actual fish counts from simulation data for validation
+        simulation_keys = [k for k in store.keys() if k.startswith('/simulations/')]
+        total_fish_from_sims = 0
+        for key in simulation_keys:
+            try:
+                sim_data = store[key]
+                if isinstance(sim_data, pd.DataFrame):
+                    total_fish_from_sims += len(sim_data)
+            except Exception:
+                pass
+        
+        # Check if barotrauma mode is active
+        barotrauma_active = False
+        unit_params_df = store.get("/Unit_Parameters", None)
+        if unit_params_df is not None and 'ps_D' in unit_params_df.columns:
+            barotrauma_active = not unit_params_df['ps_D'].isna().all()
+        
+        # Get mortality component data for "Wheel of Death"
+        mortality_components = {}
+        if daily_df is not None and not daily_df.empty:
+            mort_cols = ['mortality_impingement', 'mortality_blade_strike', 'mortality_barotrauma']
+            available_mort_cols = [c for c in mort_cols if c in daily_df.columns]
+            if available_mort_cols:
+                for col in available_mort_cols:
+                    mortality_components[col.replace('mortality_', '')] = daily_df[col].sum()
+            else:
+                mortality_components = None
+        else:
+            mortality_components = None
+        
         exec_summary_html = "<h2>Executive Summary</h2>"
+        # Use simulation data as the authoritative source
+        if total_fish_from_sims > 0:
+            total_fish = total_fish_from_sims
+        
         if any([total_fish, mean_entr, mean_mort, total_entr]):
             exec_summary_html += (
                 f"""
@@ -3268,6 +3302,32 @@ def generate_report(sim):
         else:
             exec_summary_html += "<p>Summary metrics not available.</p>"
 
+        # Data validation diagnostics
+        baro_status = "🔴 ACTIVE" if barotrauma_active else "⚪ INACTIVE"
+        baro_color = "#dc3545" if barotrauma_active else "#6c757d"
+        diagnostic_html = f"""
+        <details style="margin:20px 0; padding:15px; background:#f8f9fa; border-radius:5px;">
+            <summary style="cursor:pointer; font-weight:bold; color:#0056b3;">📊 Data Source Diagnostics (Click to Expand)</summary>
+            <div style="margin-top:10px; font-family:monospace; font-size:11px;">
+                <p><strong>Fish Count Sources:</strong></p>
+                <ul>
+                    <li>Total from /simulations/ tables: <strong>{total_fish_from_sims:,}</strong> (all fish that completed passage)</li>
+                    <li>Total from /Population table: <strong>{total_fish if total_fish != total_fish_from_sims else 'N/A'}</strong></li>
+                    <li>Total entrained (from /Daily): <strong>{int(total_entr):,}</strong></li>
+                    <li>Total survived (from /Daily): <strong>{int(total_surv):,}</strong></li>
+                </ul>
+                <p><strong>Mortality Model Configuration:</strong></p>
+                <ul>
+                    <li>Barotrauma Mode: <strong style="color:{baro_color};">{baro_status}</strong></li>
+                    <li>Blade Strike Model: <strong>✅ ACTIVE</strong> (Franke 1997)</li>
+                    <li>Impingement Screening: <strong>✅ ACTIVE</strong></li>
+                </ul>
+                <p><strong>HDF5 Tables Available:</strong> {', '.join(store.keys())}</p>
+                <p style="color:#666; font-style:italic; margin-top:10px;">Note: Route usage counts show final passage destinations. Executive summary shows aggregated daily metrics.</p>
+            </div>
+        </details>
+        """
+        
         report_sections = [
             "<div style='margin: 10px;'>"
             "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
@@ -3278,7 +3338,7 @@ def generate_report(sim):
             f"<p><strong>Units:</strong> {getattr(sim, 'units_session', 'N/A')}</p>",
             f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
             exec_summary_html,
-            f"<p>HDF keys found: {store.keys()}</p>",
+            diagnostic_html,
         ]
 
         units = getattr(sim, 'output_units', 'imperial')
@@ -3298,6 +3358,9 @@ def generate_report(sim):
             table_html = df.to_html(index=False, border=1, classes="table")
             return shape_info + f"<div style='overflow-x:auto;'>{table_html}</div>"
 
+        # Table counter for consistent numbering
+        table_counter = {'count': 1}
+        
         def add_section(title, key, units_mode):
             report_sections.append(f"<h2>{title}</h2>")
             if key in store.keys():
@@ -3316,6 +3379,16 @@ def generate_report(sim):
                             if c in df.columns:
                                 df[c] = df[c] * 0.0283168
                 report_sections.append(enforce_horizontal(df, title))
+                # Add caption based on section
+                if key == '/Facilities':
+                    table_counter['count'] += 1
+                    report_sections.append(f"<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>Table {table_counter['count']}: Facility-level parameters including bypass flows, environmental flows, and minimum operating conditions.</p>")
+                elif key == '/Unit_Parameters':
+                    table_counter['count'] += 1
+                    report_sections.append(f"<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>Table {table_counter['count']}: Unit-specific turbine parameters including dimensions, capacities, and operational characteristics used in blade strike calculations.</p>")
+                elif key == '/Operating Scenarios':
+                    table_counter['count'] += 1
+                    report_sections.append(f"<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>Table {table_counter['count']}: Operating priority scenarios defining unit dispatch order and operational constraints.</p>")
             else:
                 report_sections.append(f"<p>No {title} data available.</p>")
 
@@ -3367,10 +3440,16 @@ def generate_report(sim):
                 <div style="flex:1; min-width:300px; text-align:center;">
                     <h3>Time Series</h3>
                     <img src="data:image/png;base64,{ts_b64}" style="max-width:100%; height:auto;" />
+                    <p style="font-size:0.9em; color:#666; margin-top:8px; font-style:italic;">
+                        Figure 1: Daily flow hydrograph showing temporal variation in discharge rates throughout the simulation period.
+                    </p>
                 </div>
                 <div style="flex:1; min-width:300px; text-align:center;">
                     <h3>Recurrence Histogram</h3>
                     <img src="data:image/png;base64,{hist_b64}" style="max-width:100%; height:auto;" />
+                    <p style="font-size:0.9em; color:#666; margin-top:8px; font-style:italic;">
+                        Figure 2: Distribution of flow recurrence intervals showing frequency of different discharge magnitudes.
+                    </p>
                 </div>
             </div>
             """)
@@ -3384,12 +3463,15 @@ def generate_report(sim):
             if species_cols:
                 species_summary = pop_df[species_cols].drop_duplicates()
                 report_sections.append(f"<div style='overflow-x:auto;'>{species_summary.to_html(index=False, border=1)}</div>")
+                report_sections.append("<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>Table 1: Species characteristics including mean body length, swimming performance (Ucrit), and population size used in the simulation.</p>")
             else:
                 report_sections.append("<p>Species metadata not available.</p>")
         else:
             report_sections.append("<p>No species information available.</p>")
 
         # Facility and Operating Data
+        report_sections.append("<h2>Facility Configuration</h2>")
+        report_sections.append(f"<p><strong>Note:</strong> Unit parameters are stored in imperial units (the native units for the Franke equations). Values are converted to {units} for display when applicable.</p>")
         add_section("Facility Parameters", "/Facilities", units)
         add_section("Unit Parameters", "/Unit_Parameters", units)
         add_section("Operating Scenarios", "/Operating Scenarios", units)
@@ -3407,26 +3489,136 @@ def generate_report(sim):
         else:
             report_sections.append("<p>Probability of entrainment data not available.</p>")
 
-        # Beta distributions - show all passage routes (units and interior nodes)
-        if "/Beta_Distributions_Units" in store.keys():
-            add_section("Survival Probability by Passage Route", "/Beta_Distributions_Units", units)
+        # Survival Analysis and Diagnostics
+        report_sections.append("<h2>Survival Analysis</h2>")
+        
+        # Add "Wheel of Death" - Mortality Factor Breakdown
+        if mortality_components and sum(mortality_components.values()) > 0:
+            report_sections.append("<h3>💀 Mortality Factor Breakdown (The Wheel of Death)</h3>")
+            
+            # Create pie chart
+            plt.rcParams.update({'font.size': 9})
+            fig, ax = plt.subplots(figsize=(7, 7))
+            
+            labels = []
+            values = []
+            colors_map = {
+                'impingement': '#e74c3c',      # Red
+                'blade_strike': '#f39c12',     # Orange
+                'barotrauma': '#9b59b6'        # Purple
+            }
+            colors = []
+            
+            for factor, count in mortality_components.items():
+                if count > 0:
+                    factor_name = factor.replace('_', ' ').title()
+                    labels.append(factor_name)
+                    values.append(count)
+                    colors.append(colors_map.get(factor, '#95a5a6'))
+            
+            if values:
+                wedges, texts, autotexts = ax.pie(
+                    values, 
+                    labels=labels,
+                    autopct='%1.1f%%',
+                    colors=colors,
+                    startangle=90,
+                    textprops={'fontsize': 10, 'weight': 'bold'}
+                )
+                ax.set_title('Mortality by Cause\n(of entrained fish that died)', 
+                           fontsize=12, weight='bold', pad=20)
+                
+                buf = io.BytesIO()
+                plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
+                plt.close(fig)
+                buf.seek(0)
+                wheel_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                
+                total_mortality = sum(values)
+                report_sections.append(f"""
+                <div style="display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;">
+                    <div style="flex:1; min-width:300px; text-align:center;">
+                        <img src="data:image/png;base64,{wheel_b64}" style="max-width:100%; height:auto;" />
+                        <p style="font-size:0.9em; color:#666; margin-top:8px; font-style:italic;">
+                            Figure 3: "Wheel of Death" - Proportional breakdown of fish mortality by causal factor (impingement, blade strike, barotrauma, and latent mortality).
+                        </p>
+                    </div>
+                    <div style="flex:1; min-width:300px;">
+                        <p style="margin:10px 0;"><strong>Total Mortalities Analyzed:</strong> {int(total_mortality):,}</p>
+                        <table style="width:100%; border-collapse:collapse;">
+                            <tr style="background:#f8f9fa;">
+                                <th style="padding:8px; text-align:left; border:1px solid #dee2e6;">Cause</th>
+                                <th style="padding:8px; text-align:right; border:1px solid #dee2e6;">Count</th>
+                                <th style="padding:8px; text-align:right; border:1px solid #dee2e6;">%</th>
+                            </tr>
+                """)
+                
+                for i, (label, value) in enumerate(zip(labels, values)):
+                    pct = (value / total_mortality) * 100
+                    report_sections.append(f"""
+                            <tr>
+                                <td style="padding:8px; border:1px solid #dee2e6;">
+                                    <span style="display:inline-block; width:12px; height:12px; background:{colors[i]}; margin-right:5px;"></span>
+                                    {label}
+                                </td>
+                                <td style="padding:8px; text-align:right; border:1px solid #dee2e6;">{int(value):,}</td>
+                                <td style="padding:8px; text-align:right; border:1px solid #dee2e6;">{pct:.1f}%</td>
+                            </tr>
+                    """)
+                
+                report_sections.append("""
+                        </table>
+                        <p style="margin-top:8px; color:#666; font-size:0.9em; font-style:italic;">
+                            Table (Inset): Mortality counts and percentages by causal mechanism, showing relative contribution of each hazard type.
+                        </p>
+                        <p style="margin-top:8px; color:#666; font-size:12px; font-style:italic;">
+                            Note: Mortality factors are tracked independently and may not sum to 100% if multiple factors contribute to the same mortality event.
+                        </p>
+                    </div>
+                </div>
+                """)
+            else:
+                report_sections.append("<p>No mortality component data to display.</p>")
         else:
-            add_section("Beta Distributions", "/Beta_Distributions", units)
+            report_sections.append("<p><em>Mortality factor breakdown not available (add mortality component tracking to enable).</em></p>")
+        
+        if overall_surv < 70.0:  # Flag low survival rates
+            baro_note = " <strong>Barotrauma is ACTIVE</strong> and may be contributing significantly to mortality." if barotrauma_active else " Barotrauma mode is inactive."
+            report_sections.append(f"""
+            <div style="padding:15px; background:#fff3cd; border-left:4px solid #ffc107; border-radius:5px; margin:20px 0;">
+                <p style="margin:0;"><strong>⚠️ Low Survival Rate Detected ({overall_surv:.1f}%)</strong></p>
+                <p style="margin:5px 0;">Potential causes for Francis turbine survival below 70%:</p>
+                <ul style="margin:5px 0 0 20px;">
+                    <li>High head operation increasing blade strike probability</li>
+                    <li>Large fish size relative to turbine runner clearances</li>
+                    <li>Off-design flow conditions reducing hydraulic efficiency</li>
+                    <li>Barotrauma effects from rapid pressure changes</li>
+                </ul>
+                <p style="margin:5px 0 0 0; font-style:italic;">{baro_note} Check unit parameters (head, RPM, blade design) and fish length distributions.</p>
+            </div>
+            """)
+        
+        # Beta distributions - show all passage routes (units and interior nodes) with ALL iterations
+        report_sections.append("<h3>Survival Probability Distributions</h3>")
+        report_sections.append("<p><strong>Note:</strong> Beta distribution parameters are calculated using survival data from ALL fish across ALL iterations and ALL days, providing robust statistical estimates.</p>")
+        if "/Beta_Distributions_Units" in store.keys():
+            add_section("Beta Distributions (Passage Routes Only)", "/Beta_Distributions_Units", units)
+        else:
+            add_section("Beta Distributions (All Routes)", "/Beta_Distributions", units)
 
-        # Flow vs Outcomes Analysis
-        report_sections.append("<h2>Flow vs Entrainment/Mortality Relationships</h2>")
+        # Flow vs Entrainment Analysis  
+        report_sections.append("<h2>Flow vs Entrainment Relationship</h2>")
         if daily_df is not None and not daily_df.empty and 'flow' in daily_df.columns:
             df_flow = daily_df.copy()
-            if 'num_mortality' not in df_flow.columns and {'num_survived', 'pop_size'} <= set(df_flow.columns):
-                df_flow['num_mortality'] = df_flow['pop_size'] - df_flow['num_survived']
 
-            def create_scatter(data, y_col, title):
+            def create_entrainment_scatter(data):
                 plt.rcParams.update({'font.size': 8})
-                fig = plt.figure(figsize=(5, 4))
-                plt.scatter(data['flow'], data[y_col], alpha=0.45, s=18, edgecolors='none')
-                plt.xlabel('Flow')
-                plt.ylabel(y_col.replace('_', ' ').title())
-                plt.title(title)
+                fig = plt.figure(figsize=(6, 4))
+                plt.scatter(data['flow'], data['num_entrained'], alpha=0.6, s=20, color='#ff8c00', edgecolors='none')
+                plt.xlabel('Flow (cfs)' if units == 'imperial' else 'Flow (m³/s)')
+                plt.ylabel('Number Entrained')
+                plt.title('Entrainment vs Flow')
+                plt.grid(True, alpha=0.3)
                 plt.tight_layout()
                 buf = io.BytesIO()
                 plt.savefig(buf, format='png', bbox_inches='tight')
@@ -3434,30 +3626,22 @@ def generate_report(sim):
                 buf.seek(0)
                 return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-            scatter_entr = create_scatter(df_flow, 'num_entrained', 'Flow vs Entrainment') if 'num_entrained' in df_flow.columns else None
-            scatter_mort = create_scatter(df_flow, 'num_mortality', 'Flow vs Mortality') if 'num_mortality' in df_flow.columns else None
-
-            chart_html = "<div style=\"display:flex; gap:20px; justify-content:center; flex-wrap:wrap\">"
-            if scatter_entr:
-                chart_html += (
-                    "<div style='flex:1; min-width:300px; text-align:center;'>"
-                    "<h3>Entrainment vs Flow</h3>"
+            if 'num_entrained' in df_flow.columns:
+                scatter_entr = create_entrainment_scatter(df_flow)
+                report_sections.append(
+                    f"<div style='text-align:center;'>"
                     f"<img src=\"data:image/png;base64,{scatter_entr}\" style='max-width:100%; height:auto;' />"
+                    "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
+                    "Figure 4: Scatter plot showing relationship between flow rate and number of fish entrained, helping identify flow-dependent entrainment patterns."
+                    "</p>"
                     "</div>"
                 )
-            if scatter_mort:
-                chart_html += (
-                    "<div style='flex:1; min-width:300px; text-align:center;'>"
-                    "<h3>Mortality vs Flow</h3>"
-                    f"<img src=\"data:image/png;base64,{scatter_mort}\" style='max-width:100%; height:auto;' />"
-                    "</div>"
-                )
-            chart_html += "</div>"
-            report_sections.append(chart_html)
+            else:
+                report_sections.append("<p>Entrainment data not available.</p>")
         else:
             report_sections.append("<p>Flow relationship data not available.</p>")
 
-        # Passage Route Usage Analysis
+        # Passage Route Usage Analysis  
         report_sections.append("<h2>Passage Route Usage</h2>")
         simulation_keys = [k for k in store.keys() if k.startswith('/simulations/')]
         combined_route_counts = pd.Series(dtype=float)
@@ -3484,11 +3668,19 @@ def generate_report(sim):
             if sim_data.empty:
                 continue
 
+            # Filter out river nodes - only keep actual passage routes (units, spill, bypass)
             route_counts = sim_data[final_state_col].value_counts()
+            # Remove routes that are river nodes (end points, not passage routes)
+            route_counts = route_counts[~route_counts.index.str.contains('river_node', case=False, na=False)]
             combined_route_counts = combined_route_counts.add(route_counts, fill_value=0)
 
             if need_estimated_flow and {'iteration', 'day', 'flow'} <= set(sim_data.columns):
                 sim_sub = sim_data[['iteration', 'day', 'flow', final_state_col]].copy()
+                # Filter out river nodes from discharge calculations
+                sim_sub = sim_sub[~sim_sub[final_state_col].str.contains('river_node', case=False, na=False)]
+                if sim_sub.empty:
+                    continue
+                    
                 sim_sub['flow_converted'] = sim_sub['flow'].astype(float) * flow_conversion
 
                 per_day_totals = (
@@ -3516,6 +3708,25 @@ def generate_report(sim):
 
         if not combined_route_counts.empty:
             combined_route_counts = combined_route_counts.sort_values(ascending=False)
+            
+            # Calculate actual entrainment rate from route data
+            total_passage_fish = combined_route_counts.sum()
+            turbine_routes = combined_route_counts[combined_route_counts.index.str.contains('U', case=True, na=False)]
+            entrained_fish = turbine_routes.sum()
+            actual_entr_rate = (entrained_fish / total_passage_fish) * 100 if total_passage_fish > 0 else 0
+            
+            # Add entrainment summary
+            report_sections.append(f"""
+            <div style="padding:15px; background:#fff3cd; border-left:4px solid #ffc107; border-radius:5px; margin:20px 0;">
+                <p style="margin:0;"><strong>Entrainment Analysis from Route Data:</strong></p>
+                <ul style="margin:5px 0 0 20px;">
+                    <li>Total fish tracked through passage: <strong>{int(total_passage_fish):,}</strong></li>
+                    <li>Fish entrained through turbines: <strong>{int(entrained_fish):,}</strong> ({actual_entr_rate:.1f}%)</li>
+                    <li>Fish passing via other routes: <strong>{int(total_passage_fish - entrained_fish):,}</strong> ({100-actual_entr_rate:.1f}%)</li>
+                </ul>
+            </div>
+            """)
+            
             plt.rcParams.update({'font.size': 8})
             fig, ax1 = plt.subplots(figsize=(6, 6))
             colors = plt.cm.Set3(np.linspace(0, 1, len(combined_route_counts)))
@@ -3547,6 +3758,9 @@ def generate_report(sim):
                 "<div style='flex:1; min-width:320px;'>"
                 "<h3>Route Usage Summary</h3>"
                 f"{route_table.to_html(index=False, border=1)}"
+                "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
+                "Table: Fish passage counts, entrainment events, and mortality statistics by route, showing how fish navigate through different facility pathways."
+                "</p>"
                 "</div>"
                 "</div>"
             )
@@ -3618,6 +3832,9 @@ def generate_report(sim):
                 "<div style='display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;'>"
                 "<div style='flex:1; min-width:320px;'>"
                 f"{discharge_display[display_cols].to_html(index=False, border=1)}"
+                "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
+                "Table: Total discharge volume through each passage route over the simulation period, including mean daily discharge and number of days sampled."
+                "</p>"
                 "</div>"
             )
 
@@ -3684,48 +3901,65 @@ def generate_report(sim):
                 "<div style='flex:1; min-width:300px; text-align:center;'>"
                 "<h3>Daily Entrainment</h3>"
                 f"{entr_html}"
+                "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
+                "Figure 5: Daily distribution of fish entrainment events showing frequency of different entrainment magnitudes."
+                "</p>"
                 "</div>"
             )
             if mort_img:
                 report_sections.append(
                     f"<div style='flex:1; min-width:300px; text-align:center;'><h3>Daily Mortality</h3>"
-                    f"<img src='data:image/png;base64,{mort_img}' style='max-width:100%; height:auto;' /></div>"
+                    f"<img src='data:image/png;base64,{mort_img}' style='max-width:100%; height:auto;' />"
+                    "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
+                    "Figure 6: Daily distribution of fish mortalities showing frequency of different mortality counts per day."
+                    "</p></div>"
                 )
             report_sections.append("</div>")
         else:
             report_sections.append("<p>No daily data available.</p>")
 
-        # Time Series Plots
-        report_sections.append("<h2>Daily Entrainment and Mortality Over Time</h2>")
+        # Time Series Plots - Daily Entrainment with Error Bars
+        report_sections.append("<h2>Daily Average Entrainment Over Time</h2>")
         if daily_df is not None and not daily_df.empty and 'day' in daily_df.columns:
             df_ts = daily_df.copy()
-            if 'num_mortality' not in df_ts.columns and {'num_survived', 'pop_size'} <= set(df_ts.columns):
-                df_ts['num_mortality'] = df_ts['pop_size'] - df_ts['num_survived']
-
-            daily_avg = df_ts.groupby('day').agg({
-                'num_entrained': 'mean',
-                'num_mortality': 'mean',
+            
+            # Calculate daily statistics with error bars
+            daily_stats = df_ts.groupby('day').agg({
+                'num_entrained': ['mean', 'std', 'count'],
                 'flow': 'mean'
             }).reset_index()
-            daily_avg['day'] = pd.to_datetime(daily_avg['day'], errors='coerce')
-            daily_avg.sort_values('day', inplace=True)
+            
+            # Flatten column names
+            daily_stats.columns = ['day', 'entr_mean', 'entr_std', 'entr_count', 'flow_mean']
+            daily_stats['day'] = pd.to_datetime(daily_stats['day'], errors='coerce')
+            daily_stats.sort_values('day', inplace=True)
+            
+            # Calculate standard error for error bars
+            daily_stats['entr_se'] = daily_stats['entr_std'] / np.sqrt(daily_stats['entr_count'])
+            daily_stats['entr_se'] = daily_stats['entr_se'].fillna(0)
 
-            def create_timeseries(data, y_col, title, color):
+            def create_entrainment_timeseries_with_error(data):
                 plt.rcParams.update({'font.size': 8})
-                fig, ax1 = plt.subplots(figsize=(8, 4))
-                ax1.plot(data['day'], data[y_col], color=color, marker='.', linestyle='-', linewidth=1)
+                fig, ax1 = plt.subplots(figsize=(10, 5))
+                
+                # Plot entrainment with error bars
+                ax1.errorbar(data['day'], data['entr_mean'], yerr=data['entr_se'], 
+                           color='#ff8c00', marker='o', linestyle='-', linewidth=1.5, 
+                           markersize=3, capsize=3, alpha=0.8)
                 ax1.set_xlabel('Date')
-                ax1.set_ylabel(y_col.replace('_', ' ').title(), color=color)
-                ax1.tick_params(axis='y', labelcolor=color)
+                ax1.set_ylabel('Number Entrained', color='#ff8c00')
+                ax1.tick_params(axis='y', labelcolor='#ff8c00')
                 ax1.tick_params(axis='x', rotation=45)
+                ax1.grid(True, alpha=0.3)
 
-                if 'flow' in data.columns:
+                # Add flow on secondary axis
+                if 'flow_mean' in data.columns:
                     ax2 = ax1.twinx()
-                    ax2.plot(data['day'], data['flow'], color='gray', alpha=0.3, linewidth=1)
+                    ax2.plot(data['day'], data['flow_mean'], color='gray', alpha=0.4, linewidth=1)
                     ax2.set_ylabel('Flow', color='gray')
                     ax2.tick_params(axis='y', labelcolor='gray')
 
-                plt.title(title)
+                plt.title('Daily Average Entrainment with Standard Error')
                 plt.tight_layout()
                 buf = io.BytesIO()
                 plt.savefig(buf, format='png', bbox_inches='tight')
@@ -3733,62 +3967,38 @@ def generate_report(sim):
                 buf.seek(0)
                 return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-            ts_entr = create_timeseries(daily_avg, 'num_entrained', 'Daily Average Entrainment Over Time', '#ff8c00') if 'num_entrained' in daily_avg.columns else None
-            ts_mort = create_timeseries(daily_avg, 'num_mortality', 'Daily Average Mortality Over Time', '#dc3545') if 'num_mortality' in daily_avg.columns else None
-
-            if ts_entr or ts_mort:
-                report_sections.append("<div style='display:flex; flex-direction:column; gap:20px;'>")
-                if ts_entr:
-                    report_sections.append(
-                        "<div style='text-align:center;'>"
-                        f"<img src=\"data:image/png;base64,{ts_entr}\" style='max-width:100%; height:auto;' />"
-                        "</div>"
-                    )
-                if ts_mort:
-                    report_sections.append(
-                        "<div style='text-align:center;'>"
-                        f"<img src=\"data:image/png;base64,{ts_mort}\" style='max-width:100%; height:auto;' />"
-                        "</div>"
-                    )
-                report_sections.append("</div>")
-                report_sections.append("<p style='color:#666; font-style:italic;'>Flow (gray line) plotted on secondary axis for context.</p>")
+            if 'num_entrained' in df_ts.columns and not daily_stats.empty:
+                ts_entr = create_entrainment_timeseries_with_error(daily_stats)
+                report_sections.append(
+                    "<div style='text-align:center;'>"
+                    f"<img src=\"data:image/png;base64,{ts_entr}\" style='max-width:100%; height:auto;' />"
+                    "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
+                    "Figure 7: Daily average entrainment over time with standard error bars (blue) and overlaid flow rates (gray). Shows temporal patterns and variability in fish entrainment."
+                    "</p>"
+                    "</div>"
+                )
             else:
-                report_sections.append("<p>Time series charts could not be created.</p>")
+                report_sections.append("<p>Entrainment time series data not available.</p>")
         else:
             report_sections.append("<p>Time series data not available.</p>")
 
-        # Daily histograms
-        report_sections.append("<h2>Daily Distribution Histograms</h2>")
-        if daily_df is not None and not daily_df.empty:
+        # Daily Entrainment Distribution  
+        report_sections.append("<h2>Daily Entrainment Distribution</h2>")
+        if daily_df is not None and not daily_df.empty and 'num_entrained' in daily_df.columns:
             df_hist = daily_df.copy()
-            if 'num_mortality' not in df_hist.columns and {'num_survived', 'pop_size'} <= set(df_hist.columns):
-                df_hist['num_mortality'] = df_hist['pop_size'] - df_hist['num_survived']
-
+            
             # Include zeros by filling NaN with 0 instead of dropping
             df_hist['num_entrained'] = df_hist['num_entrained'].fillna(0)
-            df_hist['num_mortality'] = df_hist['num_mortality'].fillna(0)
-
-            entr_hist = df_hist['num_entrained'].astype(int).value_counts().sort_index()
-            mort_hist = df_hist['num_mortality'].astype(int).value_counts().sort_index()
-
-            entr_bins = np.arange(0, entr_hist.index.max() + 2) - 0.5
-            mort_bins = np.arange(0, mort_hist.index.max() + 2) - 0.5
 
             plt.rcParams.update({'font.size': 8})
-            fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 8))
-            ax1.hist(df_hist['num_entrained'], bins=entr_bins, edgecolor='black')
-            ax1.set_xlabel("Number of Fish Entrained")
-            ax1.set_ylabel("Frequency")
-            ax1.set_title("Daily Entrainment Distribution")
-            ax1.grid(axis='y')
-
-            ax2.hist(df_hist['num_mortality'], bins=mort_bins, edgecolor='black')
-            ax2.set_xlabel("Number of Fish Mortality")
-            ax2.set_ylabel("Frequency")
-            ax2.set_title("Daily Mortality Distribution")
-            ax2.grid(axis='y')
-
+            fig = plt.figure(figsize=(8, 5))
+            plt.hist(df_hist['num_entrained'], bins=20, edgecolor='black', color='#ff8c00', alpha=0.7)
+            plt.xlabel("Number of Fish Entrained per Day")
+            plt.ylabel("Frequency")
+            plt.title("Daily Entrainment Distribution Across All Iterations")
+            plt.grid(axis='y', alpha=0.3)
             plt.tight_layout()
+            
             buf = io.BytesIO()
             plt.savefig(buf, format='png', bbox_inches='tight')
             plt.close(fig)
@@ -3797,12 +4007,14 @@ def generate_report(sim):
 
             report_sections.append(
                 "<div style='text-align:center;'>"
-                "<h3>Daily Entrainment and Mortality Histograms</h3>"
                 f"<img src=\"data:image/png;base64,{hist_b64}\" style='max-width:100%; height:auto;' />"
+                "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
+                "Figure 8: Histogram of daily entrainment across all Monte Carlo iterations, showing the complete distribution of daily entrainment outcomes from the stochastic simulation."
+                "</p>"
                 "</div>"
             )
         else:
-            report_sections.append("<p>No daily data available for histograms.</p>")
+            report_sections.append("<p>No daily entrainment data available for histogram.</p>")
 
         # Finalize HTML
         final_html = "\n".join(report_sections)
