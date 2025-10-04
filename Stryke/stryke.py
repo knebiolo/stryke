@@ -1244,6 +1244,21 @@ class simulation():
                 # calculate turbine survival estimate
                 prob = imp_surv_prob * strike_surv_prob * baro_surv * latent_survival
                 prob = scalarize(prob)
+                
+                # Store component survivals for mortality factor tracking
+                # This will be used to create the "Wheel of Death" breakdown
+                if not hasattr(self, '_mortality_components'):
+                    self._mortality_components = {
+                        'impingement': [],
+                        'blade_strike': [],
+                        'barotrauma': [],
+                        'latent': []
+                    }
+                self._mortality_components['impingement'].append(1.0 - imp_surv_prob)
+                self._mortality_components['blade_strike'].append(1.0 - strike_surv_prob)
+                self._mortality_components['barotrauma'].append(1.0 - baro_surv)
+                self._mortality_components['latent'].append(1.0 - latent_survival)
+                
             try:
                 return np.float32(prob)
             except (ValueError, TypeError) as e:
@@ -1970,6 +1985,14 @@ class simulation():
             print(f"[DIAG] HDF5 file reopened successfully. Current keys: {self.hdf.keys()}", flush=True)
         self._route_flow_logged_keys = set()
         
+        # Initialize mortality component tracking for "Wheel of Death" visualization
+        self._mortality_components = {
+            'impingement': [],
+            'blade_strike': [],
+            'barotrauma': [],
+            'latent': []
+        }
+        
         # Create route and associated data.
         self.create_route()
         #logger.debug('starting simulation')
@@ -2382,8 +2405,28 @@ class simulation():
                                 fishes['survived_entrainment'] = survived
                                 total_entrained = entrained.sum()
                                 total_survived_entrained = survived.sum()
+                                total_mortality = total_entrained - total_survived_entrained
+                                
                                 daily_row_dict['num_entrained'] = total_entrained
                                 daily_row_dict['num_survived'] = total_survived_entrained
+                                daily_row_dict['num_mortality'] = total_mortality
+                                
+                                # Calculate mortality components from tracked data
+                                if hasattr(self, '_mortality_components') and total_entrained > 0:
+                                    # Average mortality contribution from each factor
+                                    n_components = len(self._mortality_components['impingement'])
+                                    if n_components > 0:
+                                        daily_row_dict['mortality_impingement'] = np.sum(self._mortality_components['impingement'][-n_components:])
+                                        daily_row_dict['mortality_blade_strike'] = np.sum(self._mortality_components['blade_strike'][-n_components:])
+                                        daily_row_dict['mortality_barotrauma'] = np.sum(self._mortality_components['barotrauma'][-n_components:])
+                                    else:
+                                        daily_row_dict['mortality_impingement'] = 0
+                                        daily_row_dict['mortality_blade_strike'] = 0
+                                        daily_row_dict['mortality_barotrauma'] = 0
+                                else:
+                                    daily_row_dict['mortality_impingement'] = 0
+                                    daily_row_dict['mortality_blade_strike'] = 0
+                                    daily_row_dict['mortality_barotrauma'] = 0
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 
@@ -2425,7 +2468,11 @@ class simulation():
                                     'flow': [np.float64(curr_Q_report)],
                                     'pop_size': [np.int64(0)],
                                     'num_entrained': [np.int64(0)],
-                                    'num_survived': [np.int64(0)]
+                                    'num_survived': [np.int64(0)],
+                                    'num_mortality': [np.int64(0)],
+                                    'mortality_impingement': [0],
+                                    'mortality_blade_strike': [0],
+                                    'mortality_barotrauma': [0]
                                 }
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 
