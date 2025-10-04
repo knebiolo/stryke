@@ -287,6 +287,16 @@
         const runId = params.get('run') || "";
         
         const eventSource = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
+        
+        // Handle connection errors
+        eventSource.onerror = function(error) {
+            console.error('EventSource error:', error);
+            if (eventSource.readyState === EventSource.CLOSED) {
+                logOutput.innerHTML += '<div class="log-error">❌ Connection lost. The simulation may still be running on the server. Please check the results page or refresh to reconnect.</div>';
+                statusText.textContent = 'Connection Lost';
+                statusIcon.textContent = '⚠️';
+            }
+        };
 
         // Update elapsed time every second
         setInterval(updateElapsedTime, 1000);
@@ -299,7 +309,8 @@
         }
 
         function updateProgress() {
-            if (totalDays && currentDay > 0) {
+            if (totalDays && totalDays > 0) {
+                // Use currentDay directly, not currentDay - 1, since we want progress for day being processed
                 const percentage = Math.min(Math.round((currentDay / totalDays) * 100), 100);
                 progressBar.style.width = percentage + '%';
                 progressPercentage.textContent = percentage + '%';
@@ -330,29 +341,38 @@
         }
 
         function parseLogLine(text) {
-            // Detect total days/iterations
-            const totalDaysMatch = text.match(/(\d+)\s+days?/i);
+            // Detect total days from messages like "will simulate 920 days"
+            const totalDaysMatch = text.match(/will simulate\s+(\d+)\s+days?/i);
             if (totalDaysMatch && !totalDays) {
                 totalDays = parseInt(totalDaysMatch[1]);
                 currentProgress.textContent = `0 of ${totalDays} days`;
             }
             
-            const totalIterMatch = text.match(/(\d+)\s+iterations?/i);
+            // Detect total iterations from messages like "with 1000 iterations"
+            const totalIterMatch = text.match(/with\s+(\d+)\s+iterations?/i);
             if (totalIterMatch && !totalIterations) {
                 totalIterations = parseInt(totalIterMatch[1]);
             }
             
-            // Detect current day progress
-            const dayMatch = text.match(/[Dd]ay[:\s]+(\d+)/);
+            // Detect current day progress - match exact format: "Day X of Y"
+            const dayMatch = text.match(/Day\s+(\d+)\s+of\s+(\d+)/i);
             if (dayMatch) {
                 currentDay = parseInt(dayMatch[1]);
+                // Also update totalDays if we see it here
+                if (!totalDays) {
+                    totalDays = parseInt(dayMatch[2]);
+                }
                 updateProgress();
             }
             
-            // Detect iteration progress
-            const iterMatch = text.match(/[Ii]teration[:\s]+(\d+)/);
+            // Detect iteration progress - match exact format: "Iteration X of Y"
+            const iterMatch = text.match(/Iteration\s+(\d+)\s+of\s+(\d+)/i);
             if (iterMatch) {
                 currentIteration = parseInt(iterMatch[1]);
+                // Also update totalIterations if we see it here
+                if (!totalIterations) {
+                    totalIterations = parseInt(iterMatch[2]);
+                }
                 updateProgress();
             }
             

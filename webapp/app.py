@@ -600,10 +600,13 @@ def stream():
         import queue as _q
         while True:
             try:
-                msg = q.get(timeout=20)
+                msg = q.get(timeout=30)  # Increased timeout to 30 seconds
             except _q.Empty:
                 yield "data: [keepalive]\n\n"
                 continue
+            except Exception as e:
+                yield f"data: [ERROR] {str(e)}\n\n"
+                break
             yield f"data: {msg}\n\n"
             if msg == "[Simulation Complete]":
                 break

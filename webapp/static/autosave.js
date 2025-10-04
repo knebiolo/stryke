@@ -54,9 +54,9 @@
             const saveDate = new Date(parseInt(savedTimestamp));
             const minutesAgo = Math.floor((Date.now() - saveDate.getTime()) / 60000);
             
-            // Only offer to restore if saved within last 24 hours AND more than 1 minute ago
-            // (avoid showing prompt for brand new empty forms)
-            if (minutesAgo > 0 && minutesAgo < 1440) {
+            // Only offer to restore if saved within last 24 hours AND more than 3 minutes ago
+            // (avoid showing prompt for recently auto-saved data from same session)
+            if (minutesAgo >= 3 && minutesAgo < 1440) {
                 const message = `Found auto-saved work from ${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago. Would you like to restore it?`;
                 
                 // Create restore prompt
