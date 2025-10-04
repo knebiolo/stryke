@@ -678,6 +678,181 @@ def download():
 
     return send_file(target_path, as_attachment=True)
 
+@app.route('/export_unit_params_template', methods=['POST'])
+def export_unit_params_template():
+    """
+    Export unit parameters as a reusable template.
+    Downloads directly to user's browser (saved to Downloads folder).
+    """
+    try:
+        template_data = {
+            'template_type': 'unit_parameters',
+            'template_version': '1.0',
+            'exported_date': pd.Timestamp.now().isoformat(),
+            'project_name': session.get('project_name', 'Unknown')
+        }
+        
+        # Get unit params file content
+        user_folder = session.get('user_sim_folder')
+        if user_folder and 'unit_params_file' in session:
+            unit_params_path = session['unit_params_file']
+            if os.path.exists(unit_params_path):
+                with open(unit_params_path, 'r') as f:
+                    template_data['unit_params_csv'] = f.read()
+            else:
+                flash('Unit parameters file not found')
+                return redirect(request.referrer or url_for('unit_parameters'))
+        else:
+            flash('No unit parameters configured yet')
+            return redirect(request.referrer or url_for('unit_parameters'))
+        
+        # Create JSON file
+        template_json = json.dumps(template_data, indent=2)
+        template_name = f"{template_data['project_name'].replace(' ', '_')}_unit_params_template.json"
+        
+        # Send as downloadable file (goes to Downloads folder)
+        return Response(
+            template_json,
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename={template_name}'}
+        )
+        
+    except Exception as e:
+        flash(f'Error exporting unit parameters template: {str(e)}')
+        return redirect(request.referrer or url_for('unit_parameters'))
+
+@app.route('/import_unit_params_template', methods=['POST'])
+def import_unit_params_template():
+    """
+    Import unit parameters template.
+    """
+    try:
+        if 'template_file' not in request.files:
+            flash('No template file uploaded')
+            return redirect(request.referrer or url_for('unit_parameters'))
+        
+        file = request.files['template_file']
+        if file.filename == '':
+            flash('No template file selected')
+            return redirect(request.referrer or url_for('unit_parameters'))
+        
+        if not file.filename.endswith('.json'):
+            flash('Template file must be a JSON file')
+            return redirect(request.referrer or url_for('unit_parameters'))
+        
+        # Read and parse template
+        template_data = json.loads(file.read().decode('utf-8'))
+        
+        # Validate template type
+        if template_data.get('template_type') != 'unit_parameters':
+            flash('Invalid template type. Expected unit parameters template.')
+            return redirect(request.referrer or url_for('unit_parameters'))
+        
+        # Restore unit params file
+        user_folder = session.get('user_sim_folder')
+        if user_folder and 'unit_params_csv' in template_data:
+            unit_params_path = os.path.join(user_folder, 'unit_params.csv')
+            with open(unit_params_path, 'w') as f:
+                f.write(template_data['unit_params_csv'])
+            session['unit_params_file'] = unit_params_path
+            flash('Unit parameters template imported successfully!')
+        else:
+            flash('Template does not contain unit parameters data')
+        
+        return redirect(url_for('unit_parameters'))
+        
+    except Exception as e:
+        flash(f'Error importing unit parameters template: {str(e)}')
+        return redirect(request.referrer or url_for('unit_parameters'))
+
+@app.route('/export_graph_template', methods=['POST'])
+def export_graph_template():
+    """
+    Export graph/network as a reusable template.
+    Downloads directly to user's browser (saved to Downloads folder).
+    """
+    try:
+        template_data = {
+            'template_type': 'graph',
+            'template_version': '1.0',
+            'exported_date': pd.Timestamp.now().isoformat(),
+            'project_name': session.get('project_name', 'Unknown')
+        }
+        
+        # Get graph file content
+        user_folder = session.get('user_sim_folder')
+        if user_folder and 'graph_file' in session:
+            graph_path = session['graph_file']
+            if os.path.exists(graph_path):
+                with open(graph_path, 'r') as f:
+                    template_data['graph_json'] = f.read()
+            else:
+                flash('Graph file not found')
+                return redirect(request.referrer or url_for('graph_editor'))
+        else:
+            flash('No graph configured yet')
+            return redirect(request.referrer or url_for('graph_editor'))
+        
+        # Create JSON file
+        template_json = json.dumps(template_data, indent=2)
+        template_name = f"{template_data['project_name'].replace(' ', '_')}_graph_template.json"
+        
+        # Send as downloadable file (goes to Downloads folder)
+        return Response(
+            template_json,
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename={template_name}'}
+        )
+        
+    except Exception as e:
+        flash(f'Error exporting graph template: {str(e)}')
+        return redirect(request.referrer or url_for('graph_editor'))
+
+@app.route('/import_graph_template', methods=['POST'])
+def import_graph_template():
+    """
+    Import graph/network template.
+    """
+    try:
+        if 'template_file' not in request.files:
+            flash('No template file uploaded')
+            return redirect(request.referrer or url_for('graph_editor'))
+        
+        file = request.files['template_file']
+        if file.filename == '':
+            flash('No template file selected')
+            return redirect(request.referrer or url_for('graph_editor'))
+        
+        if not file.filename.endswith('.json'):
+            flash('Template file must be a JSON file')
+            return redirect(request.referrer or url_for('graph_editor'))
+        
+        # Read and parse template
+        template_data = json.loads(file.read().decode('utf-8'))
+        
+        # Validate template type
+        if template_data.get('template_type') != 'graph':
+            flash('Invalid template type. Expected graph template.')
+            return redirect(request.referrer or url_for('graph_editor'))
+        
+        # Restore graph file
+        user_folder = session.get('user_sim_folder')
+        if user_folder and 'graph_json' in template_data:
+            graph_path = os.path.join(user_folder, 'graph.json')
+            with open(graph_path, 'w') as f:
+                f.write(template_data['graph_json'])
+            session['graph_file'] = graph_path
+            flash('Graph template imported successfully!')
+        else:
+            flash('Template does not contain graph data')
+        
+        return redirect(url_for('graph_editor'))
+        
+    except Exception as e:
+        flash(f'Error importing graph template: {str(e)}')
+        return redirect(request.referrer or url_for('graph_editor'))
+
+@app.route('/export_partial_template', methods=['POST'])
 @app.route('/fit', methods=['GET', 'POST'])
 def fit_distributions():
     summary_text = ""

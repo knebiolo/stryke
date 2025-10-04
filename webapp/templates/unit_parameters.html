@@ -104,6 +104,7 @@
       padding: 6px;
     }
   </style>
+  <script src="{{ url_for('static', filename='autosave.js') }}"></script>
 </head>
 <body>
   <div class="container">
@@ -448,6 +449,33 @@
       {% endif %}
       <button type="submit">Save Unit Parameters</button>
     </form>
+    
+    <!-- Template Import/Export Section -->
+    <div style="background: #e8f4f8; padding: 15px; border-radius: 4px; margin-top: 30px; border-left: 4px solid #007BFF;">
+      <h3 style="margin-top: 0;">💾 Unit Parameters Template</h3>
+      <p style="font-size: 14px; margin: 10px 0;">
+        Save or load unit parameters to reuse turbine configurations across projects:
+      </p>
+      <ul style="font-size: 13px; margin: 10px 0 15px 20px; line-height: 1.6;">
+        <li><strong>Export:</strong> Click the yellow "📤 Export Template" button to save your current unit parameters as a JSON file (downloads to your Downloads folder)</li>
+        <li><strong>Import:</strong> Click "Choose File" to browse and select a previously saved template from any folder on your computer, then click the green "📥 Import Template" button to load it</li>
+      </ul>
+      
+      <!-- Import -->
+      <form method="post" action="{{ url_for('import_unit_params_template') }}" enctype="multipart/form-data" style="display: inline-block; margin-right: 20px;">
+        <input type="file" name="template_file" accept=".json" required style="display: inline-block; width: auto; margin-right: 10px;">
+        <button type="submit" style="background: #28a745;">📥 Import Template</button>
+      </form>
+      
+      <!-- Export -->
+      <form method="post" action="{{ url_for('export_unit_params_template') }}" style="display: inline-block;">
+        <button type="submit" style="background: #ffc107; color: #000;">📤 Export Template</button>
+      </form>
+      
+      <p style="font-size: 12px; color: #666; margin-top: 10px;">
+        <em>💡 Tip: Templates are saved to your Downloads folder and persist after logout!</em>
+      </p>
+    </div>
   </div>
   
   <script>
