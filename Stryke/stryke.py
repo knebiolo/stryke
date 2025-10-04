@@ -428,10 +428,11 @@ class simulation():
             print(f"[DIAG] Nodes DataFrame head:\n{self.nodes.head()}")
         try:
             self.edges = to_dataframe(graph_summary.get('Edges', []))
-            if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Edges DataFrame shape: {self.edges.shape}")
-                print(f"[DIAG] Edges DataFrame columns: {self.edges.columns.tolist()}")
-                print(f"[DIAG] Edges DataFrame head:\n{self.edges.head()}")
+            # Verbose diagnostics commented out
+            # if DIAGNOSTICS_ENABLED:
+            #     print(f"[DIAG] Edges DataFrame shape: {self.edges.shape}")
+            #     print(f"[DIAG] Edges DataFrame columns: {self.edges.columns.tolist()}")
+            #     print(f"[DIAG] Edges DataFrame head:\n{self.edges.head()}")
         except Exception as e:
             logger.info("Single Unit Scenario Identified, No Movement")
             if DIAGNOSTICS_ENABLED:
@@ -518,33 +519,37 @@ class simulation():
             if self.unit_params is not None:
                 self.unit_params['Unit_Name'] = self.unit_params.Facility + ' - Unit ' + self.unit_params.Unit.astype('str')
                 self.unit_params.set_index('Unit_Name', inplace=True)
-            if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Unit params DataFrame shape: {self.unit_params.shape}")
-                print(f"[DIAG] Unit params DataFrame columns: {self.unit_params.columns.tolist()}")
-                print(f"[DIAG] Unit params DataFrame head:\n{self.unit_params.head()}")
+            # Verbose diagnostics commented out - too much output
+            # if DIAGNOSTICS_ENABLED:
+            #     print(f"[DIAG] Unit params DataFrame shape: {self.unit_params.shape}")
+            #     print(f"[DIAG] Unit params DataFrame columns: {self.unit_params.columns.tolist()}")
+            #     print(f"[DIAG] Unit params DataFrame head:\n{self.unit_params.head()}")
         elif "unit_parameters" in data_dict:
             self.unit_params = to_dataframe(data_dict["unit_parameters"])
-            if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Unit params DataFrame shape: {self.unit_params.shape}")
-                print(f"[DIAG] Unit params DataFrame columns: {self.unit_params.columns.tolist()}")
-                print(f"[DIAG] Unit params DataFrame head:\n{self.unit_params.head()}")
+            # Verbose diagnostics commented out - too much output
+            # if DIAGNOSTICS_ENABLED:
+            #     print(f"[DIAG] Unit params DataFrame shape: {self.unit_params.shape}")
+            #     print(f"[DIAG] Unit params DataFrame columns: {self.unit_params.columns.tolist()}")
+            #     print(f"[DIAG] Unit params DataFrame head:\n{self.unit_params.head()}")
 
         # 4. Facilities.
         if "facilities" in data_dict:
             self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
-            if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Facility params DataFrame shape: {self.facility_params.shape}")
-                print(f"[DIAG] Facility params DataFrame columns: {self.facility_params.columns.tolist()}")
-                print(f"[DIAG] Facility params DataFrame head:\n{self.facility_params.head()}")
+            # Verbose diagnostics commented out
+            # if DIAGNOSTICS_ENABLED:
+            #     print(f"[DIAG] Facility params DataFrame shape: {self.facility_params.shape}")
+            #     print(f"[DIAG] Facility params DataFrame columns: {self.facility_params.columns.tolist()}")
+            #     print(f"[DIAG] Facility params DataFrame head:\n{self.facility_params.head()}")
 
         # 5. Flow Scenarios.
         if "flow_scenarios" in data_dict:
             self.flow_scenarios_df = to_dataframe(data_dict["flow_scenarios"], numeric_cols=['FlowYear', 'Prorate'])
             self.flow_scenarios = self.flow_scenarios_df["Scenario"].unique()
-            if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Flow scenarios DataFrame shape: {self.flow_scenarios_df.shape}")
-                print(f"[DIAG] Flow scenarios DataFrame columns: {self.flow_scenarios_df.columns.tolist()}")
-                print(f"[DIAG] Flow scenarios DataFrame head:\n{self.flow_scenarios_df.head()}")
+            # Verbose diagnostics commented out
+            # if DIAGNOSTICS_ENABLED:
+            #     print(f"[DIAG] Flow scenarios DataFrame shape: {self.flow_scenarios_df.shape}")
+            #     print(f"[DIAG] Flow scenarios DataFrame columns: {self.flow_scenarios_df.columns.tolist()}")
+            #     print(f"[DIAG] Flow scenarios DataFrame head:\n{self.flow_scenarios_df.head()}")
         
         # 6. Operating Scenarios.
         if "operating_scenarios_file" in data_dict:
@@ -553,10 +558,11 @@ class simulation():
                 numeric_cols=['Hours', 'Location', 'Prob Not Operating', 'Scale', 'Shape', 'Unit']
             )
             #logger.info('operating scenarios columns', self.operating_scenarios_df.columns.to_list())
-            if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Operating scenarios DataFrame shape: {self.operating_scenarios_df.shape}")
-                print(f"[DIAG] Operating scenarios DataFrame columns: {self.operating_scenarios_df.columns.tolist()}")
-                print(f"[DIAG] Operating scenarios DataFrame head:\n{self.operating_scenarios_df.head()}")
+            # Verbose diagnostics commented out
+            # if DIAGNOSTICS_ENABLED:
+            #     print(f"[DIAG] Operating scenarios DataFrame shape: {self.operating_scenarios_df.shape}")
+            #     print(f"[DIAG] Operating scenarios DataFrame columns: {self.operating_scenarios_df.columns.tolist()}")
+            #     print(f"[DIAG] Operating scenarios DataFrame head:\n{self.operating_scenarios_df.head()}")
         else:
             self.operating_scenarios_df = None
         
@@ -576,18 +582,20 @@ class simulation():
                                                                'length location', 'length scale', 'length shape',
                                                                'location', 'max_ent_rate', 'occur_prob', 'scale', 'shape'])
             #logger.info('population dataframe columns:', self.pop.columns.to_list())
-            if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Population DataFrame shape: {self.pop.shape}")
-                print(f"[DIAG] Population DataFrame columns: {self.pop.columns.tolist()}")
-                print(f"[DIAG] Population DataFrame head:\n{self.pop.head()}")
+            # Verbose diagnostics commented out
+            # if DIAGNOSTICS_ENABLED:
+            #     print(f"[DIAG] Population DataFrame shape: {self.pop.shape}")
+            #     print(f"[DIAG] Population DataFrame columns: {self.pop.columns.tolist()}")
+            #     print(f"[DIAG] Population DataFrame head:\n{self.pop.head()}")
         # 8. Hydrograph.
         if "hydrograph_file" in data_dict:
             self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
-            if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Hydrograph DataFrame shape: {self.input_hydrograph_df.shape if self.input_hydrograph_df is not None else 'None'}")
-                if self.input_hydrograph_df is not None:
-                    print(f"[DIAG] Hydrograph DataFrame columns: {self.input_hydrograph_df.columns.tolist()}")
-                    print(f"[DIAG] Hydrograph DataFrame head:\n{self.input_hydrograph_df.head()}")
+            # Verbose diagnostics commented out
+            # if DIAGNOSTICS_ENABLED:
+            #     print(f"[DIAG] Hydrograph DataFrame shape: {self.input_hydrograph_df.shape if self.input_hydrograph_df is not None else 'None'}")
+            #     if self.input_hydrograph_df is not None:
+            #         print(f"[DIAG] Hydrograph DataFrame columns: {self.input_hydrograph_df.columns.tolist()}")
+            #         print(f"[DIAG] Hydrograph DataFrame head:\n{self.input_hydrograph_df.head()}")
 
         
         # # 9. Unit Conversion.
@@ -2376,7 +2384,13 @@ class simulation():
                                     'iteration': [np.int64(i)],
                                     'day': [pd.to_datetime(day)],
                                     'flow': [np.float64(curr_Q_report)],
-                                    'pop_size': [np.int64(len(fishes))]
+                                    'pop_size': [np.int64(len(fishes))],
+                                    'num_entrained': [np.int64(0)],
+                                    'num_survived': [np.int64(0)],
+                                    'num_mortality': [np.int64(0)],
+                                    'mortality_impingement': [np.int64(0)],
+                                    'mortality_blade_strike': [np.int64(0)],
+                                    'mortality_barotrauma': [np.int64(0)]
                                 }
                                 # Identify state and survival columns.
                                 state_columns = sorted([col for col in fishes.columns if col.startswith('state_')])
@@ -2407,26 +2421,27 @@ class simulation():
                                 total_survived_entrained = survived.sum()
                                 total_mortality = total_entrained - total_survived_entrained
                                 
-                                daily_row_dict['num_entrained'] = total_entrained
-                                daily_row_dict['num_survived'] = total_survived_entrained
-                                daily_row_dict['num_mortality'] = total_mortality
+                                # Update the dictionary (overwrite defaults)
+                                daily_row_dict['num_entrained'] = [np.int64(total_entrained)]
+                                daily_row_dict['num_survived'] = [np.int64(total_survived_entrained)]
+                                daily_row_dict['num_mortality'] = [np.int64(total_mortality)]
                                 
                                 # Calculate mortality components from tracked data
                                 if hasattr(self, '_mortality_components') and total_entrained > 0:
                                     # Average mortality contribution from each factor
                                     n_components = len(self._mortality_components['impingement'])
                                     if n_components > 0:
-                                        daily_row_dict['mortality_impingement'] = np.sum(self._mortality_components['impingement'][-n_components:])
-                                        daily_row_dict['mortality_blade_strike'] = np.sum(self._mortality_components['blade_strike'][-n_components:])
-                                        daily_row_dict['mortality_barotrauma'] = np.sum(self._mortality_components['barotrauma'][-n_components:])
+                                        daily_row_dict['mortality_impingement'] = [np.int64(np.sum(self._mortality_components['impingement'][-n_components:]))]
+                                        daily_row_dict['mortality_blade_strike'] = [np.int64(np.sum(self._mortality_components['blade_strike'][-n_components:]))]
+                                        daily_row_dict['mortality_barotrauma'] = [np.int64(np.sum(self._mortality_components['barotrauma'][-n_components:]))]
                                     else:
-                                        daily_row_dict['mortality_impingement'] = 0
-                                        daily_row_dict['mortality_blade_strike'] = 0
-                                        daily_row_dict['mortality_barotrauma'] = 0
+                                        daily_row_dict['mortality_impingement'] = [np.int64(0)]
+                                        daily_row_dict['mortality_blade_strike'] = [np.int64(0)]
+                                        daily_row_dict['mortality_barotrauma'] = [np.int64(0)]
                                 else:
-                                    daily_row_dict['mortality_impingement'] = 0
-                                    daily_row_dict['mortality_blade_strike'] = 0
-                                    daily_row_dict['mortality_barotrauma'] = 0
+                                    daily_row_dict['mortality_impingement'] = [np.int64(0)]
+                                    daily_row_dict['mortality_blade_strike'] = [np.int64(0)]
+                                    daily_row_dict['mortality_barotrauma'] = [np.int64(0)]
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 
@@ -2470,9 +2485,9 @@ class simulation():
                                     'num_entrained': [np.int64(0)],
                                     'num_survived': [np.int64(0)],
                                     'num_mortality': [np.int64(0)],
-                                    'mortality_impingement': [0],
-                                    'mortality_blade_strike': [0],
-                                    'mortality_barotrauma': [0]
+                                    'mortality_impingement': [np.int64(0)],
+                                    'mortality_blade_strike': [np.int64(0)],
+                                    'mortality_barotrauma': [np.int64(0)]
                                 }
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 
