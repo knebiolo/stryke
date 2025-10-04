@@ -2090,8 +2090,11 @@ class simulation():
         #print("Survival dictionary created:", surv_dict, flush=True)
         #logger.debug('iterate over scenarios')
         # Iterate over each flow scenario.
+        total_scenarios = len(self.flow_scenarios)
+        scenario_counter = 0
         for scen in self.flow_scenarios:
-            #print(f"Starting scenario {scen} now", flush=True)
+            scenario_counter += 1
+            print(f"[INFO] Processing scenario {scenario_counter} of {total_scenarios}: {scen}", flush=True)
             #logger.debug('start assessing scenario')
             try:
                 scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
@@ -2125,6 +2128,9 @@ class simulation():
             else:
                 fixed_discharge = scen_df.iat[0, scen_df.columns.get_loc('Flow')]
                 flow_df = self.create_hydrograph(self.discharge_type, scen, scen_months, self.flow_scenarios_df, fixed_discharge=fixed_discharge)
+            
+            total_days = len(flow_df)
+            print(f"[INFO] Scenario '{scenario}' will simulate {total_days} days", flush=True)
 
             # Diagnostics for flow_df (hydrograph)
             if DIAGNOSTICS_ENABLED:
@@ -2159,11 +2165,22 @@ class simulation():
                 if math.isnan(occur_prob):
                     occur_prob = 1.0
         
+                print(f"[INFO] Simulating species: {species_name} with {int(iterations)} iterations", flush=True)
+                
                 spc_length = pd.DataFrame()
                 for i in np.arange(0, iterations, 1):
+                    if i % max(1, int(iterations / 10)) == 0:  # Report every 10%
+                        print(f"[INFO] Species {species_name}: Iteration {int(i+1)} of {int(iterations)}", flush=True)
+                    
+                    day_counter = 0
                     for flow_row in flow_df.iterrows():
+                        day_counter += 1
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
                         day = flow_row[1]['datetimeUTC']
+                        
+                        # Progress update every 10% of days for first few iterations
+                        if i < 3 and day_counter % max(1, int(total_days / 10)) == 0:
+                            print(f"[INFO] Day {day_counter} of {total_days} (Iteration {int(i+1)})", flush=True)
 
                         if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                             # Diagnostics for flow_row and curr_Q
@@ -2545,7 +2562,9 @@ class simulation():
                         logger.info("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
                 self.hdf.flush()
                 logger.info("Completed Scenario %s for Species %s",scen,species)
+                print(f"[INFO] ✅ Completed scenario '{scen}' for species {species}", flush=True)
                 
+            print(f"[INFO] ✅ All scenarios complete! Finalizing results...", flush=True)
             logger.info("Completed Simulations - view results")
             if DIAGNOSTICS_ENABLED:
                 try:
@@ -2554,6 +2573,7 @@ class simulation():
                     print(f"[DIAG] Could not retrieve HDF5 keys (file may be closed): {e}", flush=True)
             self.hdf.flush()
             self.hdf.close()
+            print(f"[INFO] 💾 Simulation data saved successfully", flush=True)
 
 
     def summary(self):

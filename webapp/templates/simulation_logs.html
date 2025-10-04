@@ -8,69 +8,454 @@
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
+            background: #f7f7f7;
         }
 
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            color: #0056b3;
+            margin-top: 0;
+        }
+
+        /* Progress Indicator Section */
+        .progress-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .progress-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .progress-percentage {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 30px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50 0%, #8BC34A 100%);
+            width: 0%;
+            transition: width 0.5s ease;
+            border-radius: 15px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255,255,255,0.3),
+                transparent
+            );
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .progress-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            font-size: 14px;
+        }
+
+        .progress-detail-item {
+            background: rgba(255,255,255,0.2);
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .progress-detail-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 4px;
+        }
+
+        .progress-detail-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        /* Status Icons */
+        .status-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-running {
+            background: #4CAF50;
+        }
+
+        .status-complete {
+            background: #2196F3;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Log Output */
         #logOutput {
-            height: 500px;
+            height: 400px;
             overflow-y: auto;
-            border: 1px solid #ccc;
+            border: 1px solid #ddd;
             background: #f8f8f8;
             padding: 10px;
-            font-family: monospace;
+            font-family: 'Courier New', monospace;
             font-size: 12px;
             line-height: 1.4;
+            border-radius: 4px;
+        }
+
+        .log-line {
+            padding: 2px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .log-line:last-child {
+            border-bottom: none;
+        }
+
+        .log-error {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+
+        .log-warning {
+            color: #f57c00;
+        }
+
+        .log-success {
+            color: #388e3c;
+            font-weight: bold;
+        }
+
+        .log-info {
+            color: #1976d2;
         }
 
         #resultsButton {
             display: none;
             margin-top: 20px;
-            padding: 10px 20px;
-            font-size: 16px;
-            background-color: #28a745;
+            padding: 15px 30px;
+            font-size: 18px;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+            transition: transform 0.2s;
         }
 
         #resultsButton:hover {
-            background-color: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <h2>Simulation Progress</h2>
-    <div id="logOutput">Waiting for simulation to start...</div>
-    <button id="resultsButton" onclick="window.location.href='/report'">View Results</button> 
+    <div class="container">
+        <h2>🚀 Simulation Progress</h2>
+        
+        <!-- Enhanced Progress Indicator -->
+        <div class="progress-section">
+            <div class="progress-header">
+                <div>
+                    <div class="progress-title">
+                        <span class="status-icon status-running"></span>
+                        <span id="statusText">Running Simulation...</span>
+                    </div>
+                </div>
+                <div class="progress-percentage" id="progressPercentage">0%</div>
+            </div>
+            
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            
+            <div class="progress-details">
+                <div class="progress-detail-item">
+                    <div class="progress-detail-label">Current Progress</div>
+                    <div class="progress-detail-value" id="currentProgress">Initializing...</div>
+                </div>
+                <div class="progress-detail-item">
+                    <div class="progress-detail-label">Time Elapsed</div>
+                    <div class="progress-detail-value" id="timeElapsed">0:00</div>
+                </div>
+                <div class="progress-detail-item">
+                    <div class="progress-detail-label">Estimated Time Remaining</div>
+                    <div class="progress-detail-value" id="timeRemaining">Calculating...</div>
+                </div>
+                <div class="progress-detail-item">
+                    <div class="progress-detail-label">Current Activity</div>
+                    <div class="progress-detail-value" id="currentActivity">Starting...</div>
+                </div>
+            </div>
+        </div>
+
+        <h3>Detailed Logs</h3>
+        <div id="logOutput">Waiting for simulation to start...</div>
+        <button id="resultsButton" onclick="window.location.href='/report'">📊 View Results</button> 
+    </div>
+
     <script>
+        // DOM elements
         const logOutput = document.getElementById("logOutput");
         const resultsButton = document.getElementById("resultsButton");
+        const progressBar = document.getElementById("progressBar");
+        const progressPercentage = document.getElementById("progressPercentage");
+        const currentProgress = document.getElementById("currentProgress");
+        const timeElapsed = document.getElementById("timeElapsed");
+        const timeRemaining = document.getElementById("timeRemaining");
+        const currentActivity = document.getElementById("currentActivity");
+        const statusText = document.getElementById("statusText");
+        const statusIcon = document.querySelector(".status-icon");
+        
+        // Tracking variables
+        let startTime = Date.now();
+        let totalDays = null;
+        let currentDay = 0;
+        let totalIterations = null;
+        let currentIteration = 0;
+        let logLineCount = 0;
+        
         const params = new URLSearchParams(window.location.search);
         const runId = params.get('run') || "";
         
         const eventSource = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
 
-        eventSource.onmessage = function(event) {
+        // Update elapsed time every second
+        setInterval(updateElapsedTime, 1000);
+
+        function updateElapsedTime() {
+            const elapsed = Math.floor((Date.now() - startTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            timeElapsed.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        function updateProgress() {
+            if (totalDays && currentDay > 0) {
+                const percentage = Math.min(Math.round((currentDay / totalDays) * 100), 100);
+                progressBar.style.width = percentage + '%';
+                progressPercentage.textContent = percentage + '%';
+                currentProgress.textContent = `Day ${currentDay} of ${totalDays}`;
+                
+                // Calculate estimated time remaining
+                const elapsed = (Date.now() - startTime) / 1000;
+                const rate = currentDay / elapsed; // days per second
+                const remaining = (totalDays - currentDay) / rate;
+                
+                if (remaining > 0 && isFinite(remaining)) {
+                    const remMinutes = Math.floor(remaining / 60);
+                    const remSeconds = Math.floor(remaining % 60);
+                    if (remMinutes > 0) {
+                        timeRemaining.textContent = `~${remMinutes}m ${remSeconds}s`;
+                    } else {
+                        timeRemaining.textContent = `~${remSeconds}s`;
+                    }
+                } else {
+                    timeRemaining.textContent = 'Almost done...';
+                }
+            } else if (totalIterations && currentIteration > 0) {
+                const percentage = Math.min(Math.round((currentIteration / totalIterations) * 100), 100);
+                progressBar.style.width = percentage + '%';
+                progressPercentage.textContent = percentage + '%';
+                currentProgress.textContent = `Iteration ${currentIteration} of ${totalIterations}`;
+            }
+        }
+
+        function parseLogLine(text) {
+            // Detect total days/iterations
+            const totalDaysMatch = text.match(/(\d+)\s+days?/i);
+            if (totalDaysMatch && !totalDays) {
+                totalDays = parseInt(totalDaysMatch[1]);
+                currentProgress.textContent = `0 of ${totalDays} days`;
+            }
+            
+            const totalIterMatch = text.match(/(\d+)\s+iterations?/i);
+            if (totalIterMatch && !totalIterations) {
+                totalIterations = parseInt(totalIterMatch[1]);
+            }
+            
+            // Detect current day progress
+            const dayMatch = text.match(/[Dd]ay[:\s]+(\d+)/);
+            if (dayMatch) {
+                currentDay = parseInt(dayMatch[1]);
+                updateProgress();
+            }
+            
+            // Detect iteration progress
+            const iterMatch = text.match(/[Ii]teration[:\s]+(\d+)/);
+            if (iterMatch) {
+                currentIteration = parseInt(iterMatch[1]);
+                updateProgress();
+            }
+            
+            // Detect current activity
+            if (text.includes('Simulating') || text.includes('Processing')) {
+                currentActivity.textContent = text.substring(0, 50) + (text.length > 50 ? '...' : '');
+            }
+            
+            if (text.includes('population')) {
+                currentActivity.textContent = 'Processing population data';
+            }
+            
+            if (text.includes('entrainment')) {
+                currentActivity.textContent = 'Calculating entrainment';
+            }
+            
+            if (text.includes('mortality') || text.includes('survival')) {
+                currentActivity.textContent = 'Computing mortality/survival';
+            }
+            
+            if (text.includes('Writing') || text.includes('Saving')) {
+                currentActivity.textContent = 'Saving results';
+            }
+            
+            if (text.includes('summary') || text.includes('Summary')) {
+                currentActivity.textContent = 'Generating summary';
+            }
+            
+            if (text.includes('report') || text.includes('Report')) {
+                currentActivity.textContent = 'Creating report';
+            }
+        }
+
+        function addLogLine(text) {
             const line = document.createElement("div");
-            line.textContent = event.data;
+            line.className = 'log-line';
+            
+            // Apply styling based on content
+            if (text.includes('[ERROR]') || text.toLowerCase().includes('error')) {
+                line.className += ' log-error';
+            } else if (text.includes('[WARNING]') || text.toLowerCase().includes('warning')) {
+                line.className += ' log-warning';
+            } else if (text.includes('[INFO]') || text.toLowerCase().includes('success') || 
+                       text.includes('Complete') || text.includes('✅')) {
+                line.className += ' log-success';
+            } else if (text.includes('Day') || text.includes('Iteration')) {
+                line.className += ' log-info';
+            }
+            
+            line.textContent = text;
             logOutput.appendChild(line);
             logOutput.scrollTop = logOutput.scrollHeight;
+            
+            logLineCount++;
+            
+            // Keep log manageable (last 500 lines)
+            if (logLineCount > 500) {
+                logOutput.removeChild(logOutput.firstChild);
+            }
+        }
+
+        eventSource.onmessage = function(event) {
+            const text = event.data;
+            
+            // Parse for progress information
+            parseLogLine(text);
+            
+            // Add to log output
+            addLogLine(text);
 
             // Check if simulation is complete
-            if (event.data.includes("[Simulation Complete]") || 
-                event.data.includes("Completed Simulations") ||
-                event.data.includes("view results")) {
+            if (text.includes("[Simulation Complete]") || 
+                text.includes("Completed Simulations") ||
+                text.includes("Simulation completed successfully") ||
+                text.includes("view results")) {
+                
                 eventSource.close();
+                
+                // Update to complete state
+                progressBar.style.width = '100%';
+                progressPercentage.textContent = '100%';
+                statusText.textContent = '✅ Simulation Complete!';
+                statusIcon.className = 'status-icon status-complete';
+                currentActivity.textContent = 'Finished!';
+                timeRemaining.textContent = 'Done!';
+                
                 resultsButton.style.display = "inline-block";
             }
         };
 
         eventSource.onerror = function(event) {
-            const line = document.createElement("div");
-            line.textContent = "[ERROR] Connection lost or server unavailable.";
-            logOutput.appendChild(line);
+            addLogLine("[ERROR] Connection lost or server unavailable.");
+            statusText.textContent = '⚠️ Connection Error';
+            currentActivity.textContent = 'Connection lost';
             eventSource.close();
         };
+
+        // Initial activity
+        setTimeout(() => {
+            if (logLineCount === 0) {
+                currentActivity.textContent = 'Initializing simulation...';
+            }
+        }, 2000);
     </script>
 
 </body>
