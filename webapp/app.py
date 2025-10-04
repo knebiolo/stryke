@@ -931,7 +931,7 @@ def save_project():
             # Clean filename
             project_name = re.sub(r'[^\w\s-]', '', project_name).strip().replace(' ', '_')
         
-        filename = f"{project_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.stryke"
+        filename = f"{project_name}.stryke"
         
         # Create JSON response
         json_data = json.dumps(project_data, indent=2)
