@@ -2,7 +2,15 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <!-- Add the viewport meta for mobile compatibility -->
+  <!-- Add the     you can add extra nodes (like "Spillway" or "Bypass" or other units) and connect them 
+    with edges to show the paths fish might take. Each node has an associated survival rate 
+    or function. When you're finished, click "Save Graph" to confirm these connections.
+  </p>
+  {% if project_loaded %}
+  <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; margin: 20px 0; border-radius: 5px; font-size: 14px;">
+    ✅ <strong>Project Data Loaded</strong> - Your migratory route graph has been imported from the project file. The routing network is stored and ready for simulation, even if it's not visually displayed here. Feel free to proceed to the next page.
+  </div>
+  {% endif %}port meta for mobile compatibility -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive Graph Editor</title>
   <!-- Include Cytoscape.js via CDN -->
@@ -331,9 +339,21 @@
   </script>
 
   <div class="action-buttons">
+    {% if project_loaded %}
+    <a href="{{ url_for('population') }}" style="display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 4px;">Next Page →</a>
+    {% else %}
     <button onclick="saveGraph()">Save Graph</button>
     <a href="{{ url_for('population') }}">Next Page</a>
+    {% endif %}
   </div>
+  
+  {% if project_loaded %}
+  <script>
+      // Clear auto-save when viewing loaded project
+      localStorage.removeItem('stryke_autosave');
+      localStorage.removeItem('stryke_autosave_timestamp');
+  </script>
+  {% endif %}
   
   <!-- Save Project Section -->
   <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin: 30px auto; max-width: 800px; border-left: 4px solid #ffc107;">

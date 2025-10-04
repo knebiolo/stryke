@@ -111,6 +111,13 @@
   <div class="container">
     <a href="{{ url_for('index') }}" class="nav-link">Home</a>
     <h1>Unit Parameters</h1>
+    
+    {% if project_loaded %}
+    <div style="background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+        <strong>✅ Project Data Loaded</strong><br>
+        <span style="font-size: 14px;">Your unit parameters have been imported from the .stryke file. The data is stored and ready for simulation. Click "Next Page" to continue.</span>
+    </div>
+    {% endif %}
     <p class="instructions">
       On this page, you’ll provide details for each turbine unit within your 
       selected generating station(s). For example, you’ll specify the runner type, flow capacity, intake velocity, and other relevant fields.
@@ -448,8 +455,39 @@
           {% endfor %}
         {% endfor %}
       {% endif %}
-      <button type="submit">Save Unit Parameters</button>
+      <button type="submit" id="saveUnitParamsBtn" {% if project_loaded %}disabled{% endif %}>Save Unit Parameters</button>
+      <button type="button" onclick="window.location.href='{{ url_for('graph_editor') }}'">Next Page →</button>
     </form>
+    
+    <script>
+        // Enable Save button when form changes
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            const saveBtn = document.getElementById('saveUnitParamsBtn');
+            
+            if (form && saveBtn) {
+                form.addEventListener('input', function() {
+                    if (saveBtn.disabled) {
+                        saveBtn.disabled = false;
+                    }
+                });
+                
+                form.addEventListener('change', function() {
+                    if (saveBtn.disabled) {
+                        saveBtn.disabled = false;
+                    }
+                });
+            }
+        });
+    </script>
+    
+    {% if project_loaded %}
+    <script>
+        // Clear auto-save when viewing loaded project
+        localStorage.removeItem('stryke_autosave');
+        localStorage.removeItem('stryke_autosave_timestamp');
+    </script>
+    {% endif %}
     
     <!-- Save Project Section -->
     <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-top: 30px; border-left: 4px solid #ffc107;">

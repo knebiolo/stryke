@@ -2,7 +2,23 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Facility Information</title>
+    <title>Facili    <div class="container">
+        <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+        <h1>Facility Information</h1>
+        {% if project_loaded %}
+        <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; margin: 20px 0; border-radius: 5px; font-size: 14px;">
+            ✅ <strong>Project Data Loaded</strong> - Your facility configuration has been imported from the project file. The data is stored and ready for the next steps, even though some fields may appear empty. Feel free to proceed to the next page.
+        </div>
+        {% endif %}
+        <p class="instructions">
+            On this page, you'll define the generating station(s) in your model. 
+            For each facility, you'll provide its name, minimum required flow for 
+            operation, the number of turbine units you will be simulating, and 
+            any additional flow needed for the environment releases or downstream 
+            bypass devices. You can also specify whether the facility has a 
+            spillway. This information helps us understand each station's 
+            operational constraints and capacity. When finished, click
+             "Save Facilities" to move on to setting up unit-specific parameters.on</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -117,8 +133,37 @@
                 {% if sim_mode in ["single_unit_survival_only", "single_unit_simulated_entrainment", "single_powerhouse_simulated_entrainment_routing"] %}readonly{% endif %}>
             
             <div id="facilities_container"></div>
-            <button type="submit">Save Facilities</button>
+            <button type="submit" id="saveFacilitiesBtn" {% if project_loaded %}disabled{% endif %}>Save Facilities</button>
+            <button type="button" onclick="window.location.href='{{ url_for('unit_parameters') }}'">Next Page →</button>
         </form>
+        
+        <script>
+            // Enable Save button when form changes
+            document.addEventListener('DOMContentLoaded', function() {
+                const form = document.querySelector('form');
+                const saveBtn = document.getElementById('saveFacilitiesBtn');
+                
+                form.addEventListener('input', function() {
+                    if (saveBtn && saveBtn.disabled) {
+                        saveBtn.disabled = false;
+                    }
+                });
+                
+                form.addEventListener('change', function() {
+                    if (saveBtn && saveBtn.disabled) {
+                        saveBtn.disabled = false;
+                    }
+                });
+            });
+        </script>
+        
+        {% if project_loaded %}
+        <script>
+            // Clear auto-save when viewing loaded project
+            localStorage.removeItem('stryke_autosave');
+            localStorage.removeItem('stryke_autosave_timestamp');
+        </script>
+        {% endif %}
 
         <!-- Save Project Section -->
         <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-top: 30px; border-left: 4px solid #ffc107;">

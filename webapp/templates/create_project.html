@@ -2,8 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Create New Project</title>
-    <style>
+    <title>Create New Project</title    <div class="container">
+        <a href="{{ url_for('index') }}" class="nav-link">Home</a>
+        <h1>Create New Project</h1>
+        {% if project_loaded %}
+        <div style="background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; margin: 20px 0; border-radius: 5px; font-size: 14px;">
+            ✅ <strong>Project Successfully Loaded!</strong> Your project details have been imported and are ready to review or edit.
+        </div>
+        {% endif %}
+        <p class="instructions">
+            Welcome to the project creation page! Here, you'll give your project a 
+            name and a brief description, and pick the number of generating 
+            stations in your model.  The model setup is meant to be flexible,
+            it is possible to simulate a single turbine or multiple turbines atstyle>
         body {
             font-family: Arial, sans-serif;
             background: #f7f7f7;
@@ -96,6 +107,13 @@
     </style>
     <script src="{{ url_for('static', filename='autosave.js') }}"></script>
     <script src="{{ url_for('static', filename='validation.js') }}"></script>
+    {% if project_loaded %}
+    <script>
+        // Clear auto-save when project is loaded to prevent restore prompt
+        localStorage.removeItem('stryke_autosave');
+        localStorage.removeItem('stryke_autosave_timestamp');
+    </script>
+    {% endif %}
 </head>
 <body>
     <div class="container">
@@ -136,8 +154,54 @@
                 <option value="multiple_powerhouses_simulated_entrainment_routing" {% if model_setup == 'multiple_powerhouses_simulated_entrainment_routing' %}selected{% endif %}>Multiple Dependent Powerhouses with movement, simulated entrainment, survival </option>
             </select>
 
-            <button type="submit">Create Project</button>
+            <button type="submit" id="createProjectBtn" {% if project_loaded %}disabled{% endif %}>Create Project</button>
+            <button type="button" onclick="window.location.href='{{ url_for('flow_scenarios') }}'">Next Page →</button>
         </form>
+        
+        <script>
+            // Track if form data has changed
+            let originalFormData = {};
+            let formChanged = false;
+            
+            // Capture original form values
+            document.addEventListener('DOMContentLoaded', function() {
+                const form = document.querySelector('form');
+                const inputs = form.querySelectorAll('input, textarea, select');
+                
+                inputs.forEach(input => {
+                    originalFormData[input.name] = input.value;
+                });
+                
+                // Listen for changes
+                inputs.forEach(input => {
+                    input.addEventListener('input', checkFormChanged);
+                    input.addEventListener('change', checkFormChanged);
+                });
+            });
+            
+            function checkFormChanged() {
+                const form = document.querySelector('form');
+                const inputs = form.querySelectorAll('input, textarea, select');
+                formChanged = false;
+                
+                inputs.forEach(input => {
+                    if (input.value !== originalFormData[input.name]) {
+                        formChanged = true;
+                    }
+                });
+                
+                // Enable/disable Create Project button based on changes
+                const createBtn = document.getElementById('createProjectBtn');
+                if (createBtn) {
+                    const isProjectLoaded = {{ 'true' if project_loaded else 'false' }};
+                    if (isProjectLoaded) {
+                        createBtn.disabled = !formChanged;
+                    } else {
+                        createBtn.disabled = false;
+                    }
+                }
+            }
+        </script>
         
         <!-- Project Save/Load Section -->
         <div class="project-management">
