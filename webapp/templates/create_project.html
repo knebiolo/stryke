@@ -117,23 +117,23 @@
 
         <form method="post">
             <label for="project_name">Project Name:</label>
-            <input type="text" name="project_name" id="project_name" maxlength="50" required>
+            <input type="text" name="project_name" id="project_name" maxlength="50" value="{{ project_name or '' }}" required>
 
             <label for="project_notes">Project Notes:</label>
-            <textarea name="project_notes" id="project_notes" maxlength="255"></textarea>
+            <textarea name="project_notes" id="project_notes" maxlength="255">{{ project_notes or '' }}</textarea>
 
             <label for="units">Choose Units:</label>
             <select name="units" id="units">
-                <option value="metric" selected>Metric</option>
+                <option value="metric" {% if units == 'metric' or not units %}selected{% endif %}>Metric</option>
 
             </select>
 
             <label for="model_setup">Model Setup:</label>
             <select name="model_setup" id="model_setup">
-                <option value="single_unit_survival_only">Specified single unit, survival only, no movement</option>
-                <option value="single_unit_simulated_entrainment">Specified single unit with simulated entrainment events and survival, no movement</option>
-                <option value="single_powerhouse_simulated_entrainment_routing">Single Powerhouse with movement, simulated entrainment, survival </option>
-                <option value="multiple_powerhouses_simulated_entrainment_routing">Multiple Dependent Powerhouses with movement, simulated entrainment, survival </option>
+                <option value="single_unit_survival_only" {% if model_setup == 'single_unit_survival_only' %}selected{% endif %}>Specified single unit, survival only, no movement</option>
+                <option value="single_unit_simulated_entrainment" {% if model_setup == 'single_unit_simulated_entrainment' %}selected{% endif %}>Specified single unit with simulated entrainment events and survival, no movement</option>
+                <option value="single_powerhouse_simulated_entrainment_routing" {% if model_setup == 'single_powerhouse_simulated_entrainment_routing' %}selected{% endif %}>Single Powerhouse with movement, simulated entrainment, survival </option>
+                <option value="multiple_powerhouses_simulated_entrainment_routing" {% if model_setup == 'multiple_powerhouses_simulated_entrainment_routing' %}selected{% endif %}>Multiple Dependent Powerhouses with movement, simulated entrainment, survival </option>
             </select>
 
             <button type="submit">Create Project</button>

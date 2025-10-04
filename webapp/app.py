@@ -996,11 +996,29 @@ def load_project():
         if project_data.get('project_info'):
             df = pd.DataFrame(project_data['project_info'])
             df.to_csv(os.path.join(sim_folder, 'project.csv'), index=False)
+            # Update session variables from loaded data
+            if len(df) > 0:
+                session['project_name'] = df.iloc[0].get('Project Name', '')
+                session['project_notes'] = df.iloc[0].get('Project Notes', '')
+                session['units'] = df.iloc[0].get('Units', 'metric')
+                session['model_setup'] = df.iloc[0].get('Model Setup', '')
         
         # Restore flow scenarios
         if project_data.get('flow_scenarios'):
             df = pd.DataFrame(project_data['flow_scenarios'])
             df.to_csv(os.path.join(sim_folder, 'flow.csv'), index=False)
+            # Update session variables from loaded data
+            if len(df) > 0:
+                session['scenario_name'] = df.iloc[0].get('Scenario Name', '')
+                session['scenario_number'] = str(df.iloc[0].get('Scenario Number', ''))
+                session['season'] = df.iloc[0].get('Season', '')
+                session['months'] = df.iloc[0].get('Months', '')
+                # Check if it's a hydrograph or static discharge
+                if pd.notna(df.iloc[0].get('Discharge')):
+                    session['scenario_type'] = 'static'
+                    session['discharge'] = str(df.iloc[0].get('Discharge', ''))
+                else:
+                    session['scenario_type'] = 'hydrograph'
         
         # Restore hydrograph
         if project_data.get('hydrograph'):
@@ -1014,8 +1032,10 @@ def load_project():
         
         # Restore unit parameters
         if project_data.get('unit_parameters', {}).get('csv_content'):
-            with open(os.path.join(sim_folder, 'unit_params.csv'), 'w') as f:
+            unit_params_path = os.path.join(sim_folder, 'unit_params.csv')
+            with open(unit_params_path, 'w') as f:
                 f.write(project_data['unit_parameters']['csv_content'])
+            session['unit_params_file'] = unit_params_path
         
         # Restore graph
         if project_data.get('graph'):
@@ -1251,7 +1271,25 @@ def create_project():
 
         return redirect(url_for('flow_scenarios'))
 
-    return render_template('create_project.html')
+    # GET request - check if there's existing project data to load
+    existing_data = {}
+    sim_folder = g.get('user_sim_folder')
+    if sim_folder:
+        project_csv = os.path.join(sim_folder, 'project.csv')
+        if os.path.exists(project_csv):
+            try:
+                df = pd.read_csv(project_csv)
+                if len(df) > 0:
+                    existing_data = {
+                        'project_name': df.iloc[0].get('Project Name', ''),
+                        'project_notes': df.iloc[0].get('Project Notes', ''),
+                        'units': df.iloc[0].get('Units', 'metric'),
+                        'model_setup': df.iloc[0].get('Model Setup', '')
+                    }
+            except Exception as e:
+                print(f"Error reading existing project data: {e}")
+    
+    return render_template('create_project.html', **existing_data)
 
 def process_hydrograph_data(raw_data):
     # Try tab first, then comma if only one column detected
@@ -1365,8 +1403,46 @@ def flow_scenarios():
         flash("Flow Scenario saved successfully!")
         return redirect(url_for('facilities'))
 
+    # GET request - check for existing flow scenario data
     units = session.get('units', 'metric')
-    return render_template('flow_scenarios.html', units=units)
+    existing_data = {}
+    sim_folder = g.get('user_sim_folder')
+    if sim_folder:
+        flow_csv = os.path.join(sim_folder, 'flow.csv')
+        if os.path.exists(flow_csv):
+            try:
+                df = pd.read_csv(flow_csv)
+                if len(df) > 0:
+                    existing_data = {
+                        'scenario_name': df.iloc[0].get('Scenario', ''),
+                        'scenario_number': str(df.iloc[0].get('Scenario Number', '')),
+                        'season': df.iloc[0].get('Season', ''),
+                        'months': df.iloc[0].get('Months', ''),
+                    }
+                    # Check if it's hydrograph or static
+                    flow_val = df.iloc[0].get('Flow')
+                    if flow_val == 'hydrograph' or pd.isna(flow_val):
+                        existing_data['scenario_type'] = 'hydrograph'
+                        # Try to load hydrograph data
+                        hydro_csv = os.path.join(sim_folder, 'hydrograph.csv')
+                        if os.path.exists(hydro_csv):
+                            df_hydro = pd.read_csv(hydro_csv)
+                            # Convert back to display format (assuming stored in CFS)
+                            if units == 'metric' and 'DAvgFlow_prorate' in df_hydro.columns:
+                                df_hydro['DAvgFlow_prorate'] = df_hydro['DAvgFlow_prorate'] / 35.3147
+                            # Format as tab-delimited string for textarea
+                            existing_data['hydrograph_data'] = df_hydro.to_csv(sep='\t', index=False, header=False)
+                    else:
+                        existing_data['scenario_type'] = 'static'
+                        # Convert back to display units
+                        discharge_val = float(flow_val)
+                        if units == 'metric':
+                            discharge_val = discharge_val / 35.3147
+                        existing_data['discharge'] = str(discharge_val)
+            except Exception as e:
+                print(f"Error reading existing flow scenario data: {e}")
+    
+    return render_template('flow_scenarios.html', units=units, **existing_data)
 
 @app.before_request
 def sync_simulation_mode():
