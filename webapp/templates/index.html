@@ -48,6 +48,42 @@
         .btn:hover {
             background: #0056b3;
         }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
+        .btn-warning {
+            background: #ffc107;
+            color: #000;
+        }
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        .project-actions {
+            background: #f0f8ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #007BFF;
+        }
+        .project-actions h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
 <body>
@@ -73,10 +109,34 @@
             <a href="https://github.com/knebiolo/stryke" target="_blank">Stryke Project Website</a>.        
         </p>
 
-        <!-- New Button for Creating a Project -->
-        <p>
-            <a href="{{ url_for('create_project') }}" class="btn">Create New Project</a>
-        </p>
+        <!-- Project Management Section -->
+        <div class="project-actions">
+            <h3>📁 Project Management</h3>
+            <p>Start a new project or load a previously saved one:</p>
+            
+            <div class="btn-group">
+                <!-- Create New Project -->
+                <a href="{{ url_for('create_project') }}" class="btn btn-success">➕ Create New Project</a>
+                
+                <!-- Load Existing Project -->
+                <form method="post" action="{{ url_for('load_project') }}" enctype="multipart/form-data" style="display: inline-block; margin: 0;" class="no-validate">
+                    <label for="project_file_load" class="btn" style="cursor: pointer; margin: 0;">
+                        📂 Load Project
+                        <input type="file" id="project_file_load" name="project_file" accept=".stryke" 
+                               style="display: none;" onchange="this.form.submit()">
+                    </label>
+                </form>
+                
+                <!-- Save Current Project -->
+                <form method="post" action="{{ url_for('save_project') }}" style="display: inline-block; margin: 0;" class="no-validate">
+                    <button type="submit" class="btn btn-warning">💾 Save Current Project</button>
+                </form>
+            </div>
+            
+            <p style="font-size: 13px; color: #666; margin-top: 10px;">
+                <em>💡 Tip: Save your project to continue working on it later or share it with colleagues!</em>
+            </p>
+        </div>
 
         <p>
             Please log out when you are done 

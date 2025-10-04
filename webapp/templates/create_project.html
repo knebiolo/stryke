@@ -51,6 +51,45 @@
         button:hover {
             background: #0056b3;
         }
+        .project-management {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #007BFF;
+        }
+        .project-management h3 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #0056b3;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .btn-small {
+            display: inline-block;
+            padding: 8px 12px;
+            background: #ffc107;
+            color: #000;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-small:hover {
+            background: #e0a800;
+        }
+        .btn-load {
+            background: #17a2b8;
+            color: white;
+        }
+        .btn-load:hover {
+            background: #138496;
+        }
     </style>
     <script src="{{ url_for('static', filename='autosave.js') }}"></script>
     <script src="{{ url_for('static', filename='validation.js') }}"></script>
@@ -98,6 +137,32 @@
 
             <button type="submit">Create Project</button>
         </form>
+        
+        <!-- Project Save/Load Section -->
+        <div class="project-management">
+            <h3>💾 Save or Load Project</h3>
+            <p style="font-size: 14px; margin: 8px 0;">Save your entire project to continue later, or load a previously saved project:</p>
+            
+            <div class="btn-group">
+                <!-- Save Project -->
+                <form method="post" action="{{ url_for('save_project') }}" style="display: inline-block; margin: 0;" class="no-validate">
+                    <button type="submit" class="btn-small">💾 Save Project</button>
+                </form>
+                
+                <!-- Load Project -->
+                <form method="post" action="{{ url_for('load_project') }}" enctype="multipart/form-data" style="display: inline-block; margin: 0;" class="no-validate">
+                    <label for="project_file_create" class="btn-small btn-load" style="cursor: pointer; margin: 0;">
+                        📂 Load Project
+                        <input type="file" id="project_file_create" name="project_file" accept=".stryke" 
+                               style="display: none;" onchange="this.form.submit()">
+                    </label>
+                </form>
+            </div>
+            
+            <p style="font-size: 12px; color: #666; margin-top: 8px;">
+                <em>💡 Projects save to your Downloads folder as .stryke files</em>
+            </p>
+        </div>
     </div>
 </body>
 </html>

@@ -852,6 +852,199 @@ def import_graph_template():
         flash(f'Error importing graph template: {str(e)}')
         return redirect(request.referrer or url_for('graph_editor'))
 
+@app.route('/save_project', methods=['POST'])
+def save_project():
+    """
+    Save entire project (all session data) as a single .stryke JSON file
+    """
+    try:
+        sim_folder = g.get("user_sim_folder")
+        if not sim_folder:
+            flash('Session expired. Please log in again.')
+            return redirect(url_for('login'))
+        
+        # Gather all project data from session files
+        project_data = {
+            'version': '1.0',
+            'saved_date': datetime.now().isoformat(),
+            'project_info': {},
+            'flow_scenarios': {},
+            'facilities': {},
+            'unit_parameters': {},
+            'graph': {},
+            'population': {},
+            'operating_scenarios': {}
+        }
+        
+        # Project info
+        project_csv = os.path.join(sim_folder, 'project.csv')
+        if os.path.exists(project_csv):
+            df = pd.read_csv(project_csv)
+            project_data['project_info'] = df.to_dict(orient='records')
+        
+        # Flow scenarios
+        flow_csv = os.path.join(sim_folder, 'flow.csv')
+        if os.path.exists(flow_csv):
+            df = pd.read_csv(flow_csv)
+            project_data['flow_scenarios'] = df.to_dict(orient='records')
+        
+        # Hydrograph data (if exists)
+        hydrograph_csv = os.path.join(sim_folder, 'hydrograph.csv')
+        if os.path.exists(hydrograph_csv):
+            df = pd.read_csv(hydrograph_csv)
+            project_data['hydrograph'] = df.to_dict(orient='records')
+        
+        # Facilities
+        facilities_csv = os.path.join(sim_folder, 'facilities.csv')
+        if os.path.exists(facilities_csv):
+            df = pd.read_csv(facilities_csv)
+            project_data['facilities'] = df.to_dict(orient='records')
+        
+        # Unit parameters
+        unit_params_csv = os.path.join(sim_folder, 'unit_params.csv')
+        if os.path.exists(unit_params_csv):
+            with open(unit_params_csv, 'r') as f:
+                project_data['unit_parameters']['csv_content'] = f.read()
+        
+        # Graph/routing
+        graph_json = os.path.join(sim_folder, 'graph.json')
+        if os.path.exists(graph_json):
+            with open(graph_json, 'r') as f:
+                project_data['graph'] = json.load(f)
+        
+        # Population data
+        population_csv = os.path.join(sim_folder, 'population.csv')
+        if os.path.exists(population_csv):
+            df = pd.read_csv(population_csv)
+            project_data['population'] = df.to_dict(orient='records')
+        
+        # Operating scenarios
+        op_scenarios_csv = os.path.join(sim_folder, 'operating_scenarios.csv')
+        if os.path.exists(op_scenarios_csv):
+            df = pd.read_csv(op_scenarios_csv)
+            project_data['operating_scenarios'] = df.to_dict(orient='records')
+        
+        # Create filename from project name or use default
+        project_name = 'stryke_project'
+        if project_data['project_info']:
+            project_name = project_data['project_info'][0].get('Project Name', 'stryke_project')
+            # Clean filename
+            project_name = re.sub(r'[^\w\s-]', '', project_name).strip().replace(' ', '_')
+        
+        filename = f"{project_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.stryke"
+        
+        # Create JSON response
+        json_data = json.dumps(project_data, indent=2)
+        
+        response = Response(
+            json_data,
+            mimetype='application/json',
+            headers={
+                'Content-Disposition': f'attachment; filename={filename}'
+            }
+        )
+        
+        flash('✅ Project saved successfully!')
+        return response
+        
+    except Exception as e:
+        flash(f'Error saving project: {str(e)}')
+        return redirect(request.referrer or url_for('index'))
+
+@app.route('/load_project', methods=['POST'])
+def load_project():
+    """
+    Load a complete project from a .stryke JSON file
+    """
+    try:
+        sim_folder = g.get("user_sim_folder")
+        if not sim_folder:
+            flash('Session expired. Please log in again.')
+            return redirect(url_for('login'))
+        
+        # Check if file was uploaded
+        if 'project_file' not in request.files:
+            flash('No file selected')
+            return redirect(request.referrer or url_for('index'))
+        
+        file = request.files['project_file']
+        if file.filename == '':
+            flash('No file selected')
+            return redirect(request.referrer or url_for('index'))
+        
+        if not file.filename.endswith('.stryke'):
+            flash('Invalid file type. Please upload a .stryke file')
+            return redirect(request.referrer or url_for('index'))
+        
+        # Read and parse JSON
+        content = file.read().decode('utf-8')
+        project_data = json.loads(content)
+        
+        # Validate version
+        if 'version' not in project_data:
+            flash('Invalid project file format')
+            return redirect(request.referrer or url_for('index'))
+        
+        # Clear existing session data
+        for filename in ['project.csv', 'flow.csv', 'hydrograph.csv', 'facilities.csv', 
+                         'unit_params.csv', 'graph.json', 'population.csv', 'operating_scenarios.csv']:
+            filepath = os.path.join(sim_folder, filename)
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        
+        # Restore project info
+        if project_data.get('project_info'):
+            df = pd.DataFrame(project_data['project_info'])
+            df.to_csv(os.path.join(sim_folder, 'project.csv'), index=False)
+        
+        # Restore flow scenarios
+        if project_data.get('flow_scenarios'):
+            df = pd.DataFrame(project_data['flow_scenarios'])
+            df.to_csv(os.path.join(sim_folder, 'flow.csv'), index=False)
+        
+        # Restore hydrograph
+        if project_data.get('hydrograph'):
+            df = pd.DataFrame(project_data['hydrograph'])
+            df.to_csv(os.path.join(sim_folder, 'hydrograph.csv'), index=False)
+        
+        # Restore facilities
+        if project_data.get('facilities'):
+            df = pd.DataFrame(project_data['facilities'])
+            df.to_csv(os.path.join(sim_folder, 'facilities.csv'), index=False)
+        
+        # Restore unit parameters
+        if project_data.get('unit_parameters', {}).get('csv_content'):
+            with open(os.path.join(sim_folder, 'unit_params.csv'), 'w') as f:
+                f.write(project_data['unit_parameters']['csv_content'])
+        
+        # Restore graph
+        if project_data.get('graph'):
+            with open(os.path.join(sim_folder, 'graph.json'), 'w') as f:
+                json.dump(project_data['graph'], f, indent=2)
+        
+        # Restore population
+        if project_data.get('population'):
+            df = pd.DataFrame(project_data['population'])
+            df.to_csv(os.path.join(sim_folder, 'population.csv'), index=False)
+        
+        # Restore operating scenarios
+        if project_data.get('operating_scenarios'):
+            df = pd.DataFrame(project_data['operating_scenarios'])
+            df.to_csv(os.path.join(sim_folder, 'operating_scenarios.csv'), index=False)
+        
+        # Clear auto-save since we just loaded a project
+        flash('✅ Project loaded successfully! All data has been restored.')
+        
+        # Redirect to create_project to show loaded data
+        return redirect(url_for('create_project'))
+        
+    except json.JSONDecodeError:
+        flash('Invalid project file format. File is corrupted or not a valid .stryke file.')
+        return redirect(request.referrer or url_for('index'))
+    except Exception as e:
+        flash(f'Error loading project: {str(e)}')
+        return redirect(request.referrer or url_for('index'))
+
 @app.route('/export_partial_template', methods=['POST'])
 @app.route('/fit', methods=['GET', 'POST'])
 def fit_distributions():
