@@ -449,6 +449,25 @@ def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
                 sim.run(); sim.summary()
         else:
             sim.run(); sim.summary()
+            
+        # Generate and save the report for XLS simulations
+        log.info("Generating simulation report...")
+        try:
+            report_html = generate_report(sim)
+            report_path = os.path.join(sim.proj_dir, 'simulation_report.html')
+            
+            with open(report_path, 'w', encoding='utf-8') as f:
+                f.write(report_html)
+            
+            # Create marker file for report location
+            marker_path = os.path.join(sim.proj_dir, 'report_path.txt')
+            with open(marker_path, 'w', encoding='utf-8') as f:
+                f.write(report_path)
+                
+            log.info("Report generated and saved to %s", report_path)
+        except Exception as e:
+            log.warning("Failed to generate report: %s", e)
+            
         log.info("Simulation completed successfully.")
     except Exception as e:
         log.exception("Simulation failed (XLS).")
@@ -2942,6 +2961,20 @@ def run_simulation_in_background_custom(data_dict, q):
         sim.run()
         sim.summary()
         
+        # Generate and save the report
+        log.info("Generating simulation report...")
+        report_html = generate_report(sim)
+        report_path = os.path.join(proj_dir, 'simulation_report.html')
+        
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(report_html)
+        
+        # Create marker file for report location
+        marker_path = os.path.join(proj_dir, 'report_path.txt')
+        with open(marker_path, 'w', encoding='utf-8') as f:
+            f.write(report_path)
+            
+        log.info("Report generated and saved to %s", report_path)
         log.info("Simulation completed successfully.")
     except Exception as e:
         log.exception("Simulation failed (UI-driven).")
