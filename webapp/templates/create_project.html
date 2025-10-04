@@ -53,6 +53,7 @@
         }
     </style>
     <script src="{{ url_for('static', filename='autosave.js') }}"></script>
+    <script src="{{ url_for('static', filename='validation.js') }}"></script>
 </head>
 <body>
     <div class="container">
@@ -74,19 +75,21 @@
 
         <form method="post">
             <label for="project_name">Project Name:</label>
-            <input type="text" name="project_name" id="project_name" maxlength="50" required>
+            <input type="text" name="project_name" id="project_name" maxlength="50" 
+                   data-validate="required|minLength:3|maxLength:50" required>
 
             <label for="project_notes">Project Notes:</label>
-            <textarea name="project_notes" id="project_notes" maxlength="255"></textarea>
+            <textarea name="project_notes" id="project_notes" maxlength="255" 
+                      data-validate="maxLength:255"></textarea>
 
             <label for="units">Choose Units:</label>
-            <select name="units" id="units">
+            <select name="units" id="units" data-validate="required">
                 <option value="metric" selected>Metric</option>
 
             </select>
 
             <label for="model_setup">Model Setup:</label>
-            <select name="model_setup" id="model_setup">
+            <select name="model_setup" id="model_setup" data-validate="required">
                 <option value="single_unit_survival_only">Specified single unit, survival only, no movement</option>
                 <option value="single_unit_simulated_entrainment">Specified single unit with simulated entrainment events and survival, no movement</option>
                 <option value="single_powerhouse_simulated_entrainment_routing">Single Powerhouse with movement, simulated entrainment, survival </option>
