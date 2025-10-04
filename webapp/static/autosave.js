@@ -34,19 +34,38 @@
         const savedTimestamp = localStorage.getItem(TIMESTAMP_KEY);
         
         if (savedData && savedTimestamp) {
+            // Check if saved data has meaningful content (not just empty form)
+            try {
+                const parsedData = JSON.parse(savedData);
+                const hasContent = Object.keys(parsedData).length > 0 && 
+                                  Object.values(parsedData).some(val => val && val.toString().trim() !== '');
+                
+                if (!hasContent) {
+                    // No meaningful data, clear it
+                    clearAutoSave();
+                    return;
+                }
+            } catch (e) {
+                // Invalid data, clear it
+                clearAutoSave();
+                return;
+            }
+            
             const saveDate = new Date(parseInt(savedTimestamp));
             const minutesAgo = Math.floor((Date.now() - saveDate.getTime()) / 60000);
             
-            // Only offer to restore if saved within last 24 hours
-            if (minutesAgo < 1440) {
+            // Only offer to restore if saved within last 24 hours AND more than 1 minute ago
+            // (avoid showing prompt for brand new empty forms)
+            if (minutesAgo > 0 && minutesAgo < 1440) {
                 const message = `Found auto-saved work from ${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago. Would you like to restore it?`;
                 
                 // Create restore prompt
                 showRestorePrompt(message, savedData);
-            } else {
+            } else if (minutesAgo >= 1440) {
                 // Clear old auto-save data
                 clearAutoSave();
             }
+            // If minutesAgo <= 0, it's too recent, don't prompt
         }
     }
 

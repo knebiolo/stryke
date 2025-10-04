@@ -114,7 +114,6 @@
             </label>
             <input type="number" id="num_facilities" name="num_facilities" min="1" value="1" 
                 onchange="generateFacilityForms()" 
-                data-validate="positiveInteger|range:1,10"
                 {% if sim_mode in ["single_unit_survival_only", "single_unit_simulated_entrainment", "single_powerhouse_simulated_entrainment_routing"] %}readonly{% endif %}>
             
             <div id="facilities_container"></div>
@@ -142,8 +141,7 @@
                     <div class="form-row">
                         <div>
                             <label for="facility_name_${i}">Facility Name:</label>
-                            <input type="text" name="facility_name_${i}" id="facility_name_${i}" maxlength="50" 
-                                   data-validate="required|minLength:2|maxLength:50" required>
+                            <input type="text" name="facility_name_${i}" id="facility_name_${i}" maxlength="50" required>
                         </div>
 
                         <div>
@@ -154,7 +152,6 @@
                                 </span>
                             </label>
                             <input type="number" name="num_units_${i}" id="num_units_${i}" min="1" value="1"
-                                   data-validate="positiveInteger|range:1,50"
                                 {% if sim_mode in ["single_unit_survival_only", "single_unit_simulated_entrainment"] %}readonly{% endif %}>
                         </div>
                     </div>
@@ -180,8 +177,7 @@
                                     <span class="tooltip-text">Minimum discharge required to operate units (${unitText}).</span>
                                 </span>
                             </label>
-                            <input type="number" name="min_op_flow_${i}" id="min_op_flow_${i}" step="any" value="0"
-                                   data-validate="nonNegative">
+                            <input type="number" name="min_op_flow_${i}" id="min_op_flow_${i}" step="any" value="0">
                         </div>
 
                         <div>
@@ -191,8 +187,7 @@
                                     <span class="tooltip-text">Minimum discharge required for instream flow releases (${unitText}).</span>
                                 </span>
                             </label>
-                            <input type="number" name="env_flow_${i}" id="env_flow_${i}" step="any" value="0"
-                                   data-validate="nonNegative">
+                            <input type="number" name="env_flow_${i}" id="env_flow_${i}" step="any" value="0">
                         </div>
 
                         <div>
@@ -202,8 +197,7 @@
                                     <span class="tooltip-text">Discharge required for downstream bypass (${unitText}).</span>
                                 </span>
                             </label>
-                            <input type="number" name="bypass_flow_${i}" id="bypass_flow_${i}" step="any" value="0"
-                                   data-validate="nonNegative">
+                            <input type="number" name="bypass_flow_${i}" id="bypass_flow_${i}" step="any" value="0">
                         </div>
 
                         <div>
@@ -213,8 +207,7 @@
                                     <span class="tooltip-text">Enter rack spacing as a float in millimeters (mm).</span>
                                 </span>
                             </label>
-                            <input type="number" step="any" name="rack_spacing_${i}" id="rack_spacing_${i}" placeholder="mm"
-                                   data-validate="positive">
+                            <input type="number" step="any" name="rack_spacing_${i}" id="rack_spacing_${i}" placeholder="mm">
                         </div>
                     </div>
 

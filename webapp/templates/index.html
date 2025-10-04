@@ -83,6 +83,13 @@
             gap: 10px;
             margin-top: 15px;
             flex-wrap: wrap;
+            align-items: center;
+        }
+        .btn-group .btn,
+        .btn-group button,
+        .btn-group label {
+            margin: 0;
+            border: none;
         }
     </style>
 </head>
@@ -116,11 +123,11 @@
             
             <div class="btn-group">
                 <!-- Create New Project -->
-                <a href="{{ url_for('create_project') }}" class="btn btn-success">➕ Create New Project</a>
+                <a href="{{ url_for('create_project') }}" class="btn btn-success" style="text-decoration: none;">➕ Create New Project</a>
                 
                 <!-- Load Existing Project -->
                 <form method="post" action="{{ url_for('load_project') }}" enctype="multipart/form-data" style="display: inline-block; margin: 0;" class="no-validate">
-                    <label for="project_file_load" class="btn" style="cursor: pointer; margin: 0;">
+                    <label for="project_file_load" class="btn" style="cursor: pointer; margin: 0; background: #007BFF; color: white; display: inline-block; padding: 10px 15px; border-radius: 4px; text-decoration: none; border: none;">
                         📂 Load Project
                         <input type="file" id="project_file_load" name="project_file" accept=".stryke" 
                                style="display: none;" onchange="this.form.submit()">
@@ -129,7 +136,7 @@
                 
                 <!-- Save Current Project -->
                 <form method="post" action="{{ url_for('save_project') }}" style="display: inline-block; margin: 0;" class="no-validate">
-                    <button type="submit" class="btn btn-warning">💾 Save Current Project</button>
+                    <button type="submit" class="btn btn-warning" style="border: none;">💾 Save Current Project</button>
                 </form>
             </div>
             

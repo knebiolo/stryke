@@ -106,8 +106,7 @@
                     <span class="tooltip-text">Scenario Name, Maximum 50 Characters. e.g. "Spring 90% Exceedance"</span>
                 </span>
             </label>
-            <input type="text" name="scenario_name" id="scenario_name" maxlength="50" 
-                   data-validate="required|minLength:3|maxLength:50" required>
+            <input type="text" name="scenario_name" id="scenario_name" maxlength="50" required>
 
             <label for="scenario_number">
                 Scenario Number:
@@ -115,8 +114,7 @@
                     <span class="tooltip-text">An integer that counts each scenarios.  Web app limited to 1 scenario</span>
                 </span>
             </label>
-            <input type="number" name="scenario_number" id="scenario_number" 
-                   data-validate="required|positiveInteger" required>
+            <input type="number" name="scenario_number" id="scenario_number" required>
 
             <label for="season">
                 Season:
@@ -124,8 +122,7 @@
                     <span class="tooltip-text">A 50-character text describing the season, e.g., "Spring".</span>
                 </span>
             </label>
-            <input type="text" name="season" id="season" maxlength="50" 
-                   data-validate="required|minLength:2|maxLength:50" required>
+            <input type="text" name="season" id="season" maxlength="50" required>
 
             <label for="months">
                 Months (single integer or comma-separated list):
@@ -133,7 +130,7 @@
                     <span class="tooltip-text">Enter a single month (e.g., 3 for March) or a list (e.g., 3,4,5).</span>
                 </span>
             </label>
-            <input type="text" name="months" id="months" data-validate="required" required>
+            <input type="text" name="months" id="months" required>
 
             <div id="static_fields">
                 <label for="discharge">
@@ -142,8 +139,7 @@
                         <span id="discharge_tooltip" class="tooltip-text"></span>
                     </span>
                 </label>
-                <input type="number" step="any" name="discharge" id="discharge" 
-                       data-validate="nonNegative">
+                <input type="number" step="any" name="discharge" id="discharge">
             </div>
 
             <div id="hydrograph_fields" class="hidden">
