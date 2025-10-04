@@ -3540,7 +3540,7 @@ def generate_report(sim):
                     <div style="flex:1; min-width:300px; text-align:center;">
                         <img src="data:image/png;base64,{wheel_b64}" style="max-width:100%; height:auto;" />
                         <p style="font-size:0.9em; color:#666; margin-top:8px; font-style:italic;">
-                            Figure 3: "Wheel of Death" - Proportional breakdown of fish mortality by causal factor (impingement, blade strike, barotrauma, and latent mortality).
+                            Figure 3: "Wheel of Death" - Proportional breakdown of fish mortality by causal factor (impingement, blade strike, and barotrauma).
                         </p>
                     </div>
                     <div style="flex:1; min-width:300px;">
