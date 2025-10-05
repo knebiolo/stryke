@@ -472,8 +472,11 @@
       </div>
         <script>
         document.addEventListener('DOMContentLoaded', function() {
-          toggleSimulateChoice(); 
-          toggleEntrainmentChoice();
+          toggleSimulateChoice();
+          // Delay toggleEntrainmentChoice to allow toggleSimulateChoice to show parent div first
+          setTimeout(function() {
+            toggleEntrainmentChoice();
+          }, 50);
         
           // Additional clear explicit event listeners
           document.getElementById("simulateChoice").addEventListener("change", toggleSimulateChoice);

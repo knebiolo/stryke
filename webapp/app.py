@@ -3604,6 +3604,34 @@ def population():
                 if len(df) > 0:
                     population_data = df.iloc[0].to_dict()
                     print(f"DEBUG population GET: population_data keys: {list(population_data.keys())}", flush=True)
+                    
+                    # Convert U_crit from ft/s (stored) to m/s (display) if units are metric
+                    units = session.get('units', 'metric')
+                    if units == 'metric' and 'U_crit' in population_data and population_data['U_crit']:
+                        try:
+                            ucrit_ft = float(population_data['U_crit'])
+                            population_data['U_crit'] = ucrit_ft / 3.28084  # Convert ft/s to m/s
+                            print(f"DEBUG: Converted U_crit from {ucrit_ft} ft/s to {population_data['U_crit']} m/s", flush=True)
+                        except (ValueError, TypeError) as e:
+                            print(f"ERROR converting U_crit: {e}", flush=True)
+                    
+                    # Convert Length_mean from inches (stored) to mm (display) if units are metric
+                    if units == 'metric' and 'Length_mean' in population_data and population_data['Length_mean']:
+                        try:
+                            length_in = float(population_data['Length_mean'])
+                            population_data['Length_mean'] = length_in * 25.4  # Convert inches to mm
+                            print(f"DEBUG: Converted Length_mean from {length_in} in to {population_data['Length_mean']} mm", flush=True)
+                        except (ValueError, TypeError) as e:
+                            print(f"ERROR converting Length_mean: {e}", flush=True)
+                    
+                    # Convert Length_sd from inches (stored) to mm (display) if units are metric
+                    if units == 'metric' and 'Length_sd' in population_data and population_data['Length_sd']:
+                        try:
+                            sd_in = float(population_data['Length_sd'])
+                            population_data['Length_sd'] = sd_in * 25.4  # Convert inches to mm
+                            print(f"DEBUG: Converted Length_sd from {sd_in} in to {population_data['Length_sd']} mm", flush=True)
+                        except (ValueError, TypeError) as e:
+                            print(f"ERROR converting Length_sd: {e}", flush=True)
             except Exception as e:
                 print(f"ERROR loading population from CSV: {e}", flush=True)
                 import traceback
