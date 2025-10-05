@@ -960,24 +960,31 @@ def load_project():
     Load a complete project from a .stryke JSON file
     """
     try:
+        print("=== LOAD PROJECT CALLED ===", flush=True)
         sim_folder = g.get("user_sim_folder")
         if not sim_folder:
+            print("No sim_folder found", flush=True)
             flash('Session expired. Please log in again.')
             return redirect(url_for('login'))
         
         # Check if file was uploaded
         if 'project_file' not in request.files:
+            print("No project_file in request.files", flush=True)
             flash('No file selected')
-            return redirect(request.referrer or url_for('index'))
+            return redirect(url_for('create_project'))
         
         file = request.files['project_file']
         if file.filename == '':
+            print("Empty filename", flush=True)
             flash('No file selected')
-            return redirect(request.referrer or url_for('index'))
+            return redirect(url_for('create_project'))
         
         if not file.filename.endswith('.stryke'):
+            print(f"Invalid file type: {file.filename}", flush=True)
             flash('Invalid file type. Please upload a .stryke file')
-            return redirect(request.referrer or url_for('index'))
+            return redirect(url_for('create_project'))
+        
+        print(f"Loading project file: {file.filename}", flush=True)
         
         # Read and parse JSON
         content = file.read().decode('utf-8')
@@ -1012,14 +1019,16 @@ def load_project():
             df.to_csv(os.path.join(sim_folder, 'flow.csv'), index=False)
             # Update session variables from loaded data
             if len(df) > 0:
-                session['scenario_name'] = df.iloc[0].get('Scenario Name', '')
+                # Try both column name formats (with/without space)
+                session['scenario_name'] = df.iloc[0].get('Scenario Name', df.iloc[0].get('Scenario', ''))
                 session['scenario_number'] = str(df.iloc[0].get('Scenario Number', ''))
                 session['season'] = df.iloc[0].get('Season', '')
                 session['months'] = df.iloc[0].get('Months', '')
                 # Check if it's a hydrograph or static discharge
-                if pd.notna(df.iloc[0].get('Discharge')):
+                flow_val = df.iloc[0].get('Flow', df.iloc[0].get('Discharge'))
+                if pd.notna(flow_val) and flow_val != 'hydrograph':
                     session['scenario_type'] = 'static'
-                    session['discharge'] = str(df.iloc[0].get('Discharge', ''))
+                    session['discharge'] = str(flow_val)
                 else:
                     session['scenario_type'] = 'hydrograph'
         
@@ -1061,15 +1070,21 @@ def load_project():
         # Clear auto-save since we just loaded a project
         flash('✅ Project loaded successfully! All data has been restored.')
         
+        print("Project loaded successfully, redirecting to create_project", flush=True)
+        
         # Redirect to create_project to show loaded data
         return redirect(url_for('create_project'))
         
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {str(e)}", flush=True)
         flash('Invalid project file format. File is corrupted or not a valid .stryke file.')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(url_for('create_project'))
     except Exception as e:
+        print(f"Error loading project: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc()
         flash(f'Error loading project: {str(e)}')
-        return redirect(request.referrer or url_for('index'))
+        return redirect(url_for('create_project'))
 
 @app.route('/export_partial_template', methods=['POST'])
 @app.route('/fit', methods=['GET', 'POST'])
@@ -1308,10 +1323,10 @@ def create_project():
                     print(f"Error reading existing project data: {e}")
     
     return render_template('create_project.html',
-                         project_name=project_name,
-                         project_notes=project_notes,
-                         units=units,
-                         model_setup=model_setup,
+                         project_name=project_name or '',
+                         project_notes=project_notes or '',
+                         units=units or 'metric',
+                         model_setup=model_setup or '',
                          project_loaded=project_loaded)
 
 def process_hydrograph_data(raw_data):
