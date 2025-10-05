@@ -117,15 +117,18 @@
                 {% if sim_mode in ["single_unit_survival_only", "single_unit_simulated_entrainment", "single_powerhouse_simulated_entrainment_routing"] %}readonly{% endif %}>
             
             <div id="facilities_container"></div>
-            <button type="submit">Save Facilities</button>
+            
+            <!-- Buttons Section -->
+            <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
+                <button type="submit" {% if project_loaded and facilities_data %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Facilities</button>
+                
+                {% if project_loaded and facilities_data %}
+                <a href="{{ url_for('unit_parameters') }}" style="text-decoration: none;">
+                    <button type="button" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;">Next: Unit Parameters →</button>
+                </a>
+                {% endif %}
+            </div>
         </form>
-
-        <!-- Next Button for Loaded Projects -->
-        {% if project_loaded and facilities_data %}
-        <div style="margin-top: 15px;">
-            <a href="{{ url_for('unit_parameters') }}" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-weight: 500;">Next: Unit Parameters →</a>
-        </div>
-        {% endif %}
 
         <!-- Save Project Section -->
         <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-top: 30px; border-left: 4px solid #ffc107;">

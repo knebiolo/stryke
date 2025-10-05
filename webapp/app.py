@@ -1873,12 +1873,13 @@ def unit_parameters():
                 unit_params_list = df.to_dict('records')
                 print(f"DEBUG unit_params GET: converted to {len(unit_params_list)} records", flush=True)
                 
-                # Create a lookup dictionary: {(facility, unit): params_dict}
+                # Create a lookup dictionary: {"facility|unit": params_dict}
+                # Use string keys instead of tuples for JSON serialization
                 unit_params_lookup = {}
                 for params in unit_params_list:
                     facility = params.get('Facility', '')
                     unit = params.get('Unit', '')
-                    key = (facility, str(unit))
+                    key = f"{facility}|{str(unit)}"  # String key instead of tuple
                     unit_params_lookup[key] = params
                 print(f"DEBUG unit_params GET: created lookup with {len(unit_params_lookup)} entries", flush=True)
                 

@@ -193,7 +193,7 @@
                         </span>
                       </th>
                       <td>
-                        {% set unit_key = (facility.Facility, i|string) %}
+                        {% set unit_key = facility.Facility ~ "|" ~ i|string %}
                         {% set params = session.get('unit_params_lookup', {}).get(unit_key, {}) %}
                         <input type="number" step="any" name="velocity_{{ outer_index }}_{{ i }}" placeholder="Intake Velocity" value="{{ params.get('intake_vel', '') }}">
                       </td>
@@ -450,15 +450,18 @@
           {% endfor %}
         {% endfor %}
       {% endif %}
-      <button type="submit">Save Unit Parameters</button>
+      
+      <!-- Buttons Section -->
+      <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
+          <button type="submit" {% if project_loaded and session.get('unit_params_lookup') %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Unit Parameters</button>
+          
+          {% if project_loaded and session.get('unit_params_lookup') %}
+          <a href="{{ url_for('operating_scenarios') }}" style="text-decoration: none;">
+              <button type="button" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;">Next: Operating Scenarios →</button>
+          </a>
+          {% endif %}
+      </div>
     </form>
-
-    <!-- Next Button for Loaded Projects -->
-    {% if project_loaded and session.get('unit_params_lookup') %}
-    <div style="margin-top: 15px;">
-        <a href="{{ url_for('operating_scenarios') }}" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-weight: 500;">Next: Operating Scenarios →</a>
-    </div>
-    {% endif %}
     
     <!-- Save Project Section -->
     <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-top: 30px; border-left: 4px solid #ffc107;">
@@ -484,13 +487,19 @@
     function populateLoadedData() {
       for (const [key, params] of Object.entries(unitParamsLookup)) {
         console.log(`Populating data for key ${key}:`, params);
-        // Key format is "[facility, unit]" as a string - need to parse it
-        // Find all accordions and match by facility/unit
+        // Key format is "facility|unit" as a string
+        const [facility, unit] = key.split('|');
+        
+        // Find the accordion for this facility/unit
         const accordions = document.querySelectorAll('.unit-accordion');
         accordions.forEach(accordion => {
           const summary = accordion.querySelector('summary').textContent;
-          // Extract facility and unit from summary text
-          // Could also use accordion ID pattern
+          // Check if this accordion matches the facility and unit
+          if (!summary.includes(facility) || !summary.includes(`Unit: ${unit}`)) {
+            return; // Skip this accordion
+          }
+          
+          console.log(`Matched accordion for ${facility} Unit ${unit}`);
           
           // Populate fields by matching parameter names
           for (const [paramKey, paramValue] of Object.entries(params)) {
