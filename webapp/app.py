@@ -1077,6 +1077,15 @@ def load_project():
         session['proj_dir'] = sim_folder
         session.modified = True  # Force session to save
         
+        # List what files were created
+        print(f"FILES CREATED IN {sim_folder}:", flush=True)
+        for fname in ['project.csv', 'flow.csv', 'hydrograph.csv', 'facilities.csv', 'unit_params.csv', 'graph.json', 'population.csv', 'operating_scenarios.csv']:
+            fpath = os.path.join(sim_folder, fname)
+            if os.path.exists(fpath):
+                print(f"  ✓ {fname} exists", flush=True)
+            else:
+                print(f"  ✗ {fname} missing", flush=True)
+        
         print(f"BEFORE REDIRECT: session keys={list(session.keys())}", flush=True)
         print(f"BEFORE REDIRECT: project_name={session.get('project_name')}", flush=True)
         print(f"BEFORE REDIRECT: proj_dir={session.get('proj_dir')}", flush=True)
