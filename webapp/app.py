@@ -1056,7 +1056,12 @@ def load_project():
             df.to_csv(os.path.join(sim_folder, 'facilities.csv'), index=False)
             # CRITICAL: Store facilities_data for simulation
             session['facilities_data'] = df.to_dict('records')
-            print(f"DEBUG load_project: Stored {len(session['facilities_data'])} facilities in session", flush=True)
+            # Build facility_units mapping for operating_scenarios page
+            facility_units = {}
+            for _, row in df.iterrows():
+                facility_units[row['Facility']] = int(row['Units'])
+            session['facility_units'] = facility_units
+            print(f"DEBUG load_project: Stored {len(session['facilities_data'])} facilities and {len(facility_units)} facility_units in session", flush=True)
         
         # Restore unit parameters
         if project_data.get('unit_parameters', {}).get('csv_content'):
