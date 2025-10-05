@@ -1060,6 +1060,7 @@ def load_project():
         if project_data.get('graph'):
             with open(os.path.join(sim_folder, 'graph.json'), 'w') as f:
                 json.dump(project_data['graph'], f, indent=2)
+            session['graph_data'] = project_data['graph']
         
         # Restore population
         if project_data.get('population'):
@@ -4045,11 +4046,23 @@ def generate_report(sim):
         # Species Information
         if pop_df is not None and not pop_df.empty:
             report_sections.append("<h2>Species Information</h2>")
-            species_cols = [c for c in ("Species", "Common_Name", "Length_mean", "Length_sd", "Ucrit_mean", "Ucrit_sd", "Population") if c in pop_df.columns]
+            # Include modeled distribution parameters for length
+            species_cols = [c for c in ("Species", "Common Name", "length location", "length scale", "U_crit") if c in pop_df.columns]
             if species_cols:
-                species_summary = pop_df[species_cols].drop_duplicates()
+                species_summary = pop_df[species_cols].copy()
+                # Rename for better display
+                rename_map = {
+                    "length location": "Length Mean (modeled)",
+                    "length scale": "Length SD (modeled)",
+                    "U_crit": "Ucrit (ft/s)"
+                }
+                species_summary.rename(columns=rename_map, inplace=True)
+                # Round numeric columns
+                for col in species_summary.columns:
+                    if species_summary[col].dtype in ['float64', 'float32']:
+                        species_summary[col] = species_summary[col].round(2)
                 report_sections.append(f"<div style='overflow-x:auto;'>{species_summary.to_html(index=False, border=1)}</div>")
-                report_sections.append("<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>Table 1: Species characteristics including mean body length, swimming performance (Ucrit), and population size used in the simulation.</p>")
+                report_sections.append("<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>Table 1: Species characteristics including modeled length distribution parameters (mean and SD from statistical distribution) and swimming performance (Ucrit).</p>")
             else:
                 report_sections.append("<p>Species metadata not available.</p>")
         else:
@@ -4057,7 +4070,7 @@ def generate_report(sim):
 
         # Facility and Operating Data
         report_sections.append("<h2>Facility Configuration</h2>")
-        report_sections.append(f"<p><strong>Note:</strong> Unit parameters are stored in imperial units (the native units for the Franke equations). Values are converted to {units} for display when applicable.</p>")
+        report_sections.append(f"<p><strong>Note:</strong> Unit parameters are stored internally in imperial units (the native units for the Franke turbine equations). All values shown have been converted to {units}, then back to metric if applicable. Minor rounding differences may occur due to unit conversions.</p>")
         add_section("Facility Parameters", "/Facilities", units)
         add_section("Unit Parameters", "/Unit_Parameters", units)
         add_section("Operating Scenarios", "/Operating Scenarios", units)
@@ -4078,9 +4091,9 @@ def generate_report(sim):
         # Survival Analysis and Diagnostics
         report_sections.append("<h2>Survival Analysis</h2>")
         
-        # Add "Wheel of Death" - Mortality Factor Breakdown
+        # Add Mortality Factor Breakdown
         if mortality_components and sum(mortality_components.values()) > 0:
-            report_sections.append("<h3>💀 Mortality Factor Breakdown (The Wheel of Death)</h3>")
+            report_sections.append("<h3>💀 Mortality Factor Breakdown</h3>")
             
             # Create pie chart
             plt.rcParams.update({'font.size': 9})
@@ -4126,7 +4139,7 @@ def generate_report(sim):
                     <div style="flex:1; min-width:300px; text-align:center;">
                         <img src="data:image/png;base64,{wheel_b64}" style="max-width:100%; height:auto;" />
                         <p style="font-size:0.9em; color:#666; margin-top:8px; font-style:italic;">
-                            Figure 3: "Wheel of Death" - Proportional breakdown of fish mortality by causal factor (impingement, blade strike, and barotrauma).
+                            Figure 3: Proportional breakdown of fish mortality by causal factor (impingement, blade strike, and barotrauma).
                         </p>
                     </div>
                     <div style="flex:1; min-width:300px;">
@@ -4240,6 +4253,42 @@ def generate_report(sim):
         need_estimated_flow = route_flow_df is None
         discharge_records = []
         flow_conversion = 0.0283168 if units == 'metric' else 1.0
+        
+        # Load graph to identify bifurcation points (nodes with multiple downstream options)
+        # Bifurcation nodes are where fish make passage decisions (e.g., unit vs spillway)
+        bifurcation_map = {}  # Maps source node -> list of possible target nodes
+        all_targets = set()  # All nodes that are targets of bifurcations (actual passage routes)
+        try:
+            session_proj_dir = session.get('proj_dir')
+            if not session_proj_dir:
+                session_proj_dir = os.path.dirname(hdf_path)
+            graph_json_path = os.path.join(session_proj_dir, 'graph.json')
+            if os.path.exists(graph_json_path):
+                with open(graph_json_path, 'r') as f:
+                    graph_data = json.load(f)
+                    if 'elements' in graph_data and 'edges' in graph_data['elements']:
+                        # Build adjacency list of outgoing edges from each node
+                        edge_map = {}
+                        for edge in graph_data['elements']['edges']:
+                            source = edge['data']['source']
+                            target = edge['data']['target']
+                            if source not in edge_map:
+                                edge_map[source] = []
+                            edge_map[source].append(target)
+                        
+                        # Identify bifurcation nodes (multiple outgoing edges)
+                        for source, targets in edge_map.items():
+                            if len(targets) > 1:
+                                bifurcation_map[source] = targets
+                                # The targets of bifurcations are the actual passage routes
+                                all_targets.update(targets)
+                        
+                        print(f"[DEBUG] Identified {len(bifurcation_map)} bifurcation nodes: {list(bifurcation_map.keys())}", flush=True)
+                        print(f"[DEBUG] Passage route targets: {all_targets}", flush=True)
+        except Exception as e:
+            print(f"[WARNING] Could not load graph for bifurcation analysis: {e}", flush=True)
+            bifurcation_map = {}
+            all_targets = set()
 
         for key in simulation_keys:
             sim_data = store[key]
@@ -4249,21 +4298,66 @@ def generate_report(sim):
             if not state_cols:
                 continue
 
-            final_state_col = state_cols[-1]
-            sim_data = sim_data.dropna(subset=[final_state_col])
-            if sim_data.empty:
+            # For each fish, identify ALL passage routes they took (for multi-facility scenarios)
+            # Each fish may pass through multiple bifurcations (e.g., facility1 then facility2)
+            # We need to count each passage event separately
+            all_passage_events = []
+            
+            for idx, row in sim_data.iterrows():
+                # Get the sequence of states this fish passed through
+                fish_path = [row[col] for col in state_cols if pd.notna(row[col])]
+                
+                if bifurcation_map:
+                    # Find ALL bifurcation targets in this fish's path
+                    # Each one represents a separate passage event
+                    for state in fish_path:
+                        if state in all_targets:
+                            # This is a passage route (target of a bifurcation decision)
+                            all_passage_events.append({
+                                'fish_id': idx,
+                                'passage_route': state,
+                                'iteration': row.get('iteration'),
+                                'day': row.get('day'),
+                                'flow': row.get('flow')
+                            })
+                else:
+                    # Fallback: Find first non-river_node state
+                    # This works for simple cases but may include intermediate nodes
+                    for state in fish_path:
+                        if 'river_node' not in state.lower():
+                            all_passage_events.append({
+                                'fish_id': idx,
+                                'passage_route': state,
+                                'iteration': row.get('iteration'),
+                                'day': row.get('day'),
+                                'flow': row.get('flow')
+                            })
+                            break
+            
+            # Convert passage events to DataFrame
+            if all_passage_events:
+                passage_df = pd.DataFrame(all_passage_events)
+                
+                # Count passage events by route
+                route_counts = passage_df['passage_route'].value_counts()
+                # Filter out any remaining river nodes (shouldn't happen, but defensive)
+                route_counts = route_counts[~route_counts.index.str.contains('river_node', case=False, na=False)]
+                combined_route_counts = combined_route_counts.add(route_counts, fill_value=0)
+                
+                # Store passage_df for discharge calculations if needed
+                if need_estimated_flow and 'flow' in passage_df.columns:
+                    sim_data_for_discharge = passage_df
+                else:
+                    sim_data_for_discharge = None
+            else:
+                sim_data_for_discharge = None
                 continue
 
-            # Filter out river nodes - only keep actual passage routes (units, spill, bypass)
-            route_counts = sim_data[final_state_col].value_counts()
-            # Remove routes that are river nodes (end points, not passage routes)
-            route_counts = route_counts[~route_counts.index.str.contains('river_node', case=False, na=False)]
-            combined_route_counts = combined_route_counts.add(route_counts, fill_value=0)
-
-            if need_estimated_flow and {'iteration', 'day', 'flow'} <= set(sim_data.columns):
-                sim_sub = sim_data[['iteration', 'day', 'flow', final_state_col]].copy()
+            if need_estimated_flow and sim_data_for_discharge is not None:
+                # Use the passage events DataFrame for discharge calculations
+                sim_sub = sim_data_for_discharge[['iteration', 'day', 'flow', 'passage_route']].copy()
                 # Filter out river nodes from discharge calculations
-                sim_sub = sim_sub[~sim_sub[final_state_col].str.contains('river_node', case=False, na=False)]
+                sim_sub = sim_sub[~sim_sub['passage_route'].str.contains('river_node', case=False, na=False)]
                 if sim_sub.empty:
                     continue
                     
@@ -4276,7 +4370,7 @@ def generate_report(sim):
                     sim_sub.groupby(['iteration', 'day'])['flow_converted'].first().reset_index()
                 )
                 route_day_counts = (
-                    sim_sub.groupby(['iteration', 'day', final_state_col])
+                    sim_sub.groupby(['iteration', 'day', 'passage_route'])
                     .size()
                     .rename('route_count')
                     .reset_index()
@@ -4289,7 +4383,7 @@ def generate_report(sim):
                     route_day_counts['estimated_discharge'] = (
                         route_day_counts['route_count'] / route_day_counts['total_fish']
                     ) * route_day_counts['flow_converted']
-                    route_day_counts.rename(columns={final_state_col: 'Passage Route'}, inplace=True)
+                    route_day_counts.rename(columns={'passage_route': 'Passage Route'}, inplace=True)
                     discharge_records.append(route_day_counts[['Passage Route', 'route_count', 'total_fish', 'estimated_discharge']])
 
         if not combined_route_counts.empty:
@@ -4559,7 +4653,7 @@ def generate_report(sim):
                     "<div style='text-align:center;'>"
                     f"<img src=\"data:image/png;base64,{ts_entr}\" style='max-width:100%; height:auto;' />"
                     "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
-                    "Figure 7: Daily average entrainment over time with standard error bars (blue) and overlaid flow rates (gray). Shows temporal patterns and variability in fish entrainment."
+                    "Figure 7: Daily average entrainment over time with standard error bars (orange) and overlaid flow rates (gray). Shows temporal patterns and variability in fish entrainment."
                     "</p>"
                     "</div>"
                 )
@@ -4567,40 +4661,6 @@ def generate_report(sim):
                 report_sections.append("<p>Entrainment time series data not available.</p>")
         else:
             report_sections.append("<p>Time series data not available.</p>")
-
-        # Daily Entrainment Distribution  
-        report_sections.append("<h2>Daily Entrainment Distribution</h2>")
-        if daily_df is not None and not daily_df.empty and 'num_entrained' in daily_df.columns:
-            df_hist = daily_df.copy()
-            
-            # Include zeros by filling NaN with 0 instead of dropping
-            df_hist['num_entrained'] = df_hist['num_entrained'].fillna(0)
-
-            plt.rcParams.update({'font.size': 8})
-            fig = plt.figure(figsize=(8, 5))
-            plt.hist(df_hist['num_entrained'], bins=20, edgecolor='black', color='#ff8c00', alpha=0.7)
-            plt.xlabel("Number of Fish Entrained per Day")
-            plt.ylabel("Frequency")
-            plt.title("Daily Entrainment Distribution Across All Iterations")
-            plt.grid(axis='y', alpha=0.3)
-            plt.tight_layout()
-            
-            buf = io.BytesIO()
-            plt.savefig(buf, format='png', bbox_inches='tight')
-            plt.close(fig)
-            buf.seek(0)
-            hist_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-
-            report_sections.append(
-                "<div style='text-align:center;'>"
-                f"<img src=\"data:image/png;base64,{hist_b64}\" style='max-width:100%; height:auto;' />"
-                "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
-                "Figure 8: Histogram of daily entrainment across all Monte Carlo iterations, showing the complete distribution of daily entrainment outcomes from the stochastic simulation."
-                "</p>"
-                "</div>"
-            )
-        else:
-            report_sections.append("<p>No daily entrainment data available for histogram.</p>")
 
         # Finalize HTML
         final_html = "\n".join(report_sections)

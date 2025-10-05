@@ -15,7 +15,7 @@
   
   {% if project_loaded %}
   <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; margin: 20px 0; border-radius: 5px; font-size: 14px;">
-    ✅ <strong>Project Data Loaded</strong> - Your migratory route graph has been imported from the project file. The routing network is stored and ready for simulation, even if it's not visually displayed here. Feel free to proceed to the next page.
+    ✅ <strong>Project Loaded</strong> - Your saved migratory route graph should appear below. You can view it, make changes if needed, or proceed to the next page.
   </div>
   {% endif %}
   
@@ -143,10 +143,18 @@
     }
     document.addEventListener("DOMContentLoaded", loadUnitParameters);
 
+    // Load graph data if available
+    var loadedGraphData = {{ graph_data | tojson | safe }};
+    var initialElements = [];
+    if (loadedGraphData && loadedGraphData.nodes && loadedGraphData.edges) {
+      initialElements = loadedGraphData.nodes.concat(loadedGraphData.edges);
+      console.log("Loaded graph with " + loadedGraphData.nodes.length + " nodes and " + loadedGraphData.edges.length + " edges");
+    }
+
     // Initialize Cytoscape with custom styles
     var cy = cytoscape({
       container: document.getElementById('cy'),
-      elements: [],
+      elements: initialElements,
       style: [
         {
           selector: 'node[type="start"]',

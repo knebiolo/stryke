@@ -1253,8 +1253,8 @@ class simulation():
                 prob = imp_surv_prob * strike_surv_prob * baro_surv * latent_survival
                 prob = scalarize(prob)
                 
-                # Store component survivals for mortality factor tracking
-                # This will be used to create the "Wheel of Death" breakdown
+                # Store mortality causes for each entrained fish
+                # Track which factor killed this fish (if it died)
                 if not hasattr(self, '_mortality_components'):
                     self._mortality_components = {
                         'impingement': [],
@@ -1262,10 +1262,59 @@ class simulation():
                         'barotrauma': [],
                         'latent': []
                     }
-                self._mortality_components['impingement'].append(1.0 - imp_surv_prob)
-                self._mortality_components['blade_strike'].append(1.0 - strike_surv_prob)
-                self._mortality_components['barotrauma'].append(1.0 - baro_surv)
-                self._mortality_components['latent'].append(1.0 - latent_survival)
+                
+                # Simulate sequential exposure to mortality factors
+                # Fish must survive each factor to proceed to next
+                fish_survived = True
+                mortality_cause = None
+                
+                # 1. Check impingement
+                if np.random.random() > imp_surv_prob:
+                    fish_survived = False
+                    mortality_cause = 'impingement'
+                
+                # 2. If survived impingement, check blade strike
+                elif np.random.random() > strike_surv_prob:
+                    fish_survived = False
+                    mortality_cause = 'blade_strike'
+                
+                # 3. If survived blade strike, check barotrauma
+                elif np.random.random() > baro_surv:
+                    fish_survived = False
+                    mortality_cause = 'barotrauma'
+                
+                # 4. If survived all immediate factors, check latent mortality
+                elif np.random.random() > latent_survival:
+                    fish_survived = False
+                    mortality_cause = 'latent'
+                
+                # Record which factor killed this fish (or 0 if survived)
+                if mortality_cause == 'impingement':
+                    self._mortality_components['impingement'].append(1)
+                    self._mortality_components['blade_strike'].append(0)
+                    self._mortality_components['barotrauma'].append(0)
+                    self._mortality_components['latent'].append(0)
+                elif mortality_cause == 'blade_strike':
+                    self._mortality_components['impingement'].append(0)
+                    self._mortality_components['blade_strike'].append(1)
+                    self._mortality_components['barotrauma'].append(0)
+                    self._mortality_components['latent'].append(0)
+                elif mortality_cause == 'barotrauma':
+                    self._mortality_components['impingement'].append(0)
+                    self._mortality_components['blade_strike'].append(0)
+                    self._mortality_components['barotrauma'].append(1)
+                    self._mortality_components['latent'].append(0)
+                elif mortality_cause == 'latent':
+                    self._mortality_components['impingement'].append(0)
+                    self._mortality_components['blade_strike'].append(0)
+                    self._mortality_components['barotrauma'].append(0)
+                    self._mortality_components['latent'].append(1)
+                else:
+                    # Fish survived all factors
+                    self._mortality_components['impingement'].append(0)
+                    self._mortality_components['blade_strike'].append(0)
+                    self._mortality_components['barotrauma'].append(0)
+                    self._mortality_components['latent'].append(0)
                 
             try:
                 return np.float32(prob)
@@ -2791,10 +2840,19 @@ class simulation():
                         if 'num_mortalities' not in df.columns:
                             df['num_mortalities'] = df['num_entrained'] - df['num_survived']
                         
-                        # Calculate probability of entrainment: total entrained / total population
-                        total_entrained = df['num_entrained'].sum()
-                        total_population = df['pop_size'].sum()
-                        prob_entr = total_entrained / total_population if total_population > 0 else 0.0
+                        # Calculate probability of entrainment: per-iteration average
+                        # For each iteration: (total entrained in that year) / (population size)
+                        iteration_probs = []
+                        for iter_num in df['iteration'].unique():
+                            iter_data = df[df['iteration'] == iter_num]
+                            iter_entrained = iter_data['num_entrained'].sum()
+                            # Population size should be consistent within iteration
+                            iter_pop = iter_data['pop_size'].iloc[0] if len(iter_data) > 0 else 0
+                            if iter_pop > 0:
+                                iteration_probs.append(iter_entrained / iter_pop)
+                            else:
+                                iteration_probs.append(0.0)
+                        prob_entr = np.mean(iteration_probs) if len(iteration_probs) > 0 else 0.0
                         
                         # Assuming bootstrap_mean_ci and summarize_ci are available
                         entrained_mean, entrained_lower, entrained_upper = bootstrap_mean_ci(df['num_entrained'])
