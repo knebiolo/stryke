@@ -1820,8 +1820,78 @@ def unit_parameters():
         
         flash("Unit parameters saved successfully!")
         return redirect(url_for('operating_scenarios'))
+    
+    # GET request - load existing unit parameters if available
     project_loaded = session.get('project_loaded', False)
-    return render_template('unit_parameters.html', project_loaded=project_loaded)
+    units = session.get('units', 'metric')
+    unit_params_list = []
+    
+    sim_folder = g.get('user_sim_folder')
+    
+    # Load facilities data into session if not already there (needed for template)
+    if sim_folder and 'facilities_data' not in session:
+        facilities_csv = os.path.join(sim_folder, 'facilities.csv')
+        if os.path.exists(facilities_csv):
+            try:
+                df_fac = pd.read_csv(facilities_csv)
+                # Don't convert units - session stores display format from form submission
+                session['facilities_data'] = df_fac.to_dict('records')
+                # Build facility_units mapping
+                facility_units = {}
+                for _, row in df_fac.iterrows():
+                    facility_units[row['Facility']] = int(row['Units'])
+                session['facility_units'] = facility_units
+                print(f"DEBUG: Populated session with {len(session['facilities_data'])} facilities", flush=True)
+            except Exception as e:
+                print(f"ERROR loading facilities for session: {e}", flush=True)
+    
+    if sim_folder:
+        unit_params_csv = os.path.join(sim_folder, 'unit_params.csv')
+        print(f"DEBUG unit_params GET: checking {unit_params_csv}, exists={os.path.exists(unit_params_csv)}", flush=True)
+        if os.path.exists(unit_params_csv):
+            try:
+                df = pd.read_csv(unit_params_csv)
+                print(f"DEBUG unit_params GET: loaded CSV with shape {df.shape}, columns={list(df.columns)}", flush=True)
+                
+                # Convert from stored (imperial) back to display units
+                if units == 'metric':
+                    conv_length = 3.28084  # feet to meters
+                    conv_flow = 35.31469989  # ft³/s to m³/s
+                    
+                    length_fields = ["intake_vel", "H", "D", "B", "D1", "D2",
+                                   "fb_depth", "ps_D", "ps_length", "submergence_depth", "elevation_head"]
+                    flow_fields = ["Qopt", "Qcap"]
+                    
+                    for col in length_fields:
+                        if col in df.columns:
+                            df[col] = pd.to_numeric(df[col], errors='coerce') / conv_length
+                    
+                    for col in flow_fields:
+                        if col in df.columns:
+                            df[col] = pd.to_numeric(df[col], errors='coerce') / conv_flow
+                
+                unit_params_list = df.to_dict('records')
+                print(f"DEBUG unit_params GET: converted to {len(unit_params_list)} records", flush=True)
+                
+                # Create a lookup dictionary: {(facility, unit): params_dict}
+                unit_params_lookup = {}
+                for params in unit_params_list:
+                    facility = params.get('Facility', '')
+                    unit = params.get('Unit', '')
+                    key = (facility, str(unit))
+                    unit_params_lookup[key] = params
+                print(f"DEBUG unit_params GET: created lookup with {len(unit_params_lookup)} entries", flush=True)
+                
+                # Store in session for template access
+                session['unit_params_lookup'] = unit_params_lookup
+            except Exception as e:
+                print(f"ERROR loading unit parameters from CSV: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+    
+    return render_template('unit_parameters.html', 
+                         project_loaded=project_loaded,
+                         units=units)
 
 @app.route('/operating_scenarios', methods=['GET', 'POST'])
 def operating_scenarios():

@@ -120,6 +120,13 @@
             <button type="submit">Save Facilities</button>
         </form>
 
+        <!-- Next Button for Loaded Projects -->
+        {% if project_loaded and facilities_data %}
+        <div style="margin-top: 15px;">
+            <a href="{{ url_for('unit_parameters') }}" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-weight: 500;">Next: Unit Parameters →</a>
+        </div>
+        {% endif %}
+
         <!-- Save Project Section -->
         <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-top: 30px; border-left: 4px solid #ffc107;">
             <h3 style="margin-top: 0;">💾 Save Project</h3>

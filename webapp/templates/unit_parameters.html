@@ -193,7 +193,9 @@
                         </span>
                       </th>
                       <td>
-                        <input type="number" step="any" name="velocity_{{ outer_index }}_{{ i }}" placeholder="Intake Velocity">
+                        {% set unit_key = (facility.Facility, i|string) %}
+                        {% set params = session.get('unit_params_lookup', {}).get(unit_key, {}) %}
+                        <input type="number" step="any" name="velocity_{{ outer_index }}_{{ i }}" placeholder="Intake Velocity" value="{{ params.get('intake_vel', '') }}">
                       </td>
                     </tr>
                     <tr>
@@ -450,6 +452,13 @@
       {% endif %}
       <button type="submit">Save Unit Parameters</button>
     </form>
+
+    <!-- Next Button for Loaded Projects -->
+    {% if project_loaded and session.get('unit_params_lookup') %}
+    <div style="margin-top: 15px;">
+        <a href="{{ url_for('operating_scenarios') }}" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 4px; font-weight: 500;">Next: Operating Scenarios →</a>
+    </div>
+    {% endif %}
     
     <!-- Save Project Section -->
     <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-top: 30px; border-left: 4px solid #ffc107;">
@@ -467,6 +476,66 @@
   </div>
   
   <script>
+    // Load unit parameters from session
+    const unitParamsLookup = {{ session.get('unit_params_lookup', {}) | tojson }};
+    console.log("Loaded unit_params_lookup:", unitParamsLookup);
+
+    // Populate form fields with loaded data
+    function populateLoadedData() {
+      for (const [key, params] of Object.entries(unitParamsLookup)) {
+        console.log(`Populating data for key ${key}:`, params);
+        // Key format is "[facility, unit]" as a string - need to parse it
+        // Find all accordions and match by facility/unit
+        const accordions = document.querySelectorAll('.unit-accordion');
+        accordions.forEach(accordion => {
+          const summary = accordion.querySelector('summary').textContent;
+          // Extract facility and unit from summary text
+          // Could also use accordion ID pattern
+          
+          // Populate fields by matching parameter names
+          for (const [paramKey, paramValue] of Object.entries(params)) {
+            // Map CSV column names to form field patterns
+            const fieldMappings = {
+              'Runner Type': 'type',
+              'intake_vel': 'velocity',
+              'op_order': 'order',
+              'H': 'H',
+              'RPM': 'RPM',
+              'D': 'D',
+              'ada': 'efficiency',
+              'N': 'N',
+              'Qopt': 'Qopt',
+              'Qcap': 'Qcap',
+              'B': 'B',
+              'iota': 'iota',
+              'D1': 'D1',
+              'D2': 'D2',
+              'lambda': 'lambda',
+              'roughness': 'roughness',
+              'fb_depth': 'fb_depth',
+              'ps_D': 'ps_D',
+              'ps_length': 'ps_length',
+              'submergence_depth': 'submergence_depth'
+            };
+            
+            const fieldPrefix = fieldMappings[paramKey] || paramKey;
+            const fields = accordion.querySelectorAll(`[name^="${fieldPrefix}_"]`);
+            fields.forEach(field => {
+              if (field.type === 'select-one') {
+                field.value = paramValue;
+              } else if (field.type === 'number' || field.type === 'text') {
+                field.value = paramValue || '';
+              }
+              // Trigger update for Francis-specific fields
+              if (field.name.startsWith('type_')) {
+                updateRow(field);
+              }
+            });
+          }
+        });
+      }
+    }
+
     // Enable/disable Francis-only fields
     function updateRow(selectElem) {
       var accordion = selectElem.closest("details");
@@ -514,6 +583,11 @@
           }
         }
       });
+    }
+
+    // Call populate function when page loads if data exists
+    if (Object.keys(unitParamsLookup).length > 0) {
+      window.addEventListener('DOMContentLoaded', populateLoadedData);
     }
   </script>
 </body>
