@@ -1300,6 +1300,20 @@ def create_project():
 
         # Use explicitly stored session directory
         session['proj_dir'] = session.get('user_sim_folder')
+        
+        # CRITICAL FIX: Write project data to CSV so it can be saved/loaded
+        sim_folder = g.get('user_sim_folder')
+        if sim_folder:
+            project_csv = os.path.join(sim_folder, 'project.csv')
+            project_df = pd.DataFrame([{
+                'Project Name': project_name,
+                'Project Notes': project_notes,
+                'Units': units,
+                'Model Setup': model_setup
+            }])
+            project_df.to_csv(project_csv, index=False)
+            print(f"Wrote project data to {project_csv}", flush=True)
+        
         flash(f"Project '{project_name}' created successfully!")
         print("Project directory set to:", session['proj_dir'])
 
