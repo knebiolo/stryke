@@ -2,22 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Create New Pro    <script src="{{ url_for('static', filename='autosave.js') }}"></script>
-    <script src="{{ url_for('static', filename='validation.js') }}"></script>
-    {% if project_loaded %}
-    <script>
-        // Clear auto-save when project is loaded to prevent restore prompt
-        localStorage.removeItem('stryke_autosave');
-        localStorage.removeItem('stryke_autosave_timestamp');
-    </script>
-    {% endif %}
-</head>
-<body>
-    <div class="container">
-        <a href="{{ url_for('index') }}" class="nav-link">Home</a>
-        <h1>Create New Project</h1>
-        <p class="instructions">
-            Welcome to the project creation page! Here, you'll give your project ale>
+    <title>Create New Project - STRYKE</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -226,5 +211,15 @@
             </p>
         </div>
     </div>
+    
+    <script src="{{ url_for('static', filename='autosave.js') }}"></script>
+    <script src="{{ url_for('static', filename='validation.js') }}"></script>
+    {% if project_loaded %}
+    <script>
+        // Clear auto-save when project is loaded to prevent restore prompt
+        localStorage.removeItem('stryke_autosave');
+        localStorage.removeItem('stryke_autosave_timestamp');
+    </script>
+    {% endif %}
 </body>
 </html>
