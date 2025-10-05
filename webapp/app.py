@@ -1023,7 +1023,10 @@ def load_project():
         # Restore flow scenarios
         if project_data.get('flow_scenarios'):
             df = pd.DataFrame(project_data['flow_scenarios'])
-            df.to_csv(os.path.join(sim_folder, 'flow.csv'), index=False)
+            flow_csv_path = os.path.join(sim_folder, 'flow.csv')
+            df.to_csv(flow_csv_path, index=False)
+            # CRITICAL: Store flow_scenario for simulation
+            session['flow_scenario'] = df.to_dict(orient='records')
             # Update session variables from loaded data
             if len(df) > 0:
                 # Try both column name formats (with/without space)
@@ -1042,12 +1045,18 @@ def load_project():
         # Restore hydrograph
         if project_data.get('hydrograph'):
             df = pd.DataFrame(project_data['hydrograph'])
-            df.to_csv(os.path.join(sim_folder, 'hydrograph.csv'), index=False)
+            hydro_csv_path = os.path.join(sim_folder, 'hydrograph.csv')
+            df.to_csv(hydro_csv_path, index=False)
+            # CRITICAL: Store hydrograph_file for simulation
+            session['hydrograph_file'] = hydro_csv_path
         
         # Restore facilities
         if project_data.get('facilities'):
             df = pd.DataFrame(project_data['facilities'])
             df.to_csv(os.path.join(sim_folder, 'facilities.csv'), index=False)
+            # CRITICAL: Store facilities_data for simulation
+            session['facilities_data'] = df.to_dict('records')
+            print(f"DEBUG load_project: Stored {len(session['facilities_data'])} facilities in session", flush=True)
         
         # Restore unit parameters
         if project_data.get('unit_parameters', {}).get('csv_content'):
@@ -1061,6 +1070,51 @@ def load_project():
             with open(os.path.join(sim_folder, 'graph.json'), 'w') as f:
                 json.dump(project_data['graph'], f, indent=2)
             session['graph_data'] = project_data['graph']
+            
+            # CRITICAL: Generate graph_summary from loaded graph data for simulation
+            graph_data = project_data['graph']
+            summary_nodes = []
+            summary_edges = []
+            
+            # Process nodes
+            elements = graph_data.get("elements", {}) if isinstance(graph_data, dict) else {}
+            nodes = elements.get("nodes", []) if isinstance(elements, dict) else []
+            for node in nodes:
+                data = (node or {}).get("data", {})
+                node_id = data.get("id")
+                if not node_id:
+                    continue
+                label = data.get("label", node_id)
+                surv_fun = data.get("surv_fun", "default")
+                survival_rate = data.get("survival_rate")
+                
+                summary_nodes.append({
+                    "ID": label,          # Use label as the ID (human-friendly)
+                    "Location": node_id,  # Use node_id as the Location (machine id)
+                    "Surv_Fun": surv_fun,
+                    "Survival": survival_rate,
+                })
+            
+            # Process edges
+            edges = elements.get("edges", []) if isinstance(elements, dict) else []
+            for edge in edges:
+                data = (edge or {}).get("data", {})
+                source = data.get("source")
+                target = data.get("target")
+                if not source or not target:
+                    continue
+                # robust weight parsing
+                w_raw = data.get("weight", 1.0)
+                try:
+                    weight = float(w_raw)
+                except Exception:
+                    weight = 1.0
+                
+                summary_edges.append({"_from": source, "_to": target, "weight": weight})
+            
+            # Store graph_summary in session for simulation
+            session['graph_summary'] = {"Nodes": summary_nodes, "Edges": summary_edges}
+            print(f"DEBUG load_project: Created graph_summary with {len(summary_nodes)} nodes, {len(summary_edges)} edges", flush=True)
         
         # Restore population
         if project_data.get('population'):
