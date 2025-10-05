@@ -2049,6 +2049,23 @@ def get_operating_scenarios():
 def graph_editor():
     project_loaded = session.get('project_loaded', False)
     graph_data = session.get('graph_data', {})
+    
+    # If no graph_data in session, try loading from file
+    if not graph_data or not graph_data.get('elements'):
+        sim_folder = g.get('user_sim_folder')
+        if sim_folder:
+            graph_file = os.path.join(sim_folder, 'graph.json')
+            print(f"DEBUG graph_editor: checking {graph_file}, exists={os.path.exists(graph_file)}", flush=True)
+            if os.path.exists(graph_file):
+                try:
+                    with open(graph_file, 'r') as f:
+                        graph_data = json.load(f)
+                    print(f"DEBUG graph_editor: loaded graph with {len(graph_data.get('elements', {}).get('nodes', []))} nodes", flush=True)
+                    session['graph_data'] = graph_data
+                except Exception as e:
+                    print(f"ERROR loading graph from file: {e}", flush=True)
+    
+    print(f"DEBUG graph_editor: graph_data has {len(graph_data.get('elements', {}).get('nodes', []))} nodes", flush=True)
     return render_template('graph_editor.html', graph_data=graph_data, project_loaded=project_loaded)
 
 @app.route('/save_graph', methods=['POST'])
@@ -3569,9 +3586,31 @@ def population():
         flash("Population parameters saved successfully!")
         return redirect(url_for('model_setup_summary'))
 
-    # GET request
+    # GET request - load existing population data if available
     project_loaded = session.get('project_loaded', False)
-    return render_template('population.html', species_defaults=species_defaults, project_loaded=project_loaded)
+    population_data = {}
+    
+    sim_folder = g.get('user_sim_folder')
+    print(f"DEBUG population GET: sim_folder={sim_folder}", flush=True)
+    if sim_folder:
+        pop_csv = os.path.join(sim_folder, 'population.csv')
+        print(f"DEBUG population GET: checking {pop_csv}, exists={os.path.exists(pop_csv)}", flush=True)
+        if os.path.exists(pop_csv):
+            try:
+                df = pd.read_csv(pop_csv)
+                print(f"DEBUG population GET: loaded CSV with shape {df.shape}, columns={list(df.columns)}", flush=True)
+                if len(df) > 0:
+                    population_data = df.iloc[0].to_dict()
+                    print(f"DEBUG population GET: population_data keys: {list(population_data.keys())}", flush=True)
+            except Exception as e:
+                print(f"ERROR loading population from CSV: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+    
+    return render_template('population.html', 
+                         species_defaults=species_defaults, 
+                         project_loaded=project_loaded,
+                         population_data=population_data)
 
 @app.route('/model_summary')
 def model_setup_summary():

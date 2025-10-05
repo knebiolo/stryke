@@ -226,13 +226,13 @@
           <label for="species_name">Species Name 
             <span class="tooltip" title="Scientific name (max 50 characters)">[?]</span>
           </label>
-          <input type="text" id="species_name" name="species_name" maxlength="50" required>
+          <input type="text" id="species_name" name="species_name" maxlength="50" value="{{ population_data.get('Species', '') }}" required>
         </div>
         <div>
           <label for="common_name">Common Name 
             <span class="tooltip" title="Common name (max 50 characters)">[?]</span>
           </label>
-          <input type="text" id="common_name" name="common_name" maxlength="50" required>
+          <input type="text" id="common_name" name="common_name" maxlength="50" value="{{ population_data.get('Common Name', '') }}" required>
         </div>
       </div>
       
@@ -248,7 +248,7 @@
           <label for="iterations">Iterations 
             <span class="tooltip" title="Number of simulation iterations">[?]</span>
           </label>
-          <input type="number" id="iterations" name="iterations" min="1" step="1" placeholder="Enter iterations" required>
+          <input type="number" id="iterations" name="iterations" min="1" step="1" value="{{ population_data.get('Iterations', '') }}" placeholder="Enter iterations" required>
         </div>
       </div>
       
@@ -259,22 +259,22 @@
           </label>
           <select id="vertical_habitat" name="vertical_habitat" required>
             <option value="">--Select Option--</option>
-            <option value="Pelagic">Pelagic</option>
-            <option value="Benthic">Benthic</option>
+            <option value="Pelagic" {% if population_data.get('Habitat') == 'Pelagic' %}selected{% endif %}>Pelagic</option>
+            <option value="Benthic" {% if population_data.get('Habitat') == 'Benthic' %}selected{% endif %}>Benthic</option>
           </select>
         </div>
         
         <!-- Hidden fields for beta values -->
-        <input type="hidden" id="beta_0" name="beta_0">
-        <input type="hidden" id="beta_1" name="beta_1">
+        <input type="hidden" id="beta_0" name="beta_0" value="{{ population_data.get('Beta 0', '') }}">
+        <input type="hidden" id="beta_1" name="beta_1" value="{{ population_data.get('Beta 1', '') }}">
         <div>
           <label for="fish_type">Swim Bladder Type 
             <span class="tooltip" title="Select fish type to auto-fill logistic regression parameters">[?]</span>
           </label>
           <select id="fish_type" name="fish_type" onchange="setBetaValues()" required>
             <option value="">--Select Option--</option>
-            <option value="physoclistous">Physoclistous</option>
-            <option value="physostomous">Physostomous</option>
+            <option value="physoclistous" {% if population_data.get('Fish Type') == 'physoclistous' %}selected{% endif %}>Physoclistous</option>
+            <option value="physostomous" {% if population_data.get('Fish Type') == 'physostomous' %}selected{% endif %}>Physostomous</option>
           </select>
         </div>
         <script>
@@ -303,8 +303,8 @@
         </label>
         <select id="simulateChoice" name="simulateChoice" onchange="toggleSimulateChoice()" required>
           <option value="">--Select Option--</option>
-          <option value="entrainment event">Entrainment Event</option>
-          <option value="starting population">Starting Population</option>
+          <option value="entrainment event" {% if population_data.get('Simulate') == 'entrainment event' %}selected{% endif %}>Entrainment Event</option>
+          <option value="starting population" {% if population_data.get('Simulate') == 'starting population' %}selected{% endif %}>Starting Population</option>
         </select>
       </div>
       
@@ -313,7 +313,7 @@
         <label for="starting_population">Starting Population 
           <span class="tooltip" title="Enter the initial number of fish">[?]</span>
         </label>
-        <input type="number" id="starting_population" name="starting_population" min="0" placeholder="e.g., 10000">
+        <input type="number" id="starting_population" name="starting_population" min="0" value="{{ population_data.get('Fish', '') }}" placeholder="e.g., 10000">
       </div>
       
       <!-- Entrainment Event Options -->
@@ -323,8 +323,8 @@
         </label>
         <select id="entrainmentChoice" name="entrainmentChoice" onchange="toggleEntrainmentChoice()" required>
           <option value="">--Select Option--</option>
-          <option value="modeled">Modeled</option>
-          <option value="empirical">Empirical</option>
+          <option value="modeled" {% if population_data.get('Entrainment Rate') == 'modeled' %}selected{% endif %}>Modeled</option>
+          <option value="empirical" {% if population_data.get('Entrainment Rate') == 'empirical' %}selected{% endif %}>Empirical</option>
         </select>
         
         <!-- Modeled: Dropdown for Species -->
@@ -336,7 +336,7 @@
           <select id="modeledSpecies" name="modeledSpecies" onchange="fillModeledFields()">
             <option value="">--Select Species--</option>
             {% for sp in species_defaults %}
-              <option value="{{ sp.name }}">{{ sp.name }}</option>
+              <option value="{{ sp.name }}" {% if population_data.get('Modeled Species') == sp.name %}selected{% endif %}>{{ sp.name }}</option>
             {% endfor %}
           </select>
         </div>
@@ -349,9 +349,9 @@
           </label>
           <select id="empiricalDist" name="empiricalDist">
             <option value="">--Select Distribution--</option>
-            <option value="Log Normal">Log Normal</option>
-            <option value="Weibull">Weibull</option>
-            <option value="Pareto">Pareto</option>
+            <option value="Log Normal" {% if population_data.get('Distribution') == 'Log Normal' %}selected{% endif %}>Log Normal</option>
+            <option value="Weibull" {% if population_data.get('Distribution') == 'Weibull' %}selected{% endif %}>Weibull</option>
+            <option value="Pareto" {% if population_data.get('Distribution') == 'Pareto' %}selected{% endif %}>Pareto</option>
           </select>
         </div>
         
@@ -362,19 +362,19 @@
               <label for="empiricalShape">Shape 
                 <span class="tooltip" title="Shape parameter for distribution fit">[?]</span>
               </label>
-              <input type="number" step="any" id="empiricalShape" name="empiricalShape" placeholder="Enter shape">
+              <input type="number" step="any" id="empiricalShape" name="empiricalShape" value="{{ population_data.get('Shape', '') }}" placeholder="Enter shape">
             </div>
             <div>
               <label for="empiricalLocation">Location 
                 <span class="tooltip" title="Location parameter for distribution fit">[?]</span>
               </label>
-              <input type="number" step="any" id="empiricalLocation" name="empiricalLocation" placeholder="Enter location">
+              <input type="number" step="any" id="empiricalLocation" name="empiricalLocation" value="{{ population_data.get('Location', '') }}" placeholder="Enter location">
             </div>
             <div>
               <label for="empiricalScale">Scale 
                 <span class="tooltip" title="Scale parameter for distribution fit">[?]</span>
               </label>
-              <input type="number" step="any" id="empiricalScale" name="empiricalScale" placeholder="Enter scale">
+              <input type="number" step="any" id="empiricalScale" name="empiricalScale" value="{{ population_data.get('Scale', '') }}" placeholder="Enter scale">
             </div>
           </div>
         </div>
@@ -386,13 +386,13 @@
               <label for="max_entrainment_rate">Maximum Entrainment Rate 
                 <span class="tooltip" title="{% if session.units=='imperial' %}Fish per million cubic feet{% else %}Fish per million cubic meters{% endif %}">[?]</span>
               </label>
-              <input type="number" step="any" id="max_entrainment_rate" name="max_entrainment_rate" placeholder="Enter maximum entrainment rate">
+              <input type="number" step="any" id="max_entrainment_rate" name="max_entrainment_rate" value="{{ population_data.get('Max Entrainment Rate', '') }}" placeholder="Enter maximum entrainment rate">
             </div>
             <div>
               <label for="occurrence_probability">Occurrence Probability 
                 <span class="tooltip" title="Probability that fish are present">[?]</span>
               </label>
-              <input type="number" step="any" id="occurrence_probability" name="occurrence_probability" placeholder="Enter probability">
+              <input type="number" step="any" id="occurrence_probability" name="occurrence_probability" value="{{ population_data.get('Occurrence Probability', '') }}" placeholder="Enter probability">
             </div>
           </div>
         </div>
@@ -416,24 +416,24 @@
             <label for="length_mean">Total Length (Mean) 
               <span class="tooltip" title="{% if session.units=='imperial' %}Mean total length in inches{% else %}Mean total length in mm{% endif %}">[?]</span>
             </label>
-            <input type="number" step="any" id="length_mean" name="length_mean" placeholder="Enter mean total length">
+            <input type="number" step="any" id="length_mean" name="length_mean" value="{{ population_data.get('Mean Length', '') }}" placeholder="Enter mean total length">
             
             <label for="length_sd">Total Length (Std Dev) 
               <span class="tooltip" title="{% if session.units=='imperial' %}Standard deviation in inches{% else %}Standard deviation in mm{% endif %}">[?]</span>
             </label>
-            <input type="number" step="any" id="length_sd" name="length_sd" placeholder="Enter total length standard deviation">
+            <input type="number" step="any" id="length_sd" name="length_sd" value="{{ population_data.get('SD Length', '') }}" placeholder="Enter total length standard deviation">
           </fieldset>
           
           <div style="flex: 1;">
             <label for="Ucrit">U_crit 
               <span class="tooltip" title="{% if session.units=='imperial' %}Critical swim speed in feet per second{% else %}Critical swim speed in meters per second{% endif %}">[?]</span>
             </label>
-            <input type="number" step="any" id="Ucrit" name="Ucrit" placeholder="Enter U_crit">
+            <input type="number" step="any" id="Ucrit" name="Ucrit" value="{{ population_data.get('Ucrit', '') }}" placeholder="Enter U_crit">
             
             <!-- Hidden fields for length_shape, length_location, and length_scale -->
-            <input type="hidden" id="length_shape" name="length_shape">
-            <input type="hidden" id="length_location" name="length_location">
-            <input type="hidden" id="length_scale" name="length_scale">
+            <input type="hidden" id="length_shape" name="length_shape" value="{{ population_data.get('Length Shape', '') }}">
+            <input type="hidden" id="length_location" name="length_location" value="{{ population_data.get('Length Location', '') }}">
+            <input type="hidden" id="length_scale" name="length_scale" value="{{ population_data.get('Length Scale', '') }}">
           </div>
         </div>
       </div>
@@ -441,7 +441,18 @@
       <!-- Optional Hidden Fields for Defaults (if needed) -->
       <!-- e.g. <input type="hidden" name="default_length_mean" value="..."> -->
       
-      <button type="submit">Save Population Parameters</button>
+      <div style="display: flex; gap: 10px; align-items: center; margin-top: 20px;">
+        {% if project_loaded %}
+          <button type="submit" style="background-color: #cccccc; cursor: not-allowed;" disabled>Save Population Parameters</button>
+          <a href="{{ url_for('run_simulation') }}" style="text-decoration: none;">
+            <button type="button" style="background-color: #007BFF; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 5px;">
+              Next &rarr;
+            </button>
+          </a>
+        {% else %}
+          <button type="submit">Save Population Parameters</button>
+        {% endif %}
+      </div>
         <script>
         document.addEventListener('DOMContentLoaded', function() {
           toggleSimulateChoice(); 
