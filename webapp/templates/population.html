@@ -292,6 +292,23 @@
               document.getElementById("beta_1").value = "";
             }
           }
+          
+          // When page loads with data, determine fish_type from beta values
+          document.addEventListener('DOMContentLoaded', function() {
+            var beta0 = parseFloat(document.getElementById("beta_0").value);
+            var beta1 = parseFloat(document.getElementById("beta_1").value);
+            var fishTypeSelect = document.getElementById("fish_type");
+            
+            // If beta values exist and fish_type not already set
+            if (beta0 && beta1 && !fishTypeSelect.value) {
+              // Check which fish type these beta values correspond to
+              if (Math.abs(beta0 - (-4.8085)) < 0.01 && Math.abs(beta1 - 3.33) < 0.01) {
+                fishTypeSelect.value = "physoclistous";
+              } else if (Math.abs(beta0 - (-4.93263)) < 0.01 && Math.abs(beta1 - 2.96225) < 0.01) {
+                fishTypeSelect.value = "physostomous";
+              }
+            }
+          });
         </script>       
       </div>      
       <hr>

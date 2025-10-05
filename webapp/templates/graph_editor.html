@@ -117,7 +117,7 @@
   <div id="cy"></div>
 
   <!-- Modal for Unit Node Selection -->
-  <div id="unitModal">
+  <div id="unitModal" {% if project_loaded %}style="display: none;"{% endif %}>
     <div id="unitModalContent">
       <h3>Select Unit</h3>
       <!-- Add aria-label for accessibility -->
@@ -233,7 +233,17 @@
         }
         
       ],
-      layout: { name: 'grid', rows: 1 },
+      layout: { 
+        name: '{% if project_loaded %}breadthfirst{% else %}grid{% endif %}',
+        {% if project_loaded %}
+        directed: true,
+        spacingFactor: 1.5,
+        avoidOverlap: true,
+        nodeDimensionsIncludeLabels: true
+        {% else %}
+        rows: 1
+        {% endif %}
+      },
       userZoomingEnabled: true,
       userPanningEnabled: true,
       boxSelectionEnabled: {% if project_loaded %}false{% else %}true{% endif %},
@@ -392,7 +402,7 @@
   </div>
   
   <!-- Save Project Section -->
-  <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin: 30px auto; max-width: 800px; border-left: 4px solid #ffc107;">
+  <div class="project-management" {% if project_loaded %}style="display: none;"{% else %}style="background: #fff3cd; padding: 15px; border-radius: 4px; margin: 30px auto; max-width: 800px; border-left: 4px solid #ffc107;"{% endif %}>
       <h3 style="margin-top: 0;">💾 Save Project</h3>
       <p style="font-size: 14px; margin: 8px 0;">Save your entire project to continue later:</p>
       
