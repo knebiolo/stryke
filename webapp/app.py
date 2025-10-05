@@ -3819,9 +3819,12 @@ def generate_report(sim):
         
         # Check if barotrauma mode is active
         barotrauma_active = False
-        unit_params_df = store.get("/Unit_Parameters", None)
-        if unit_params_df is not None and 'ps_D' in unit_params_df.columns:
-            barotrauma_active = not unit_params_df['ps_D'].isna().all()
+        try:
+            unit_params_df = store.get("/Unit_Parameters")
+            if unit_params_df is not None and 'ps_D' in unit_params_df.columns:
+                barotrauma_active = not unit_params_df['ps_D'].isna().all()
+        except (KeyError, AttributeError):
+            unit_params_df = None
         
         # Get mortality component data for "Wheel of Death"
         mortality_components = {}

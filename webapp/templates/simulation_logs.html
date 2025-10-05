@@ -309,17 +309,22 @@
         }
 
         function updateProgress() {
-            if (totalDays && totalDays > 0) {
-                // Use currentDay directly, not currentDay - 1, since we want progress for day being processed
-                const percentage = Math.min(Math.round((currentDay / totalDays) * 100), 100);
+            if (totalDays && totalDays > 0 && totalIterations && totalIterations > 0) {
+                // Calculate overall progress across all iterations
+                // Total work = totalDays * totalIterations
+                // Completed work = (currentIteration - 1) * totalDays + currentDay
+                const totalWork = totalDays * totalIterations;
+                const completedWork = ((currentIteration - 1) * totalDays) + currentDay;
+                const percentage = Math.min(Math.round((completedWork / totalWork) * 100), 100);
+                
                 progressBar.style.width = percentage + '%';
                 progressPercentage.textContent = percentage + '%';
-                currentProgress.textContent = `Day ${currentDay} of ${totalDays}`;
+                currentProgress.textContent = `Iteration ${currentIteration}/${totalIterations} - Day ${currentDay}/${totalDays}`;
                 
-                // Calculate estimated time remaining
+                // Calculate estimated time remaining based on overall progress
                 const elapsed = (Date.now() - startTime) / 1000;
-                const rate = currentDay / elapsed; // days per second
-                const remaining = (totalDays - currentDay) / rate;
+                const rate = completedWork / elapsed; // units of work per second
+                const remaining = (totalWork - completedWork) / rate;
                 
                 if (remaining > 0 && isFinite(remaining)) {
                     const remMinutes = Math.floor(remaining / 60);
