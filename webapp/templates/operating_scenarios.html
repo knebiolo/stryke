@@ -82,14 +82,6 @@
   <div class="container">
     <a href="{{ url_for('index') }}" class="nav-link">Home</a>
     <h1>Operating Scenarios</h1>
-    
-    {% if project_loaded %}
-    <div style="background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
-        <strong>✅ Project Data Loaded</strong><br>
-        <span style="font-size: 14px;">Your operating scenarios have been imported from the .stryke file. The data is stored and ready for simulation. Click "Next Page" to continue.</span>
-    </div>
-    {% endif %}
-    
     <p class="instructions">
         On this page, you’ll describe how each turbine unit operates over time. 
         For a run-of-river facility, you might run at a steady rate all day 

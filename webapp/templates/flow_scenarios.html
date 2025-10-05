@@ -2,22 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Fl        {% if project_loaded %}
-        <div style="background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; margin: 20px 0; border-radius: 5px; font-size: 14px;">
-            ✅ <strong>Project Successfully Loaded!</strong> Your flow scenario details have been imported and are ready to review or edit.
-        </div>
-        {% endif %}
-        <p class="instructions">
-            On this page, you'll define a "flow scenario" for your project. 
-            A flow scenario can represent a single, steady flow rate (a static scenario),
-            or a set of daily/monthly flows you paste in from a spreadsheet or text 
-            file (a hydrograph). Give each scenario a descriptive name, pick the time 
-            of year (season/months) it covers, and specify whether you want a constant
-            discharge or to upload a hydrograph. If you choose a hydrograph, simply 
-            paste your data without headers into the indicated box, and we'll use 
-            that varying flow throughout the model runs. Once you're done, click 
-            "Save Scenario" to move on.
-        </p>s</title>
+    <title>Flow Scenarios</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -92,6 +77,13 @@
     </style>
     <script src="{{ url_for('static', filename='autosave.js') }}"></script>
     <script src="{{ url_for('static', filename='validation.js') }}"></script>
+    {% if project_loaded %}
+    <script>
+        // Clear auto-save when project is loaded to prevent restore prompt
+        localStorage.removeItem('stryke_autosave');
+        localStorage.removeItem('stryke_autosave_timestamp');
+    </script>
+    {% endif %}
 </head>
 <body>
     <div class="container">
@@ -167,61 +159,9 @@
                 <textarea name="hydrograph_data" id="hydrograph_data" placeholder="YYYY-MM-DD<TAB>Flow">{{ hydrograph_data or '' }}</textarea>
             </div>
 
-            <button type="submit" id="saveFlowBtn" {% if project_loaded %}disabled{% endif %}>Save Flow Scenario</button>
+            <button type="submit" id="saveScenarioBtn" {% if project_loaded %}disabled{% endif %}>Save Flow Scenario</button>
             <button type="button" onclick="window.location.href='{{ url_for('facilities') }}'">Next Page →</button>
         </form>
-        
-        <script>
-            // Track if form data has changed
-            let originalFormData = {};
-            
-            // Capture original form values on page load
-            document.addEventListener('DOMContentLoaded', function() {
-                const form = document.querySelector('form');
-                const inputs = form.querySelectorAll('input, textarea, select');
-                
-                inputs.forEach(input => {
-                    originalFormData[input.name] = input.value;
-                });
-                
-                // Listen for changes
-                inputs.forEach(input => {
-                    input.addEventListener('input', checkFormChanged);
-                    input.addEventListener('change', checkFormChanged);
-                });
-            });
-            
-            function checkFormChanged() {
-                const form = document.querySelector('form');
-                const inputs = form.querySelectorAll('input, textarea, select');
-                let formChanged = false;
-                
-                inputs.forEach(input => {
-                    if (input.value !== (originalFormData[input.name] || '')) {
-                        formChanged = true;
-                    }
-                });
-                
-                // Enable/disable Save button based on changes
-                const saveBtn = document.getElementById('saveFlowBtn');
-                if (saveBtn) {
-                    const isProjectLoaded = {{ 'true' if project_loaded else 'false' }};
-                    if (isProjectLoaded) {
-                        saveBtn.disabled = !formChanged;
-                    } else {
-                        saveBtn.disabled = false;
-                    }
-                }
-            }
-        </script>
-        
-        {% if project_loaded %}
-        <script>
-            // Clear auto-save when viewing loaded project
-            localStorage.removeItem('stryke_autosave');
-            localStorage.removeItem('stryke_autosave_timestamp');
-        </script>
-        {% endif %}
     </div>
 
     <script>
@@ -242,6 +182,41 @@
         
         document.addEventListener("DOMContentLoaded", function() {
             document.getElementById("discharge_tooltip").textContent = tooltipText;
+            
+            // Track form changes for button behavior
+            const form = document.querySelector('form');
+            const inputs = form.querySelectorAll('input, textarea, select');
+            let originalFormData = {};
+            
+            inputs.forEach(input => {
+                originalFormData[input.name] = input.value;
+            });
+            
+            // Listen for changes
+            inputs.forEach(input => {
+                input.addEventListener('input', checkFormChanged);
+                input.addEventListener('change', checkFormChanged);
+            });
+            
+            function checkFormChanged() {
+                let formChanged = false;
+                inputs.forEach(input => {
+                    if (input.value !== originalFormData[input.name]) {
+                        formChanged = true;
+                    }
+                });
+                
+                // Enable/disable Save button based on changes
+                const saveBtn = document.getElementById('saveScenarioBtn');
+                if (saveBtn) {
+                    const isProjectLoaded = {{ 'true' if project_loaded else 'false' }};
+                    if (isProjectLoaded) {
+                        saveBtn.disabled = !formChanged;
+                    } else {
+                        saveBtn.disabled = false;
+                    }
+                }
+            }
         });
     </script>
 

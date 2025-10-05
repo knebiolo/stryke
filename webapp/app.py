@@ -1055,11 +1055,11 @@ def load_project():
             df = pd.DataFrame(project_data['operating_scenarios'])
             df.to_csv(os.path.join(sim_folder, 'operating_scenarios.csv'), index=False)
         
-        # Set flag that project was loaded
+        # Set flag to indicate project was just loaded
         session['project_loaded'] = True
         
         # Clear auto-save since we just loaded a project
-        flash('✅ Project loaded successfully! All data has been restored. Click "Next Page" to continue.')
+        flash('✅ Project loaded successfully! All data has been restored.')
         
         # Redirect to create_project to show loaded data
         return redirect(url_for('create_project'))
@@ -1269,9 +1269,7 @@ def create_project():
         session['project_notes'] = project_notes
         session['units'] = units
         session['model_setup'] = model_setup
-        
-        # Clear project_loaded flag since we're creating a new project
-        session['project_loaded'] = False
+        session['project_loaded'] = False  # Reset flag when creating new project
 
         # Use explicitly stored session directory
         session['proj_dir'] = session.get('user_sim_folder')
@@ -1280,19 +1278,16 @@ def create_project():
 
         return redirect(url_for('flow_scenarios'))
 
-    # GET request - check session first, then CSV file for existing project data
-    existing_data = {}
+    # GET request - session-first loading pattern
+    # Check session first, then fall back to CSV
+    project_name = session.get('project_name', '')
+    project_notes = session.get('project_notes', '')
+    units = session.get('units', 'metric')
+    model_setup = session.get('model_setup', '')
+    project_loaded = session.get('project_loaded', False)
     
-    # First try session variables (most recent)
-    if 'project_name' in session:
-        existing_data = {
-            'project_name': session.get('project_name', ''),
-            'project_notes': session.get('project_notes', ''),
-            'units': session.get('units', 'metric'),
-            'model_setup': session.get('model_setup', '')
-        }
-    else:
-        # Fall back to CSV file if session empty
+    # If no session data, try loading from CSV
+    if not project_name:
         sim_folder = g.get('user_sim_folder')
         if sim_folder:
             project_csv = os.path.join(sim_folder, 'project.csv')
@@ -1300,22 +1295,24 @@ def create_project():
                 try:
                     df = pd.read_csv(project_csv)
                     if len(df) > 0:
-                        existing_data = {
-                            'project_name': df.iloc[0].get('Project Name', ''),
-                            'project_notes': df.iloc[0].get('Project Notes', ''),
-                            'units': df.iloc[0].get('Units', 'metric'),
-                            'model_setup': df.iloc[0].get('Model Setup', '')
-                        }
-                        # Also populate session for persistence
-                        session['project_name'] = existing_data['project_name']
-                        session['project_notes'] = existing_data['project_notes']
-                        session['units'] = existing_data['units']
-                        session['model_setup'] = existing_data['model_setup']
+                        project_name = df.iloc[0].get('Project Name', '')
+                        project_notes = df.iloc[0].get('Project Notes', '')
+                        units = df.iloc[0].get('Units', 'metric')
+                        model_setup = df.iloc[0].get('Model Setup', '')
+                        # Populate session from CSV
+                        session['project_name'] = project_name
+                        session['project_notes'] = project_notes
+                        session['units'] = units
+                        session['model_setup'] = model_setup
                 except Exception as e:
                     print(f"Error reading existing project data: {e}")
     
-    project_loaded = session.get('project_loaded', False)
-    return render_template('create_project.html', project_loaded=project_loaded, **existing_data)
+    return render_template('create_project.html',
+                         project_name=project_name,
+                         project_notes=project_notes,
+                         units=units,
+                         model_setup=model_setup,
+                         project_loaded=project_loaded)
 
 def process_hydrograph_data(raw_data):
     # Try tab first, then comma if only one column detected
@@ -1429,61 +1426,75 @@ def flow_scenarios():
         flash("Flow Scenario saved successfully!")
         return redirect(url_for('facilities'))
 
-    # GET request - check session first, then CSV for existing flow scenario data
+    # GET request - session-first loading pattern
     units = session.get('units', 'metric')
-    existing_data = {}
+    project_loaded = session.get('project_loaded', False)
     
-    # First try session variables (most recent)
-    if 'scenario_name' in session:
-        existing_data = {
-            'scenario_name': session.get('scenario_name', ''),
-            'scenario_number': session.get('scenario_number', ''),
-            'season': session.get('season', ''),
-            'months': session.get('months', ''),
-            'scenario_type': session.get('scenario_type', 'static'),
-            'discharge': session.get('discharge', ''),
-            'hydrograph_data': session.get('hydrograph_data', '')
-        }
-    else:
-        # Fall back to CSV file if session empty
+    # Check session first for flow scenario data
+    scenario_name = session.get('scenario_name', '')
+    scenario_number = session.get('scenario_number', '')
+    season = session.get('season', '')
+    months = session.get('months', '')
+    scenario_type = session.get('scenario_type', '')
+    discharge = session.get('discharge', '')
+    hydrograph_data = session.get('hydrograph_data', '')
+    
+    # If no session data, try loading from CSV
+    if not scenario_name:
         sim_folder = g.get('user_sim_folder')
         if sim_folder:
             flow_csv = os.path.join(sim_folder, 'flow.csv')
-        if os.path.exists(flow_csv):
-            try:
-                df = pd.read_csv(flow_csv)
-                if len(df) > 0:
-                    existing_data = {
-                        'scenario_name': df.iloc[0].get('Scenario', ''),
-                        'scenario_number': str(df.iloc[0].get('Scenario Number', '')),
-                        'season': df.iloc[0].get('Season', ''),
-                        'months': df.iloc[0].get('Months', ''),
-                    }
-                    # Check if it's hydrograph or static
-                    flow_val = df.iloc[0].get('Flow')
-                    if flow_val == 'hydrograph' or pd.isna(flow_val):
-                        existing_data['scenario_type'] = 'hydrograph'
-                        # Try to load hydrograph data
-                        hydro_csv = os.path.join(sim_folder, 'hydrograph.csv')
-                        if os.path.exists(hydro_csv):
-                            df_hydro = pd.read_csv(hydro_csv)
-                            # Convert back to display format (assuming stored in CFS)
-                            if units == 'metric' and 'DAvgFlow_prorate' in df_hydro.columns:
-                                df_hydro['DAvgFlow_prorate'] = df_hydro['DAvgFlow_prorate'] / 35.3147
-                            # Format as tab-delimited string for textarea
-                            existing_data['hydrograph_data'] = df_hydro.to_csv(sep='\t', index=False, header=False)
-                    else:
-                        existing_data['scenario_type'] = 'static'
-                        # Convert back to display units
-                        discharge_val = float(flow_val)
-                        if units == 'metric':
-                            discharge_val = discharge_val / 35.3147
-                        existing_data['discharge'] = str(discharge_val)
-            except Exception as e:
-                print(f"Error reading existing flow scenario data: {e}")
+            if os.path.exists(flow_csv):
+                try:
+                    df = pd.read_csv(flow_csv)
+                    if len(df) > 0:
+                        scenario_name = df.iloc[0].get('Scenario', '')
+                        scenario_number = str(df.iloc[0].get('Scenario Number', ''))
+                        season = df.iloc[0].get('Season', '')
+                        months = df.iloc[0].get('Months', '')
+                        
+                        # Check if it's hydrograph or static
+                        flow_val = df.iloc[0].get('Flow')
+                        if flow_val == 'hydrograph' or pd.isna(flow_val):
+                            scenario_type = 'hydrograph'
+                            # Try to load hydrograph data
+                            hydro_csv = os.path.join(sim_folder, 'hydrograph.csv')
+                            if os.path.exists(hydro_csv):
+                                df_hydro = pd.read_csv(hydro_csv)
+                                # Convert back to display format (assuming stored in CFS)
+                                if units == 'metric' and 'DAvgFlow_prorate' in df_hydro.columns:
+                                    df_hydro['DAvgFlow_prorate'] = df_hydro['DAvgFlow_prorate'] / 35.3147
+                                # Format as tab-delimited string for textarea
+                                hydrograph_data = df_hydro.to_csv(sep='\t', index=False, header=False)
+                        else:
+                            scenario_type = 'static'
+                            # Convert back to display units
+                            discharge_val = float(flow_val)
+                            if units == 'metric':
+                                discharge_val = discharge_val / 35.3147
+                            discharge = str(discharge_val)
+                        
+                        # Populate session from CSV
+                        session['scenario_name'] = scenario_name
+                        session['scenario_number'] = scenario_number
+                        session['season'] = season
+                        session['months'] = months
+                        session['scenario_type'] = scenario_type
+                        session['discharge'] = discharge
+                        session['hydrograph_data'] = hydrograph_data
+                except Exception as e:
+                    print(f"Error reading existing flow scenario data: {e}")
     
-    project_loaded = session.get('project_loaded', False)
-    return render_template('flow_scenarios.html', units=units, project_loaded=project_loaded, **existing_data)
+    return render_template('flow_scenarios.html',
+                         units=units,
+                         project_loaded=project_loaded,
+                         scenario_name=scenario_name,
+                         scenario_number=scenario_number,
+                         season=season,
+                         months=months,
+                         scenario_type=scenario_type,
+                         discharge=discharge,
+                         hydrograph_data=hydrograph_data)
 
 @app.before_request
 def sync_simulation_mode():
@@ -1601,7 +1612,8 @@ def facilities():
     units = session.get('units', 'metric')
     scenario = session.get('scenario_name', 'Unknown Scenario')
     sim_mode = session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing')
-    return render_template('facilities.html', units=units, scenario=scenario, sim_mode=sim_mode)
+    project_loaded = session.get('project_loaded', False)
+    return render_template('facilities.html', units=units, scenario=scenario, sim_mode=sim_mode, project_loaded=project_loaded)
 
 @app.route('/unit_parameters', methods=['GET', 'POST'])
 def unit_parameters():
@@ -1696,18 +1708,8 @@ def unit_parameters():
         
         flash("Unit parameters saved successfully!")
         return redirect(url_for('operating_scenarios'))
-    
-    sim_mode = session.get('simulation_mode', 'single_unit_survival_only')
-    unit_params_file = session.get('unit_params_file', None)
-    num_facilities = session.get('num_facilities', 1)
-    num_units = session.get('num_units', 1)
     project_loaded = session.get('project_loaded', False)
-    return render_template('unit_parameters.html',
-                           sim_mode=sim_mode,
-                           unit_params_file=unit_params_file,
-                           num_facilities=num_facilities,
-                           num_units=num_units,
-                           project_loaded=project_loaded)
+    return render_template('unit_parameters.html', project_loaded=project_loaded)
 
 @app.route('/operating_scenarios', methods=['GET', 'POST'])
 def operating_scenarios():
@@ -1794,7 +1796,7 @@ def operating_scenarios():
     
         # print("DEBUG: Operating Scenarios DataFrame:")
         # print(df_os, flush=True)
-    
+        
     project_loaded = session.get('project_loaded', False)
     return render_template('operating_scenarios.html', project_loaded=project_loaded)
 
@@ -1828,8 +1830,8 @@ def get_operating_scenarios():
 
 @app.route('/graph_editor', methods=['GET'])
 def graph_editor():
-    graph_data = session.get('raw_graph_data', None)
     project_loaded = session.get('project_loaded', False)
+    graph_data = session.get('graph_data', {})
     return render_template('graph_editor.html', graph_data=graph_data, project_loaded=project_loaded)
 
 @app.route('/save_graph', methods=['POST'])
