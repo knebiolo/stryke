@@ -1509,51 +1509,51 @@ def flow_scenarios():
     discharge = session.get('discharge', '')
     hydrograph_data = session.get('hydrograph_data', '')
     
-    # If no session data, try loading from CSV
-    if not scenario_name:
-        sim_folder = g.get('user_sim_folder')
-        if sim_folder:
-            flow_csv = os.path.join(sim_folder, 'flow.csv')
-            if os.path.exists(flow_csv):
-                try:
-                    df = pd.read_csv(flow_csv)
-                    if len(df) > 0:
-                        scenario_name = df.iloc[0].get('Scenario', '')
-                        scenario_number = str(df.iloc[0].get('Scenario Number', ''))
-                        season = df.iloc[0].get('Season', '')
-                        months = df.iloc[0].get('Months', '')
-                        
-                        # Check if it's hydrograph or static
-                        flow_val = df.iloc[0].get('Flow')
-                        if flow_val == 'hydrograph' or pd.isna(flow_val):
-                            scenario_type = 'hydrograph'
-                            # Try to load hydrograph data
-                            hydro_csv = os.path.join(sim_folder, 'hydrograph.csv')
-                            if os.path.exists(hydro_csv):
-                                df_hydro = pd.read_csv(hydro_csv)
-                                # Convert back to display format (assuming stored in CFS)
-                                if units == 'metric' and 'DAvgFlow_prorate' in df_hydro.columns:
-                                    df_hydro['DAvgFlow_prorate'] = df_hydro['DAvgFlow_prorate'] / 35.3147
-                                # Format as tab-delimited string for textarea
-                                hydrograph_data = df_hydro.to_csv(sep='\t', index=False, header=False)
-                        else:
-                            scenario_type = 'static'
-                            # Convert back to display units
-                            discharge_val = float(flow_val)
-                            if units == 'metric':
-                                discharge_val = discharge_val / 35.3147
-                            discharge = str(discharge_val)
-                        
-                        # Populate session from CSV
-                        session['scenario_name'] = scenario_name
-                        session['scenario_number'] = scenario_number
-                        session['season'] = season
-                        session['months'] = months
-                        session['scenario_type'] = scenario_type
-                        session['discharge'] = discharge
-                        session['hydrograph_data'] = hydrograph_data
-                except Exception as e:
-                    print(f"Error reading existing flow scenario data: {e}")
+    # Load from CSV if no scenario data OR if hydrograph data is missing
+    sim_folder = g.get('user_sim_folder')
+    if sim_folder:
+        flow_csv = os.path.join(sim_folder, 'flow.csv')
+        if os.path.exists(flow_csv) and (not scenario_name or (scenario_type == 'hydrograph' and not hydrograph_data)):
+            try:
+                df = pd.read_csv(flow_csv)
+                if len(df) > 0:
+                    scenario_name = df.iloc[0].get('Scenario', '')
+                    scenario_number = str(df.iloc[0].get('Scenario Number', ''))
+                    season = df.iloc[0].get('Season', '')
+                    months = df.iloc[0].get('Months', '')
+                    
+                    # Check if it's hydrograph or static
+                    flow_val = df.iloc[0].get('Flow')
+                    if flow_val == 'hydrograph' or pd.isna(flow_val):
+                        scenario_type = 'hydrograph'
+                        # Try to load hydrograph data
+                        hydro_csv = os.path.join(sim_folder, 'hydrograph.csv')
+                        if os.path.exists(hydro_csv):
+                            df_hydro = pd.read_csv(hydro_csv)
+                            # Convert back to display format (assuming stored in CFS)
+                            if units == 'metric' and 'DAvgFlow_prorate' in df_hydro.columns:
+                                df_hydro['DAvgFlow_prorate'] = df_hydro['DAvgFlow_prorate'] / 35.3147
+                            # Format as tab-delimited string for textarea
+                            hydrograph_data = df_hydro.to_csv(sep='\t', index=False, header=False)
+                            print(f"Loaded hydrograph with {len(df_hydro)} rows", flush=True)
+                    else:
+                        scenario_type = 'static'
+                        # Convert back to display units
+                        discharge_val = float(flow_val)
+                        if units == 'metric':
+                            discharge_val = discharge_val / 35.3147
+                        discharge = str(discharge_val)
+                    
+                    # Populate session from CSV
+                    session['scenario_name'] = scenario_name
+                    session['scenario_number'] = scenario_number
+                    session['season'] = season
+                    session['months'] = months
+                    session['scenario_type'] = scenario_type
+                    session['discharge'] = discharge
+                    session['hydrograph_data'] = hydrograph_data
+            except Exception as e:
+                print(f"Error reading existing flow scenario data: {e}", flush=True)
     
     return render_template('flow_scenarios.html',
                          units=units,
@@ -1684,11 +1684,41 @@ def facilities():
         #print("DEBUG: Facilities DataFrame:")
         #print(facilities_data, flush=True)
 
+    # GET request - load from session or CSV if available
     units = session.get('units', 'metric')
     scenario = session.get('scenario_name', 'Unknown Scenario')
     sim_mode = session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing')
     project_loaded = session.get('project_loaded', False)
-    return render_template('facilities.html', units=units, scenario=scenario, sim_mode=sim_mode, project_loaded=project_loaded)
+    
+    # Try to load existing facilities data from CSV
+    facilities_list = []
+    sim_folder = g.get('user_sim_folder')
+    if sim_folder:
+        facilities_csv = os.path.join(sim_folder, 'facilities.csv')
+        if os.path.exists(facilities_csv):
+            try:
+                df = pd.read_csv(facilities_csv)
+                # Convert from stored (imperial) back to display units
+                if units == 'metric':
+                    # Rack spacing: ft to mm
+                    if 'Rack Spacing' in df.columns:
+                        df['Rack Spacing'] = df['Rack Spacing'] * 304.8  # ft to mm
+                    # Flow values: cfs to cms
+                    for col in ['Min_Op_Flow', 'Env_Flow', 'Bypass_Flow']:
+                        if col in df.columns:
+                            df[col] = df[col] / 35.3147
+                
+                facilities_list = df.to_dict('records')
+                print(f"Loaded {len(facilities_list)} facilities from CSV", flush=True)
+            except Exception as e:
+                print(f"Error loading facilities from CSV: {e}", flush=True)
+    
+    return render_template('facilities.html', 
+                         units=units, 
+                         scenario=scenario, 
+                         sim_mode=sim_mode, 
+                         project_loaded=project_loaded,
+                         facilities_data=facilities_list)
 
 @app.route('/unit_parameters', methods=['GET', 'POST'])
 def unit_parameters():

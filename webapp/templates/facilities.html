@@ -136,6 +136,10 @@
     </div>
 
     <script>
+        // Load facilities data from backend
+        const facilitiesData = {{ facilities_data | tojson }};
+        console.log("Loaded facilities data:", facilitiesData);
+
         function generateFacilityForms() {
             var simMode = "{{ sim_mode }}";  
             var units = "{{ units }}";  
@@ -146,6 +150,9 @@
             let unitText = units === "metric" ? "m³/s" : "ft³/s";
 
             for (let i = 0; i < numFacilities; i++) {
+                // Get loaded data for this facility if it exists
+                const facilityData = facilitiesData[i] || {};
+                
                 let facilityDiv = document.createElement("div");
                 facilityDiv.classList.add("facility-container");
 
@@ -155,7 +162,7 @@
                     <div class="form-row">
                         <div>
                             <label for="facility_name_${i}">Facility Name:</label>
-                            <input type="text" name="facility_name_${i}" id="facility_name_${i}" maxlength="50" required>
+                            <input type="text" name="facility_name_${i}" id="facility_name_${i}" maxlength="50" required value="${facilityData.Facility || ''}">
                         </div>
 
                         <div>
@@ -165,7 +172,7 @@
                                     <span class="tooltip-text">Enter the number of units at this facility.</span>
                                 </span>
                             </label>
-                            <input type="number" name="num_units_${i}" id="num_units_${i}" min="1" value="1"
+                            <input type="number" name="num_units_${i}" id="num_units_${i}" min="1" value="${facilityData.Units || 1}"
                                 {% if sim_mode in ["single_unit_survival_only", "single_unit_simulated_entrainment"] %}readonly{% endif %}>
                         </div>
                     </div>
@@ -175,9 +182,9 @@
                         <div>
                             <label for="operations_${i}">Facility Type:</label>
                             <select name="operations_${i}" id="operations_${i}" required>
-                                <option value="run-of-river" selected>run-of-river</option>
-                                <option value="pumped storage">pumped storage</option>
-                                <option value="peaking">peaking</option>
+                                <option value="run-of-river" ${(facilityData.Operations === 'run-of-river' || !facilityData.Operations) ? 'selected' : ''}>run-of-river</option>
+                                <option value="pumped storage" ${facilityData.Operations === 'pumped storage' ? 'selected' : ''}>pumped storage</option>
+                                <option value="peaking" ${facilityData.Operations === 'peaking' ? 'selected' : ''}>peaking</option>
                             </select>
                         </div>
                     </div>
@@ -191,7 +198,7 @@
                                     <span class="tooltip-text">Minimum discharge required to operate units (${unitText}).</span>
                                 </span>
                             </label>
-                            <input type="number" name="min_op_flow_${i}" id="min_op_flow_${i}" step="any" value="0">
+                            <input type="number" name="min_op_flow_${i}" id="min_op_flow_${i}" step="any" value="${facilityData.Min_Op_Flow || 0}">
                         </div>
 
                         <div>
@@ -201,7 +208,7 @@
                                     <span class="tooltip-text">Minimum discharge required for instream flow releases (${unitText}).</span>
                                 </span>
                             </label>
-                            <input type="number" name="env_flow_${i}" id="env_flow_${i}" step="any" value="0">
+                            <input type="number" name="env_flow_${i}" id="env_flow_${i}" step="any" value="${facilityData.Env_Flow || 0}">
                         </div>
 
                         <div>
@@ -211,7 +218,7 @@
                                     <span class="tooltip-text">Discharge required for downstream bypass (${unitText}).</span>
                                 </span>
                             </label>
-                            <input type="number" name="bypass_flow_${i}" id="bypass_flow_${i}" step="any" value="0">
+                            <input type="number" name="bypass_flow_${i}" id="bypass_flow_${i}" step="any" value="${facilityData.Bypass_Flow || 0}">
                         </div>
 
                         <div>
@@ -221,7 +228,7 @@
                                     <span class="tooltip-text">Enter rack spacing as a float in millimeters (mm).</span>
                                 </span>
                             </label>
-                            <input type="number" step="any" name="rack_spacing_${i}" id="rack_spacing_${i}" placeholder="mm">
+                            <input type="number" step="any" name="rack_spacing_${i}" id="rack_spacing_${i}" placeholder="mm" value="${facilityData['Rack Spacing'] || ''}">
                         </div>
                     </div>
 
@@ -233,7 +240,7 @@
                                 <span class="tooltip-text">If a spillway is present, enter the associated dam name (Max 50 characters).</span>
                             </span>
                         </label>
-                        <input type="text" name="spillway_${i}" id="spillway_${i}" maxlength="50" value="none">
+                        <input type="text" name="spillway_${i}" id="spillway_${i}" maxlength="50" value="${facilityData.Spillway || 'none'}">
                     </div>
 
                     <hr>
@@ -250,6 +257,14 @@
                 input.value = "";
             } else {
                 usedFacilityNames.add(name);
+            }
+        }
+
+        // Set number of facilities from loaded data if available
+        if (facilitiesData && facilitiesData.length > 0) {
+            const numFacInput = document.getElementById("num_facilities");
+            if (numFacInput) {
+                numFacInput.value = facilitiesData.length;
             }
         }
 
