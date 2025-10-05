@@ -120,7 +120,7 @@
             
             <!-- Buttons Section -->
             <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
-                <button type="submit" {% if project_loaded and facilities_data %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Facilities</button>
+                <button type="submit" style="{% if project_loaded and facilities_data %}background: #ccc; cursor: not-allowed;{% else %}background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;{% endif %}" {% if project_loaded and facilities_data %}disabled{% endif %}>Save Facilities</button>
                 
                 {% if project_loaded and facilities_data %}
                 <a href="{{ url_for('unit_parameters') }}" style="text-decoration: none;">

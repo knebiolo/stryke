@@ -136,54 +136,9 @@
                 <option value="multiple_powerhouses_simulated_entrainment_routing" {% if model_setup == 'multiple_powerhouses_simulated_entrainment_routing' %}selected{% endif %}>Multiple Dependent Powerhouses with movement, simulated entrainment, survival </option>
             </select>
 
-            <button type="submit" id="createProjectBtn" {% if project_loaded %}disabled{% endif %}>Create Project</button>
+            <button type="submit" id="createProjectBtn" {% if project_loaded %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Create Project</button>
             <button type="button" onclick="window.location.href='{{ url_for('flow_scenarios') }}'">Next Page →</button>
         </form>
-        
-        <script>
-            // Track if form data has changed
-            let originalFormData = {};
-            let formChanged = false;
-            
-            // Capture original form values
-            document.addEventListener('DOMContentLoaded', function() {
-                const form = document.querySelector('form');
-                const inputs = form.querySelectorAll('input, textarea, select');
-                
-                inputs.forEach(input => {
-                    originalFormData[input.name] = input.value;
-                });
-                
-                // Listen for changes
-                inputs.forEach(input => {
-                    input.addEventListener('input', checkFormChanged);
-                    input.addEventListener('change', checkFormChanged);
-                });
-            });
-            
-            function checkFormChanged() {
-                const form = document.querySelector('form');
-                const inputs = form.querySelectorAll('input, textarea, select');
-                formChanged = false;
-                
-                inputs.forEach(input => {
-                    if (input.value !== originalFormData[input.name]) {
-                        formChanged = true;
-                    }
-                });
-                
-                // Enable/disable Create Project button based on changes
-                const createBtn = document.getElementById('createProjectBtn');
-                if (createBtn) {
-                    const isProjectLoaded = {{ 'true' if project_loaded else 'false' }};
-                    if (isProjectLoaded) {
-                        createBtn.disabled = !formChanged;
-                    } else {
-                        createBtn.disabled = false;
-                    }
-                }
-            }
-        </script>
         
         <!-- Project Save/Load Section -->
         <div class="project-management">

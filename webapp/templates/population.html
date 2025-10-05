@@ -259,22 +259,22 @@
           </label>
           <select id="vertical_habitat" name="vertical_habitat" required>
             <option value="">--Select Option--</option>
-            <option value="Pelagic" {% if population_data.get('Habitat') == 'Pelagic' %}selected{% endif %}>Pelagic</option>
-            <option value="Benthic" {% if population_data.get('Habitat') == 'Benthic' %}selected{% endif %}>Benthic</option>
+            <option value="Pelagic" {% if population_data.get('vertical_habitat') == 'Pelagic' %}selected{% endif %}>Pelagic</option>
+            <option value="Benthic" {% if population_data.get('vertical_habitat') == 'Benthic' %}selected{% endif %}>Benthic</option>
           </select>
         </div>
         
         <!-- Hidden fields for beta values -->
-        <input type="hidden" id="beta_0" name="beta_0" value="{{ population_data.get('Beta 0', '') }}">
-        <input type="hidden" id="beta_1" name="beta_1" value="{{ population_data.get('Beta 1', '') }}">
+        <input type="hidden" id="beta_0" name="beta_0" value="{{ population_data.get('beta_0', '') }}">
+        <input type="hidden" id="beta_1" name="beta_1" value="{{ population_data.get('beta_1', '') }}">
         <div>
           <label for="fish_type">Swim Bladder Type 
             <span class="tooltip" title="Select fish type to auto-fill logistic regression parameters">[?]</span>
           </label>
           <select id="fish_type" name="fish_type" onchange="setBetaValues()" required>
             <option value="">--Select Option--</option>
-            <option value="physoclistous" {% if population_data.get('Fish Type') == 'physoclistous' %}selected{% endif %}>Physoclistous</option>
-            <option value="physostomous" {% if population_data.get('Fish Type') == 'physostomous' %}selected{% endif %}>Physostomous</option>
+            <option value="physoclistous" {% if population_data.get('fish_type') == 'physoclistous' %}selected{% endif %}>Physoclistous</option>
+            <option value="physostomous" {% if population_data.get('fish_type') == 'physostomous' %}selected{% endif %}>Physostomous</option>
           </select>
         </div>
         <script>
@@ -349,9 +349,9 @@
           </label>
           <select id="empiricalDist" name="empiricalDist">
             <option value="">--Select Distribution--</option>
-            <option value="Log Normal" {% if population_data.get('Distribution') == 'Log Normal' %}selected{% endif %}>Log Normal</option>
-            <option value="Weibull" {% if population_data.get('Distribution') == 'Weibull' %}selected{% endif %}>Weibull</option>
-            <option value="Pareto" {% if population_data.get('Distribution') == 'Pareto' %}selected{% endif %}>Pareto</option>
+            <option value="Log Normal" {% if population_data.get('dist') == 'Log Normal' %}selected{% endif %}>Log Normal</option>
+            <option value="Weibull" {% if population_data.get('dist') == 'Weibull' %}selected{% endif %}>Weibull</option>
+            <option value="Pareto" {% if population_data.get('dist') == 'Pareto' %}selected{% endif %}>Pareto</option>
           </select>
         </div>
         
@@ -362,19 +362,19 @@
               <label for="empiricalShape">Shape 
                 <span class="tooltip" title="Shape parameter for distribution fit">[?]</span>
               </label>
-              <input type="number" step="any" id="empiricalShape" name="empiricalShape" value="{{ population_data.get('Shape', '') }}" placeholder="Enter shape">
+              <input type="number" step="any" id="empiricalShape" name="empiricalShape" value="{{ population_data.get('shape', '') }}" placeholder="Enter shape">
             </div>
             <div>
               <label for="empiricalLocation">Location 
                 <span class="tooltip" title="Location parameter for distribution fit">[?]</span>
               </label>
-              <input type="number" step="any" id="empiricalLocation" name="empiricalLocation" value="{{ population_data.get('Location', '') }}" placeholder="Enter location">
+              <input type="number" step="any" id="empiricalLocation" name="empiricalLocation" value="{{ population_data.get('location', '') }}" placeholder="Enter location">
             </div>
             <div>
               <label for="empiricalScale">Scale 
                 <span class="tooltip" title="Scale parameter for distribution fit">[?]</span>
               </label>
-              <input type="number" step="any" id="empiricalScale" name="empiricalScale" value="{{ population_data.get('Scale', '') }}" placeholder="Enter scale">
+              <input type="number" step="any" id="empiricalScale" name="empiricalScale" value="{{ population_data.get('scale', '') }}" placeholder="Enter scale">
             </div>
           </div>
         </div>
@@ -386,13 +386,13 @@
               <label for="max_entrainment_rate">Maximum Entrainment Rate 
                 <span class="tooltip" title="{% if session.units=='imperial' %}Fish per million cubic feet{% else %}Fish per million cubic meters{% endif %}">[?]</span>
               </label>
-              <input type="number" step="any" id="max_entrainment_rate" name="max_entrainment_rate" value="{{ population_data.get('Max Entrainment Rate', '') }}" placeholder="Enter maximum entrainment rate">
+              <input type="number" step="any" id="max_entrainment_rate" name="max_entrainment_rate" value="{{ population_data.get('max_ent_rate', '') }}" placeholder="Enter maximum entrainment rate">
             </div>
             <div>
               <label for="occurrence_probability">Occurrence Probability 
                 <span class="tooltip" title="Probability that fish are present">[?]</span>
               </label>
-              <input type="number" step="any" id="occurrence_probability" name="occurrence_probability" value="{{ population_data.get('Occurrence Probability', '') }}" placeholder="Enter probability">
+              <input type="number" step="any" id="occurrence_probability" name="occurrence_probability" value="{{ population_data.get('occur_prob', '') }}" placeholder="Enter probability">
             </div>
           </div>
         </div>
@@ -416,24 +416,24 @@
             <label for="length_mean">Total Length (Mean) 
               <span class="tooltip" title="{% if session.units=='imperial' %}Mean total length in inches{% else %}Mean total length in mm{% endif %}">[?]</span>
             </label>
-            <input type="number" step="any" id="length_mean" name="length_mean" value="{{ population_data.get('Mean Length', '') }}" placeholder="Enter mean total length">
+            <input type="number" step="any" id="length_mean" name="length_mean" value="{{ population_data.get('Length_mean', '') }}" placeholder="Enter mean total length">
             
             <label for="length_sd">Total Length (Std Dev) 
               <span class="tooltip" title="{% if session.units=='imperial' %}Standard deviation in inches{% else %}Standard deviation in mm{% endif %}">[?]</span>
             </label>
-            <input type="number" step="any" id="length_sd" name="length_sd" value="{{ population_data.get('SD Length', '') }}" placeholder="Enter total length standard deviation">
+            <input type="number" step="any" id="length_sd" name="length_sd" value="{{ population_data.get('Length_sd', '') }}" placeholder="Enter total length standard deviation">
           </fieldset>
           
           <div style="flex: 1;">
             <label for="Ucrit">U_crit 
               <span class="tooltip" title="{% if session.units=='imperial' %}Critical swim speed in feet per second{% else %}Critical swim speed in meters per second{% endif %}">[?]</span>
             </label>
-            <input type="number" step="any" id="Ucrit" name="Ucrit" value="{{ population_data.get('Ucrit', '') }}" placeholder="Enter U_crit">
+            <input type="number" step="any" id="Ucrit" name="Ucrit" value="{{ population_data.get('U_crit', '') }}" placeholder="Enter U_crit">
             
             <!-- Hidden fields for length_shape, length_location, and length_scale -->
-            <input type="hidden" id="length_shape" name="length_shape" value="{{ population_data.get('Length Shape', '') }}">
-            <input type="hidden" id="length_location" name="length_location" value="{{ population_data.get('Length Location', '') }}">
-            <input type="hidden" id="length_scale" name="length_scale" value="{{ population_data.get('Length Scale', '') }}">
+            <input type="hidden" id="length_shape" name="length_shape" value="{{ population_data.get('length shape', '') }}">
+            <input type="hidden" id="length_location" name="length_location" value="{{ population_data.get('length location', '') }}">
+            <input type="hidden" id="length_scale" name="length_scale" value="{{ population_data.get('length scale', '') }}">
           </div>
         </div>
       </div>

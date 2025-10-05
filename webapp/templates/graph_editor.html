@@ -152,6 +152,7 @@
 
     // Load graph data if available
     var loadedGraphData = {{ graph_data | tojson | safe }};
+    console.log("Raw loadedGraphData:", loadedGraphData);
     var initialElements = [];
     if (loadedGraphData && loadedGraphData.elements) {
       // Cytoscape format: graph_data.elements.nodes and graph_data.elements.edges
@@ -159,10 +160,13 @@
       var edges = loadedGraphData.elements.edges || [];
       initialElements = nodes.concat(edges);
       console.log("Loaded graph with " + nodes.length + " nodes and " + edges.length + " edges");
+      console.log("initialElements:", initialElements);
     } else if (loadedGraphData && loadedGraphData.nodes && loadedGraphData.edges) {
       // Fallback for old format
       initialElements = loadedGraphData.nodes.concat(loadedGraphData.edges);
       console.log("Loaded graph (old format) with " + loadedGraphData.nodes.length + " nodes and " + loadedGraphData.edges.length + " edges");
+    } else {
+      console.log("No graph data loaded or empty graph_data");
     }
 
     // Initialize Cytoscape with custom styles
