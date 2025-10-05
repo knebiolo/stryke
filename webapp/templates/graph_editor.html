@@ -15,11 +15,18 @@
   
   {% if project_loaded %}
   <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; margin: 20px 0; border-radius: 5px; font-size: 14px;">
-    ✅ <strong>Project Loaded</strong> - Your saved migratory route graph should appear below. You can view it, make changes if needed, or proceed to the next page.
+    ✅ <strong>Project Loaded</strong> - Your saved migratory route graph is displayed below. This was saved with your project, so you can proceed to the next step.
+  </div>
+  
+  <!-- Buttons Section -->
+  <div style="display: flex; gap: 10px; align-items: center; margin: 15px 0;">
+      <a href="{{ url_for('population') }}" style="text-decoration: none;">
+          <button type="button" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;">Next: Population →</button>
+      </a>
   </div>
   {% endif %}
   
-  <div class="toolbar">ort meta for mobile compatibility -->
+  <div class="toolbar" {% if project_loaded %}style="display: none;"{% endif %}>ort meta for mobile compatibility -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive Graph Editor</title>
   <!-- Include Cytoscape.js via CDN -->
@@ -146,9 +153,16 @@
     // Load graph data if available
     var loadedGraphData = {{ graph_data | tojson | safe }};
     var initialElements = [];
-    if (loadedGraphData && loadedGraphData.nodes && loadedGraphData.edges) {
+    if (loadedGraphData && loadedGraphData.elements) {
+      // Cytoscape format: graph_data.elements.nodes and graph_data.elements.edges
+      var nodes = loadedGraphData.elements.nodes || [];
+      var edges = loadedGraphData.elements.edges || [];
+      initialElements = nodes.concat(edges);
+      console.log("Loaded graph with " + nodes.length + " nodes and " + edges.length + " edges");
+    } else if (loadedGraphData && loadedGraphData.nodes && loadedGraphData.edges) {
+      // Fallback for old format
       initialElements = loadedGraphData.nodes.concat(loadedGraphData.edges);
-      console.log("Loaded graph with " + loadedGraphData.nodes.length + " nodes and " + loadedGraphData.edges.length + " edges");
+      console.log("Loaded graph (old format) with " + loadedGraphData.nodes.length + " nodes and " + loadedGraphData.edges.length + " edges");
     }
 
     // Initialize Cytoscape with custom styles
@@ -208,15 +222,21 @@
         }
         
       ],
-      layout: { name: 'grid', rows: 1 }
+      layout: { name: 'grid', rows: 1 },
+      userZoomingEnabled: true,
+      userPanningEnabled: true,
+      boxSelectionEnabled: {% if project_loaded %}false{% else %}true{% endif %},
+      autoungrabify: {% if project_loaded %}true{% else %}false{% endif %}
     });
 
-    // Delete key removes selected nodes or edges.
+    {% if not project_loaded %}
+    // Delete key removes selected nodes or edges (only when not loaded).
     document.addEventListener('keydown', function(event) {
       if (event.key === 'Delete') {
         cy.$(':selected').remove();
       }
     });
+    {% endif %}
 
     // When adding a node, we set its id equal to its label.
     function addNode(type, labelOverride, survFunOverride) {
@@ -355,7 +375,7 @@
     }
   </script>
 
-  <div class="action-buttons">
+  <div class="action-buttons" {% if project_loaded %}style="display: none;"{% endif %}>
     <button onclick="saveGraph()">Save Graph</button>
     <a href="{{ url_for('population') }}">Next Page</a>
   </div>
