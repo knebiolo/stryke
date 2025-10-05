@@ -1664,7 +1664,6 @@ def facilities():
         session['facility_units'] = facility_units
 
         # Convert the facilities_data into a pandas DataFrame (with converted values) for simulation/reporting.
-        import pandas as pd
         df_facilities = pd.DataFrame(facilities_data)
         # Enforce the expected column order.
         expected_columns = ['Facility', 'Operations', 'Rack Spacing', 'Min_Op_Flow', 'Env_Flow', 'Bypass_Flow', 'Spillway', 'Units']
