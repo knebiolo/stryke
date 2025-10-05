@@ -1273,6 +1273,7 @@ def clear_folder(folder_path):
 
 @app.route('/create_project', methods=['GET', 'POST'])
 def create_project():
+    print(f"=== CREATE PROJECT CALLED === Method: {request.method}", flush=True)
     if request.method == 'POST':
         project_name = request.form.get('project_name')
         project_notes = request.form.get('project_notes')
@@ -1322,12 +1323,19 @@ def create_project():
                 except Exception as e:
                     print(f"Error reading existing project data: {e}")
     
-    return render_template('create_project.html',
-                         project_name=project_name or '',
-                         project_notes=project_notes or '',
-                         units=units or 'metric',
-                         model_setup=model_setup or '',
-                         project_loaded=project_loaded)
+    print(f"Rendering create_project.html with: name={project_name}, loaded={project_loaded}", flush=True)
+    try:
+        return render_template('create_project.html',
+                             project_name=project_name or '',
+                             project_notes=project_notes or '',
+                             units=units or 'metric',
+                             model_setup=model_setup or '',
+                             project_loaded=project_loaded)
+    except Exception as e:
+        print(f"ERROR rendering create_project.html: {str(e)}", flush=True)
+        import traceback
+        traceback.print_exc()
+        raise
 
 def process_hydrograph_data(raw_data):
     # Try tab first, then comma if only one column detected
