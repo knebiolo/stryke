@@ -1012,6 +1012,7 @@ def load_project():
                 session['project_notes'] = df.iloc[0].get('Project Notes', '')
                 session['units'] = df.iloc[0].get('Units', 'metric')
                 session['model_setup'] = df.iloc[0].get('Model Setup', '')
+                print(f"SET session vars: name={session['project_name']}, units={session['units']}", flush=True)
         
         # Restore flow scenarios
         if project_data.get('flow_scenarios'):
@@ -1066,6 +1067,10 @@ def load_project():
         
         # Set flag to indicate project was just loaded
         session['project_loaded'] = True
+        session.modified = True  # Force session to save
+        
+        print(f"BEFORE REDIRECT: session keys={list(session.keys())}", flush=True)
+        print(f"BEFORE REDIRECT: project_name={session.get('project_name')}", flush=True)
         
         # Clear auto-save since we just loaded a project
         flash('✅ Project loaded successfully! All data has been restored.')
@@ -1296,11 +1301,13 @@ def create_project():
 
     # GET request - session-first loading pattern
     # Check session first, then fall back to CSV
+    print(f"Session keys: {list(session.keys())}", flush=True)
     project_name = session.get('project_name', '')
     project_notes = session.get('project_notes', '')
     units = session.get('units', 'metric')
     model_setup = session.get('model_setup', '')
     project_loaded = session.get('project_loaded', False)
+    print(f"From session: name={project_name}, units={units}, setup={model_setup}, loaded={project_loaded}", flush=True)
     
     # If no session data, try loading from CSV
     if not project_name:
