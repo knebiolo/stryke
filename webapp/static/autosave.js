@@ -1,7 +1,6 @@
 /**
- * Auto-Save System for Stryke Web App
- * Automatically saves form data to localStorage every 3 minutes
- * Detects and restores previous sessions on page load
+ * Auto-Save System for Stryke Web App - DISABLED
+ * Auto-save functionality has been disabled to prevent session conflicts
  */
 
 (function() {
@@ -13,19 +12,26 @@
     let autoSaveTimer = null;
     let lastSaveTime = null;
 
-    // Initialize auto-save system
+    // Initialize auto-save system - DISABLED
     function init() {
+        // Auto-save disabled - clear any existing data
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(TIMESTAMP_KEY);
+        console.log('Auto-save system disabled');
+        return;
+        
+        // OLD CODE BELOW - DISABLED
         // Check for existing auto-saved data on page load
-        checkForAutoSavedData();
+        // checkForAutoSavedData();
         
         // Start auto-save timer
-        startAutoSave();
+        // startAutoSave();
         
         // Update "last saved" indicator every 30 seconds
-        setInterval(updateLastSavedIndicator, 30000);
+        // setInterval(updateLastSavedIndicator, 30000);
         
         // Save on page unload as backup
-        window.addEventListener('beforeunload', saveFormData);
+        // window.addEventListener('beforeunload', saveFormData);
     }
 
     // Check if there's auto-saved data and prompt user to restore
