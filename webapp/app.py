@@ -3602,36 +3602,59 @@ def population():
                 df = pd.read_csv(pop_csv)
                 print(f"DEBUG population GET: loaded CSV with shape {df.shape}, columns={list(df.columns)}", flush=True)
                 if len(df) > 0:
+                    # Add missing columns for backward compatibility with old project files
+                    required_columns = ['Simulate Choice', 'Entrainment Choice', 'Modeled Species', 'fish_type']
+                    for col in required_columns:
+                        if col not in df.columns:
+                            df[col] = None
+                            print(f"DEBUG: Added missing column '{col}' to population data", flush=True)
+                    
+                    # For old files, try to infer Simulate Choice from Fish column
+                    if pd.isna(df.iloc[0].get('Simulate Choice')) or df.iloc[0].get('Simulate Choice') == '':
+                        if 'Fish' in df.columns and pd.notna(df.iloc[0]['Fish']):
+                            df.at[0, 'Simulate Choice'] = 'starting population'
+                            print(f"DEBUG: Inferred 'Simulate Choice' = 'starting population' from Fish column", flush=True)
+                        elif 'max_ent_rate' in df.columns and pd.notna(df.iloc[0]['max_ent_rate']):
+                            df.at[0, 'Simulate Choice'] = 'entrainment event'
+                            df.at[0, 'Entrainment Choice'] = 'empirical'  # Default guess
+                            print(f"DEBUG: Inferred 'Simulate Choice' = 'entrainment event'", flush=True)
+                    
                     population_data = df.iloc[0].to_dict()
                     print(f"DEBUG population GET: population_data keys: {list(population_data.keys())}", flush=True)
                     
                     # Convert U_crit from ft/s (stored) to m/s (display) if units are metric
                     units = session.get('units', 'metric')
-                    if units == 'metric' and 'U_crit' in population_data and population_data['U_crit']:
+                    if units == 'metric' and 'U_crit' in population_data:
                         try:
-                            ucrit_ft = float(population_data['U_crit'])
-                            population_data['U_crit'] = ucrit_ft / 3.28084  # Convert ft/s to m/s
-                            print(f"DEBUG: Converted U_crit from {ucrit_ft} ft/s to {population_data['U_crit']} m/s", flush=True)
+                            if pd.notna(population_data['U_crit']):
+                                ucrit_ft = float(population_data['U_crit'])
+                                population_data['U_crit'] = ucrit_ft / 3.28084  # Convert ft/s to m/s
+                                print(f"DEBUG: Converted U_crit from {ucrit_ft} ft/s to {population_data['U_crit']} m/s", flush=True)
                         except (ValueError, TypeError) as e:
                             print(f"ERROR converting U_crit: {e}", flush=True)
                     
                     # Convert Length_mean from inches (stored) to mm (display) if units are metric
-                    if units == 'metric' and 'Length_mean' in population_data and population_data['Length_mean']:
+                    if units == 'metric' and 'Length_mean' in population_data:
                         try:
-                            length_in = float(population_data['Length_mean'])
-                            population_data['Length_mean'] = length_in * 25.4  # Convert inches to mm
-                            print(f"DEBUG: Converted Length_mean from {length_in} in to {population_data['Length_mean']} mm", flush=True)
+                            if pd.notna(population_data['Length_mean']):
+                                length_in = float(population_data['Length_mean'])
+                                population_data['Length_mean'] = length_in * 25.4  # Convert inches to mm
+                                print(f"DEBUG: Converted Length_mean from {length_in} in to {population_data['Length_mean']} mm", flush=True)
                         except (ValueError, TypeError) as e:
                             print(f"ERROR converting Length_mean: {e}", flush=True)
                     
                     # Convert Length_sd from inches (stored) to mm (display) if units are metric
-                    if units == 'metric' and 'Length_sd' in population_data and population_data['Length_sd']:
+                    if units == 'metric' and 'Length_sd' in population_data:
                         try:
-                            sd_in = float(population_data['Length_sd'])
-                            population_data['Length_sd'] = sd_in * 25.4  # Convert inches to mm
-                            print(f"DEBUG: Converted Length_sd from {sd_in} in to {population_data['Length_sd']} mm", flush=True)
+                            if pd.notna(population_data['Length_sd']):
+                                sd_in = float(population_data['Length_sd'])
+                                population_data['Length_sd'] = sd_in * 25.4  # Convert inches to mm
+                                print(f"DEBUG: Converted Length_sd from {sd_in} in to {population_data['Length_sd']} mm", flush=True)
                         except (ValueError, TypeError) as e:
                             print(f"ERROR converting Length_sd: {e}", flush=True)
+                    
+                    # Store processed data back to session for simulation
+                    session['population_data_for_sim'] = [population_data]
             except Exception as e:
                 print(f"ERROR loading population from CSV: {e}", flush=True)
                 import traceback
@@ -3696,10 +3719,25 @@ def model_setup_summary():
     gf = session.get('graph_files') or {}
     node_link_path = gf.get('node_link')
     graph_data = {}
-    if node_link_path and os.path.exists(node_link_path):
+    graph_nodes = []
+    graph_edges = []
+    
+    # Try to get graph from session first
+    if 'graph_data' in session and session['graph_data']:
+        graph_data = session['graph_data']
+        if 'elements' in graph_data:
+            graph_nodes = graph_data['elements'].get('nodes', [])
+            graph_edges = graph_data['elements'].get('edges', [])
+        print(f"DEBUG model_summary: Loaded graph from session: {len(graph_nodes)} nodes, {len(graph_edges)} edges", flush=True)
+    # Fallback to file
+    elif node_link_path and os.path.exists(node_link_path):
         try:
             with open(node_link_path, 'r', encoding='utf-8') as f:
                 graph_data = json.load(f)
+            if 'elements' in graph_data:
+                graph_nodes = graph_data['elements'].get('nodes', [])
+                graph_edges = graph_data['elements'].get('edges', [])
+            print(f"DEBUG model_summary: Loaded graph from file: {len(graph_nodes)} nodes, {len(graph_edges)} edges", flush=True)
         except Exception:
             log.exception('Failed reading node_link graph file: %s', node_link_path)
 
@@ -3707,6 +3745,11 @@ def model_setup_summary():
     pop_df = []
     if 'population_data_for_sim' in session:
         pop_df = session['population_data_for_sim']
+        print(f"DEBUG model_summary: Population data from session: {pop_df}", flush=True)
+    
+    # Ensure it's a list for template iteration
+    if pop_df and not isinstance(pop_df, list):
+        pop_df = [pop_df]
 
     # --- Prepare data for template ---
     proj_dir = session.get('proj_dir', '')
@@ -3718,8 +3761,10 @@ def model_setup_summary():
                          unit_columns=unit_columns,
                          operating_scenarios=operating_scenarios,
                          flow_scenarios=flow_scenarios,
-                         population_data=pop_df,
+                         population_parameters=pop_df,  # Changed from population_data to match template
                          graph_summary=graph_summary,
+                         graph_nodes=graph_nodes,  # Added
+                         graph_edges=graph_edges,  # Added
                          project_name=session.get('project_name'),
                          project_notes=session.get('project_notes'),
                          model_setup=session.get('model_setup'),
