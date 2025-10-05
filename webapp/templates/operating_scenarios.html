@@ -164,7 +164,9 @@
                 <input type="number" name="unit_ror_{{ outer_index }}_{{ i }}" value="{{ i }}" readonly>
               </td>
               <td>
-                <input type="number" step="any" name="hours_ror_{{ outer_index }}_{{ i }}" placeholder="Enter hours" value="0">
+                {% set op_key = facility.Facility ~ "|" ~ i|string %}
+                {% set op_scen = session.get('op_scen_lookup', {}).get(op_key, {}) %}
+                <input type="number" step="any" name="hours_ror_{{ outer_index }}_{{ i }}" placeholder="Enter hours" value="{{ op_scen.get('Hours', 0) }}">
               </td>
             </tr>
             {% endfor %}
@@ -281,19 +283,21 @@
                 <input type="number" name="unit_ps_{{ outer_index }}_{{ i }}" value="{{ i }}" readonly>
               </td>
               <td>
-                <input type="number" step="any" name="hours_ps_{{ outer_index }}_{{ i }}" placeholder="Enter hours" value="0">
+                {% set op_key = facility.Facility ~ "|" ~ i|string %}
+                {% set op_scen = session.get('op_scen_lookup', {}).get(op_key, {}) %}
+                <input type="number" step="any" name="hours_ps_{{ outer_index }}_{{ i }}" placeholder="Enter hours" value="{{ op_scen.get('Hours', 0) }}">
               </td>
               <td>
-                <input type="number" step="any" name="prob_not_operating_{{ outer_index }}_{{ i }}" placeholder="Enter probability" value="">
+                <input type="number" step="any" name="prob_not_operating_{{ outer_index }}_{{ i }}" placeholder="Enter probability" value="{{ op_scen.get('Prob Not Operating', '') }}">
               </td>
               <td>
-                <input type="number" step="any" name="shape_{{ outer_index }}_{{ i }}" placeholder="Shape" value="">
+                <input type="number" step="any" name="shape_{{ outer_index }}_{{ i }}" placeholder="Shape" value="{{ op_scen.get('Shape', '') }}">
               </td>
               <td>
-                <input type="number" step="any" name="location_{{ outer_index }}_{{ i }}" placeholder="Location" value="">
+                <input type="number" step="any" name="location_{{ outer_index }}_{{ i }}" placeholder="Location" value="{{ op_scen.get('Location', '') }}">
               </td>
               <td>
-                <input type="number" step="any" name="scale_{{ outer_index }}_{{ i }}" placeholder="Scale" value="">
+                <input type="number" step="any" name="scale_{{ outer_index }}_{{ i }}" placeholder="Scale" value="{{ op_scen.get('Scale', '') }}">
               </td>
             </tr>
             {% endfor %}
@@ -301,7 +305,17 @@
         </tbody>
       </table>
       {% endif %}
-      <button type="submit">Save Operating Scenarios</button>
+      
+      <!-- Buttons Section -->
+      <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
+          <button type="submit" {% if project_loaded and has_op_scen_data %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Operating Scenarios</button>
+          
+          {% if project_loaded and has_op_scen_data %}
+          <a href="{{ url_for('graph_editor') }}" style="text-decoration: none;">
+              <button type="button" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;">Next: Graph Editor →</button>
+          </a>
+          {% endif %}
+      </div>
     </form>
 
     <!-- Save Project Section -->

@@ -1981,8 +1981,42 @@ def operating_scenarios():
         # print("DEBUG: Operating Scenarios DataFrame:")
         # print(df_os, flush=True)
         
+    # GET request - load existing operating scenarios if available
     project_loaded = session.get('project_loaded', False)
-    return render_template('operating_scenarios.html', project_loaded=project_loaded)
+    op_scen_list = []
+    
+    sim_folder = g.get('user_sim_folder')
+    print(f"DEBUG op_scenarios GET: sim_folder={sim_folder}", flush=True)
+    if sim_folder:
+        op_scen_csv = os.path.join(sim_folder, 'operating_scenarios.csv')
+        print(f"DEBUG op_scenarios GET: checking {op_scen_csv}, exists={os.path.exists(op_scen_csv)}", flush=True)
+        if os.path.exists(op_scen_csv):
+            try:
+                df = pd.read_csv(op_scen_csv)
+                print(f"DEBUG op_scenarios GET: loaded CSV with shape {df.shape}, columns={list(df.columns)}", flush=True)
+                print(f"DEBUG op_scenarios GET: first row = {df.iloc[0].to_dict() if len(df) > 0 else 'EMPTY'}", flush=True)
+                
+                op_scen_list = df.to_dict('records')
+                
+                # Create a lookup dictionary: "facility|unit": op_scen_dict
+                op_scen_lookup = {}
+                for op_scen in op_scen_list:
+                    facility = op_scen.get('Facility', '')
+                    unit = op_scen.get('Unit', '')
+                    key = f"{facility}|{str(unit)}"
+                    op_scen_lookup[key] = op_scen
+                print(f"DEBUG op_scenarios GET: created lookup with {len(op_scen_lookup)} entries", flush=True)
+                
+                # Store in session for template access
+                session['op_scen_lookup'] = op_scen_lookup
+            except Exception as e:
+                print(f"ERROR loading operating scenarios from CSV: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
+    
+    return render_template('operating_scenarios.html', 
+                         project_loaded=project_loaded,
+                         has_op_scen_data=len(op_scen_list) > 0)
 
 @app.route('/get_operating_scenarios', methods=['GET'])
 def get_operating_scenarios():
