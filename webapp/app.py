@@ -1932,7 +1932,6 @@ def operating_scenarios():
         ror_list = list(ror_rows.values())
         ps_list = list(ps_rows.values())
         
-        import pandas as pd
         df_ror = pd.DataFrame(ror_list)
         df_ps = pd.DataFrame(ps_list)
         
@@ -3503,7 +3502,6 @@ def population():
         
         #session['population_data'] = pop_data
         
-        import pandas as pd
         df_population = pd.DataFrame([pop_data])
         #print("DataFrame created with shape:", df_population.shape, flush=True)
         
