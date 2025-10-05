@@ -3408,6 +3408,7 @@ def population():
         pop_data["vertical_habitat"] = vertical_habitat
         pop_data["beta_0"] = safe_float(beta_0)
         pop_data["beta_1"] = safe_float(beta_1)
+        pop_data["fish_type"] = request.form.get('fish_type')
         
         units = session.get('units', 'metric')
         
@@ -3524,7 +3525,8 @@ def population():
         
         expected_columns = [
             "Species", "Common Name", "Scenario", "Iterations", "Fish",
-            "vertical_habitat", "beta_0", "beta_1",
+            "Simulate Choice", "Entrainment Choice", "Modeled Species",
+            "vertical_habitat", "beta_0", "beta_1", "fish_type",
             "dist","shape", "location", "scale",
             "max_ent_rate", "occur_prob",
             "Length_mean", "Length_sd", "U_crit",

@@ -303,8 +303,8 @@
         </label>
         <select id="simulateChoice" name="simulateChoice" onchange="toggleSimulateChoice()" required>
           <option value="">--Select Option--</option>
-          <option value="entrainment event" {% if population_data.get('Simulate') == 'entrainment event' %}selected{% endif %}>Entrainment Event</option>
-          <option value="starting population" {% if population_data.get('Simulate') == 'starting population' %}selected{% endif %}>Starting Population</option>
+          <option value="entrainment event" {% if population_data.get('Simulate Choice') == 'entrainment event' %}selected{% endif %}>Entrainment Event</option>
+          <option value="starting population" {% if population_data.get('Simulate Choice') == 'starting population' %}selected{% endif %}>Starting Population</option>
         </select>
       </div>
       
@@ -323,8 +323,8 @@
         </label>
         <select id="entrainmentChoice" name="entrainmentChoice" onchange="toggleEntrainmentChoice()" required>
           <option value="">--Select Option--</option>
-          <option value="modeled" {% if population_data.get('Entrainment Rate') == 'modeled' %}selected{% endif %}>Modeled</option>
-          <option value="empirical" {% if population_data.get('Entrainment Rate') == 'empirical' %}selected{% endif %}>Empirical</option>
+          <option value="modeled" {% if population_data.get('Entrainment Choice') == 'modeled' %}selected{% endif %}>Modeled</option>
+          <option value="empirical" {% if population_data.get('Entrainment Choice') == 'empirical' %}selected{% endif %}>Empirical</option>
         </select>
         
         <!-- Modeled: Dropdown for Species -->

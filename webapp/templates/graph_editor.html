@@ -26,7 +26,14 @@
   </div>
   {% endif %}
   
-  <div class="toolbar" {% if project_loaded %}style="display: none;"{% endif %}>mobile compatibility -->
+  <div class="toolbar" {% if project_loaded %}style="display: none;"{% endif %}>
+    <button onclick="addNode('start')">Add Start Node</button>
+    <button onclick="addNode('interior')">Add Interior Node</button>
+    <button onclick="showUnitModal()">Add Unit Node</button>
+    <button onclick="addNode('end')">Add End Node</button>
+    <button onclick="initiateEdge()">Add Edge</button>
+  </div>
+  <div id="cy"></div>compatibility -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive Graph Editor</title>
   <!-- Include Cytoscape.js via CDN -->
