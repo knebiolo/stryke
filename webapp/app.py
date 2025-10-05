@@ -1069,7 +1069,9 @@ def load_project():
         # Restore operating scenarios
         if project_data.get('operating_scenarios'):
             df = pd.DataFrame(project_data['operating_scenarios'])
-            df.to_csv(os.path.join(sim_folder, 'operating_scenarios.csv'), index=False)
+            op_scen_path = os.path.join(sim_folder, 'operating_scenarios.csv')
+            df.to_csv(op_scen_path, index=False)
+            session['op_scen_file'] = op_scen_path
         
         # Set flag to indicate project was just loaded
         session['project_loaded'] = True
@@ -1668,6 +1670,11 @@ def facilities():
         df_facilities = df_facilities[expected_columns]
         # Save a JSON-serialized version of the DataFrame into the session.
         session['facilities_dataframe'] = df_facilities.to_json(orient='records')
+        
+        # CRITICAL FIX: Write facilities to CSV so it can be saved/loaded
+        facilities_csv_path = os.path.join(session['proj_dir'], 'facilities.csv')
+        df_facilities.to_csv(facilities_csv_path, index=False)
+        print(f"Wrote facilities to {facilities_csv_path}", flush=True)
 
         flash(f"{num_facilities} facility(ies) saved successfully!")
         return redirect(url_for('unit_parameters'))  # Adjust for next page as needed.
@@ -1853,8 +1860,9 @@ def operating_scenarios():
         # Save the combined operating scenarios to the session.
         #session['operating_scenarios'] = df_os.to_dict(orient='records')
         # Assume unit_params is your DataFrame containing the unit parameters
-        op_scen_path = os.path.join(session['proj_dir'], 'op_scen.csv')
+        op_scen_path = os.path.join(session['proj_dir'], 'operating_scenarios.csv')
         df_os.to_csv(op_scen_path, index=False)
+        print(f"Wrote operating scenarios to {op_scen_path}", flush=True)
         
         # Store only the file path in the session
         session['op_scen_file'] = op_scen_path        
@@ -1991,6 +1999,11 @@ def save_graph():
         os.makedirs(proj_dir, exist_ok=True)
         full_path = os.path.join(proj_dir, 'graph_full.json')
         with open(full_path, 'w', encoding='utf-8') as f:
+            json.dump(graph_data, f, ensure_ascii=False)
+        
+        # CRITICAL FIX: Also save as graph.json for save_project compatibility
+        graph_json_path = os.path.join(proj_dir, 'graph.json')
+        with open(graph_json_path, 'w', encoding='utf-8') as f:
             json.dump(graph_data, f, ensure_ascii=False)
 
         node_link_path = os.path.join(proj_dir, 'graph_node_link.json');
@@ -3401,8 +3414,9 @@ def population():
         #print ('project directory:', proj_dir, flush = True)
         
         # make a csv path, save the dataframe and check
-        pop_csv_path = os.path.join(proj_dir, "population_params.csv")
-        df_population.to_csv(pop_csv_path, index=False)   
+        pop_csv_path = os.path.join(proj_dir, "population.csv")
+        df_population.to_csv(pop_csv_path, index=False)
+        print(f"Wrote population data to {pop_csv_path}", flush=True)   
         session['population_csv_path'] = pop_csv_path
         df_check = pd.read_csv(pop_csv_path)
         print("CSV Headers:", df_check.columns.tolist(), flush=True)
