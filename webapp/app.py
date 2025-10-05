@@ -1005,6 +1005,10 @@ def load_project():
         # Restore project info
         if project_data.get('project_info'):
             df = pd.DataFrame(project_data['project_info'])
+            print(f"DEBUG: project_info DataFrame shape: {df.shape}", flush=True)
+            print(f"DEBUG: project_info columns: {list(df.columns)}", flush=True)
+            if len(df) > 0:
+                print(f"DEBUG: First row data: {df.iloc[0].to_dict()}", flush=True)
             df.to_csv(os.path.join(sim_folder, 'project.csv'), index=False)
             # Update session variables from loaded data
             if len(df) > 0:
@@ -1013,6 +1017,8 @@ def load_project():
                 session['units'] = df.iloc[0].get('Units', 'metric')
                 session['model_setup'] = df.iloc[0].get('Model Setup', '')
                 print(f"SET session vars: name={session['project_name']}, units={session['units']}", flush=True)
+        else:
+            print("DEBUG: No project_info in loaded data!", flush=True)
         
         # Restore flow scenarios
         if project_data.get('flow_scenarios'):
