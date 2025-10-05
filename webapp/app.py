@@ -1479,6 +1479,11 @@ def flow_scenarios():
         #print("DEBUG: Flow scenario DataFrame:")
         #print(flow_scenario_df, flush=True)
         
+        # CRITICAL FIX: Write flow scenario to CSV so it can be saved/loaded
+        flow_csv_path = os.path.join(session['proj_dir'], 'flow.csv')
+        flow_scenario_df.to_csv(flow_csv_path, index=False)
+        print(f"Wrote flow scenario to {flow_csv_path}", flush=True)
+        
         # Store the flow scenario in session.
         session['flow_scenario'] = flow_scenario_df.to_dict(orient='records')
         flow_scenarios = session.get("flow_scenario", [])
