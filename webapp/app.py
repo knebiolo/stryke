@@ -3920,12 +3920,46 @@ def run_simulation():
     gf = session.get('graph_files') or {}
     node_link_path = gf.get('node_link')
     graph_data = {}
+    
+    # Try to load pre-generated node-link file (created when graph was manually built)
     if node_link_path and os.path.exists(node_link_path):
         try:
             with open(node_link_path, 'r', encoding='utf-8') as f:
                 graph_data = json.load(f)
+            log.info('Loaded node-link graph from file: %s', node_link_path)
         except Exception:
             log.exception('Failed reading node_link graph file: %s', node_link_path)
+    
+    # If no node-link file, generate it from graph_summary (for loaded projects)
+    if not graph_data and graph_summary:
+        log.info('Generating node-link graph from graph_summary')
+        import networkx as nx
+        from networkx.readwrite import json_graph
+        
+        G = nx.DiGraph()
+        
+        # Add nodes from graph_summary
+        for node in graph_summary.get('Nodes', []):
+            node_id = node.get('Location')  # Use Location as the node ID
+            if node_id:
+                G.add_node(node_id,
+                          ID=node.get('ID'),
+                          Location=node.get('Location'),
+                          Surv_Fun=node.get('Surv_Fun'),
+                          Survival=node.get('Survival'))
+        
+        # Add edges from graph_summary
+        for edge in graph_summary.get('Edges', []):
+            source = edge.get('_from')
+            target = edge.get('_to')
+            weight = edge.get('weight', 1.0)
+            if source and target:
+                G.add_edge(source, target, weight=weight)
+        
+        # Convert to node-link format
+        graph_data = json_graph.node_link_data(G)
+        log.info('Generated node-link graph: %d nodes, %d edges', 
+                len(graph_data.get('nodes', [])), len(graph_data.get('links', [])))
     
     # Population data
     pop_df = []
