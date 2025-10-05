@@ -1073,10 +1073,13 @@ def load_project():
         
         # Set flag to indicate project was just loaded
         session['project_loaded'] = True
+        # CRITICAL: Set proj_dir so other pages can save data
+        session['proj_dir'] = sim_folder
         session.modified = True  # Force session to save
         
         print(f"BEFORE REDIRECT: session keys={list(session.keys())}", flush=True)
         print(f"BEFORE REDIRECT: project_name={session.get('project_name')}", flush=True)
+        print(f"BEFORE REDIRECT: proj_dir={session.get('proj_dir')}", flush=True)
         
         # Clear auto-save since we just loaded a project
         flash('✅ Project loaded successfully! All data has been restored.')
