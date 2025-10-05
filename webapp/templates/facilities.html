@@ -279,6 +279,55 @@
         }
 
         generateFacilityForms();
+        
+        // Track form changes to re-enable Save button when project is loaded
+        var projectLoaded = {{ 'true' if project_loaded else 'false' }};
+        var hasFacilitiesData = {{ 'true' if facilities_data else 'false' }};
+        
+        if (projectLoaded && hasFacilitiesData) {
+            var form = document.querySelector('form');
+            var saveBtn = form.querySelector('button[type="submit"]');
+            var originalFormData = new FormData(form);
+            var originalData = {};
+            for (var pair of originalFormData.entries()) {
+                originalData[pair[0]] = pair[1];
+            }
+            
+            // Listen for any input change
+            form.addEventListener('input', function() {
+                var currentData = new FormData(form);
+                var changed = false;
+                for (var pair of currentData.entries()) {
+                    if (originalData[pair[0]] !== pair[1]) {
+                        changed = true;
+                        break;
+                    }
+                }
+                if (changed && saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.style.backgroundColor = '#007BFF';
+                    saveBtn.style.color = 'white';
+                    saveBtn.style.cursor = 'pointer';
+                }
+            });
+            
+            form.addEventListener('change', function() {
+                var currentData = new FormData(form);
+                var changed = false;
+                for (var pair of currentData.entries()) {
+                    if (originalData[pair[0]] !== pair[1]) {
+                        changed = true;
+                        break;
+                    }
+                }
+                if (changed && saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.style.backgroundColor = '#007BFF';
+                    saveBtn.style.color = 'white';
+                    saveBtn.style.cursor = 'pointer';
+                }
+            });
+        }
     </script>
 </body>
 </html>
