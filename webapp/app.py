@@ -1693,11 +1693,16 @@ def facilities():
     # Try to load existing facilities data from CSV
     facilities_list = []
     sim_folder = g.get('user_sim_folder')
+    print(f"DEBUG facilities GET: sim_folder={sim_folder}", flush=True)
     if sim_folder:
         facilities_csv = os.path.join(sim_folder, 'facilities.csv')
+        print(f"DEBUG facilities GET: checking {facilities_csv}, exists={os.path.exists(facilities_csv)}", flush=True)
         if os.path.exists(facilities_csv):
             try:
                 df = pd.read_csv(facilities_csv)
+                print(f"DEBUG facilities GET: loaded CSV with shape {df.shape}, columns={list(df.columns)}", flush=True)
+                print(f"DEBUG facilities GET: first row = {df.iloc[0].to_dict() if len(df) > 0 else 'EMPTY'}", flush=True)
+                
                 # Convert from stored (imperial) back to display units
                 if units == 'metric':
                     # Rack spacing: ft to mm
@@ -1709,9 +1714,12 @@ def facilities():
                             df[col] = df[col] / 35.3147
                 
                 facilities_list = df.to_dict('records')
-                print(f"Loaded {len(facilities_list)} facilities from CSV", flush=True)
+                print(f"DEBUG facilities GET: facilities_list has {len(facilities_list)} items", flush=True)
+                print(f"DEBUG facilities GET: facilities_list[0] = {facilities_list[0] if facilities_list else 'EMPTY'}", flush=True)
             except Exception as e:
-                print(f"Error loading facilities from CSV: {e}", flush=True)
+                print(f"ERROR loading facilities from CSV: {e}", flush=True)
+                import traceback
+                traceback.print_exc()
     
     return render_template('facilities.html', 
                          units=units, 
