@@ -1484,6 +1484,13 @@ class simulation():
             
             sorted_nbors = sorted(nbors, key=sort_key)
             
+            # DEBUG: Print sorting results on first day
+            if not hasattr(self, '_neighbor_sort_printed'):
+                self._neighbor_sort_printed = True
+                print(f"[NEIGHBOR DEBUG] Original nbors: {nbors}", flush=True)
+                print(f"[NEIGHBOR DEBUG] Sorted nbors: {sorted_nbors}", flush=True)
+                print(f"[NEIGHBOR DEBUG] op_order dict: {op_order}", flush=True)
+            
             for i in sorted_nbors:
                 if 'U' in i:
                     # Resolve facility
@@ -1528,9 +1535,10 @@ class simulation():
                     probs.append(prob)
                     route_flows.append(u_Q)
                     
-                    # DEBUG: Print unit allocation details (first time only)
-                    if not hasattr(self, '_unit_debug_printed'):
-                        self._unit_debug_printed = True
+                    # DEBUG: Print unit allocation details (first time for each unit)
+                    unit_debug_key = f'_unit_debug_{i}'
+                    if not hasattr(self, unit_debug_key):
+                        setattr(self, unit_debug_key, True)
                         print(f"[UNIT DEBUG] {i}: prev_Q={prev_Q:.1f}, prod_Q={prod_Q:.1f}, unit_cap={unit_cap:.1f}, u_Q={u_Q:.1f}, prob={prob:.3f}", flush=True)
     
                 elif 'spill' in i:
