@@ -4688,6 +4688,11 @@ def generate_report(sim):
             all_passage_events = []
             
             for idx, row in sim_data.iterrows():
+                # Prefer the persistent fish identifier stored in the row (if present).
+                # Pandas may load a column named 'index' (from the HDF) while the DataFrame
+                # also has its own row index. Use the stored 'index' column when available
+                # so deduplication across days works correctly.
+                fish_identifier = row.get('index') if 'index' in sim_data.columns else idx
                 # Get the sequence of states this fish passed through
                 fish_path = [row[col] for col in state_cols if pd.notna(row[col])]
                 
@@ -4698,7 +4703,7 @@ def generate_report(sim):
                         if state in all_targets:
                             # This is a passage route (target of a bifurcation decision)
                             all_passage_events.append({
-                                'fish_id': idx,
+                                'fish_id': fish_identifier,
                                 'passage_route': state,
                                 'iteration': row.get('iteration'),
                                 'day': row.get('day'),
@@ -4710,7 +4715,7 @@ def generate_report(sim):
                     for state in fish_path:
                         if 'river_node' not in state.lower():
                             all_passage_events.append({
-                                'fish_id': idx,
+                                'fish_id': fish_identifier,
                                 'passage_route': state,
                                 'iteration': row.get('iteration'),
                                 'day': row.get('day'),
@@ -4721,20 +4726,44 @@ def generate_report(sim):
             # Convert passage events to DataFrame
             if all_passage_events:
                 passage_df = pd.DataFrame(all_passage_events)
-                
-                # Count passage events by route
-                route_counts = passage_df['passage_route'].value_counts()
+
+                # Deduplicate according to policy B: count unique fish per iteration.
+                # This ensures the report shows the average number of individual fish
+                # passing each route per iteration, instead of counting repeated
+                # daily events for the same fish multiple times.
+                if not passage_df.empty:
+                    # Because fish indices are assigned per-day (they reset each day),
+                    # we must treat the unique fish instance as the tuple (fish_id, iteration, day).
+                    # Policy B (average across iterations) requires computing per-iteration
+                    # totals by summing unique fish per day within that iteration.
+                    passage_df_unique_iter = passage_df.drop_duplicates(subset=['fish_id', 'iteration', 'day'])
+                    # unique per day for discharge/flow estimation (same as above)
+                    passage_df_unique_day = passage_df.drop_duplicates(subset=['fish_id', 'iteration', 'day'])
+                else:
+                    passage_df_unique_iter = passage_df
+                    passage_df_unique_day = passage_df
+
+                # Debug: report raw and deduped sizes
+                try:
+                    print(f"[ROUTE AGG DEBUG] raw_events={len(passage_df)}, unique_iter_events={len(passage_df_unique_iter)}, unique_day_events={len(passage_df_unique_day)}", flush=True)
+                except Exception:
+                    pass
+
+                # Count passage events by route using unique fish per iteration
+                route_counts = passage_df_unique_iter['passage_route'].value_counts()
                 # Filter out any remaining river nodes (shouldn't happen, but defensive)
                 route_counts = route_counts[~route_counts.index.str.contains('river_node', case=False, na=False)]
                 combined_route_counts = combined_route_counts.add(route_counts, fill_value=0)
-                
-                # Store passage_df for discharge calculations if needed
-                if need_estimated_flow and 'flow' in passage_df.columns:
-                    sim_data_for_discharge = passage_df
+
+                # Store passage_df_unique_day for discharge calculations if needed
+                if need_estimated_flow and 'flow' in passage_df_unique_day.columns:
+                    sim_data_for_discharge = passage_df_unique_day
                 else:
                     sim_data_for_discharge = None
             else:
                 sim_data_for_discharge = None
+                # Debug: report that this simulation key produced no passage events
+                print(f"[ROUTE AGG DEBUG] simulation key={key} produced 0 passage events; sim_rows={len(sim_data.index)}", flush=True)
                 continue
 
             if need_estimated_flow and sim_data_for_discharge is not None:
@@ -4771,14 +4800,31 @@ def generate_report(sim):
                     discharge_records.append(route_day_counts[['Passage Route', 'route_count', 'total_fish', 'estimated_discharge']])
 
         if not combined_route_counts.empty:
+            # Debug: log combined counts BEFORE dividing by iterations
+            try:
+                print(f"[ROUTE AGG DEBUG] combined_route_counts raw_sum={combined_route_counts.sum()}, entries={len(combined_route_counts)}", flush=True)
+            except Exception:
+                pass
             # FIXED: Counts are across all iterations, so divide by number of iterations to get mean
             # Get number of iterations from daily_df or default to 1
             num_iterations = 1
             if daily_df is not None and 'iteration' in daily_df.columns:
                 num_iterations = daily_df['iteration'].nunique()
+
+            # Debug: log num_iterations and total entrained from Daily (if present)
+            try:
+                total_daily_entr = float(daily_df.get('num_entrained', pd.Series(dtype=float)).sum()) if daily_df is not None else 0.0
+            except Exception:
+                total_daily_entr = None
+            print(f"[ROUTE AGG DEBUG] num_iterations={num_iterations}, total_entrained_from_Daily={total_daily_entr}", flush=True)
             
             # Divide counts by number of iterations to show mean per iteration
             combined_route_counts = combined_route_counts / num_iterations
+            # Debug: log combined counts AFTER dividing
+            try:
+                print(f"[ROUTE AGG DEBUG] combined_route_counts mean_sum={combined_route_counts.sum()}, entries={len(combined_route_counts)}", flush=True)
+            except Exception:
+                pass
             combined_route_counts = combined_route_counts.sort_values(ascending=False)
             
             # Calculate actual entrainment rate from route data
