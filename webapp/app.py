@@ -4687,6 +4687,9 @@ def generate_report(sim):
             # We need to count each passage event separately
             all_passage_events = []
             
+            # Identify survival columns for mapping to state columns (if present)
+            survival_cols = [c for c in sim_data.columns if c.startswith('survival_')]
+
             for idx, row in sim_data.iterrows():
                 # Prefer the persistent fish identifier stored in the row (if present).
                 # Pandas may load a column named 'index' (from the HDF) while the DataFrame
@@ -4699,27 +4702,44 @@ def generate_report(sim):
                 if bifurcation_map:
                     # Find ALL bifurcation targets in this fish's path
                     # Each one represents a separate passage event
-                    for state in fish_path:
+                    for pos, state in enumerate(fish_path):
                         if state in all_targets:
+                            # Map state position -> survival column (survival_{pos-1}) when possible
+                            survived = None
+                            try:
+                                if pos > 0 and survival_cols and len(survival_cols) >= pos:
+                                    surv_col = survival_cols[pos-1]
+                                    survived = row.get(surv_col)
+                            except Exception:
+                                survived = None
                             # This is a passage route (target of a bifurcation decision)
                             all_passage_events.append({
                                 'fish_id': fish_identifier,
                                 'passage_route': state,
                                 'iteration': row.get('iteration'),
                                 'day': row.get('day'),
-                                'flow': row.get('flow')
+                                'flow': row.get('flow'),
+                                'survived': survived
                             })
                 else:
                     # Fallback: Find first non-river_node state
                     # This works for simple cases but may include intermediate nodes
-                    for state in fish_path:
+                    for pos, state in enumerate(fish_path):
                         if 'river_node' not in state.lower():
+                            survived = None
+                            try:
+                                if pos > 0 and survival_cols and len(survival_cols) >= pos:
+                                    surv_col = survival_cols[pos-1]
+                                    survived = row.get(surv_col)
+                            except Exception:
+                                survived = None
                             all_passage_events.append({
                                 'fish_id': fish_identifier,
                                 'passage_route': state,
                                 'iteration': row.get('iteration'),
                                 'day': row.get('day'),
-                                'flow': row.get('flow')
+                                'flow': row.get('flow'),
+                                'survived': survived
                             })
                             break
             
@@ -4867,6 +4887,69 @@ def generate_report(sim):
                 'Number of Fish': combined_route_counts.values.astype(int),
                 'Percentage': (combined_route_counts.values / combined_route_counts.sum() * 100).round(1)
             })
+
+            # Compute survival by route using explicit survival_* columns in the simulations
+            # Do a safe second pass over simulation keys to build deduped events with survival
+            try:
+                events_all = []
+                for key in simulation_keys:
+                    sim_data = store[key]
+                    if not isinstance(sim_data, pd.DataFrame):
+                        continue
+                    state_cols = [c for c in sim_data.columns if c.startswith('state_')]
+                    survival_cols = [c for c in sim_data.columns if c.startswith('survival_')]
+                    if not state_cols:
+                        continue
+                    for idx, row in sim_data.iterrows():
+                        fish_identifier = row.get('index') if 'index' in sim_data.columns else idx
+                        fish_path = [row[col] for col in state_cols if pd.notna(row[col])]
+                        for pos, state in enumerate(fish_path):
+                            if 'river_node' not in str(state).lower():
+                                survived = None
+                                try:
+                                    if pos > 0 and survival_cols and len(survival_cols) >= pos:
+                                        surv_col = survival_cols[pos-1]
+                                        survived = row.get(surv_col)
+                                        # Normalize to numeric 0/1 when possible
+                                        if pd.notna(surv_col) and survived is not None:
+                                            try:
+                                                survived = int(survived)
+                                            except Exception:
+                                                pass
+                                except Exception:
+                                    survived = None
+                                events_all.append({'fish_id': fish_identifier,
+                                                   'iteration': row.get('iteration'),
+                                                   'day': row.get('day'),
+                                                   'passage_route': state,
+                                                   'survived': survived})
+                                break
+
+                if events_all:
+                    evdf = pd.DataFrame(events_all)
+                    # Deduplicate per Policy B (fish_id, iteration, day)
+                    ev_dedup = evdf.drop_duplicates(subset=['fish_id', 'iteration', 'day'])
+                    surv_tbl = ev_dedup.groupby('passage_route')['survived'].agg(['count', 'sum', 'mean']).reset_index()
+                    if not surv_tbl.empty:
+                        surv_tbl.rename(columns={'count': 'Total Fish', 'sum': 'Survived', 'mean': 'Survival Rate'}, inplace=True)
+                        surv_tbl['Survival %'] = (surv_tbl['Survival Rate'] * 100).round(1)
+                    else:
+                        surv_tbl = None
+                else:
+                    surv_tbl = None
+            except Exception as e:
+                print(f"[ROUTE AGG DEBUG] survival aggregation failed: {e}", flush=True)
+                surv_tbl = None
+
+            # Append survival table to the report if available
+            if surv_tbl is not None and not surv_tbl.empty:
+                # Build HTML table for survival
+                try:
+                    surv_html = surv_tbl[['passage_route', 'Total Fish', 'Survived', 'Survival %']].to_html(index=False, border=1)
+                    report_sections.append('<h3>Survival by Passage Route</h3>')
+                    report_sections.append(surv_html)
+                except Exception:
+                    pass
 
             report_sections.append(
                 "<div style='display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start;'>"
