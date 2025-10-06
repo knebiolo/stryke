@@ -85,3 +85,53 @@ else:
 
 store.close()
 print('\nDone')
+
+# Additional diagnostics: build survival-by-route events similarly to webapp and print diagnostics
+store = pd.HDFStore(h5, mode='r')
+sim_keys = [k for k in store.keys() if k.startswith('/simulations/')]
+if sim_keys:
+    key = sim_keys[0]
+    dat = store[key]
+    state_cols = [c for c in dat.columns if c.startswith('state_')]
+    survival_cols = [c for c in dat.columns if c.startswith('survival_')]
+    events_all = []
+    for idx, row in dat.iterrows():
+        fish_identifier = row.get('index') if 'index' in dat.columns else idx
+        fish_path = [row[col] for col in state_cols if pd.notna(row[col])]
+        for pos, state in enumerate(fish_path):
+            if 'river_node' not in str(state).lower():
+                survived = None
+                try:
+                    # Map state position to matching survival column (survival_k for state_k)
+                    if pos >= 0 and survival_cols and len(survival_cols) > pos:
+                        surv_col = survival_cols[pos]
+                        survived = row.get(surv_col)
+                        # Normalize to numeric 0/1 when possible; check the extracted value
+                        if pd.notna(survived):
+                            try:
+                                survived = int(survived)
+                            except Exception:
+                                pass
+                except Exception:
+                    survived = None
+                events_all.append({'fish_id': fish_identifier,
+                                   'iteration': row.get('iteration'),
+                                   'day': row.get('day'),
+                                   'passage_route': state,
+                                   'survived': survived})
+                break
+    if events_all:
+        evdf = pd.DataFrame(events_all)
+        print('\nSample events_all rows:')
+        print(evdf.head(20))
+        print('\nSurvived value counts:')
+        print(evdf['survived'].value_counts(dropna=False))
+        ev_dedup = evdf.drop_duplicates(subset=['fish_id', 'iteration', 'day'])
+        surv_tbl = ev_dedup.groupby('passage_route')['survived'].agg(['count', 'sum', 'mean']).reset_index()
+        print('\nSurv_tbl sample:')
+        print(surv_tbl.head(20))
+    else:
+        print('\nNo events_all generated for diagnostics')
+else:
+    print('\nNo simulation table for diagnostics')
+store.close()
