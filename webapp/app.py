@@ -3708,9 +3708,24 @@ def population():
                             if pd.notna(population_data['Length_sd']):
                                 sd_in = float(population_data['Length_sd'])
                                 population_data['Length_sd'] = sd_in * 25.4  # Convert inches to mm
-                                print(f"DEBUG: Converted Length_sd from {sd_in} in to {population_data['Length_sd']} mm", flush=True)
                         except (ValueError, TypeError) as e:
                             print(f"ERROR converting Length_sd: {e}", flush=True)
+                    
+                    # Set beta_0 and beta_1 based on fish_type if they're missing (Pflugrath 2021 values)
+                    if 'fish_type' in population_data and pd.notna(population_data['fish_type']):
+                        fish_type = str(population_data['fish_type']).lower()
+                        # Only set if beta values are missing or NaN
+                        if pd.isna(population_data.get('beta_0')) or pd.isna(population_data.get('beta_1')):
+                            if fish_type == 'physoclistous':
+                                population_data['beta_0'] = -4.8085
+                                population_data['beta_1'] = 3.33
+                                print(f"DEBUG: Set beta values for Physoclistous: beta_0=-4.8085, beta_1=3.33", flush=True)
+                            elif fish_type == 'physostomous':
+                                population_data['beta_0'] = -4.93263
+                                population_data['beta_1'] = 2.96225
+                                print(f"DEBUG: Set beta values for Physostomous: beta_0=-4.93263, beta_1=2.96225", flush=True)
+                        else:
+                            print(f"DEBUG: beta values already set: beta_0={population_data.get('beta_0')}, beta_1={population_data.get('beta_1')}", flush=True)
                     
                     # Store processed data back to session for simulation
                     session['population_data_for_sim'] = [population_data]
