@@ -1513,16 +1513,9 @@ class simulation():
                     # Calculate total flow allocated to units (production flow)
                     total_unit_flow = sum(route_flows)  # Sum of all unit flows calculated above
                     
-                    # Spillway gets: total flow - environmental - bypass - unit production
-                    if curr_Q > total_sta_cap + total_env_Q + total_bypass_Q:
-                        # Excess flow goes to spillway
-                        spill_Q = curr_Q - total_sta_cap - total_env_Q - total_bypass_Q
-                    elif curr_Q > total_env_Q + total_bypass_Q:
-                        # Some production, rest to spillway as environmental/bypass
-                        spill_Q = total_env_Q + total_bypass_Q
-                    else:
-                        # All flow through spillway (low flow condition)
-                        spill_Q = curr_Q
+                    # Spillway gets: remaining flow after units, environmental, and bypass
+                    # Use actual allocated flow to units, not station capacity
+                    spill_Q = max(0.0, curr_Q - total_unit_flow - total_env_Q - total_bypass_Q)
                     
                     prob = spill_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
