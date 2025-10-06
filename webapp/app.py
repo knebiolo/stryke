@@ -4821,7 +4821,7 @@ def generate_report(sim):
                 total_discharge=('discharge_value', 'sum'),
                 mean_discharge=('discharge_value', 'mean'),
                 median_discharge=('discharge_value', 'median'),
-                days_observed=('day', 'nunique')
+                days_observed=('discharge_value', 'count')  # Count total observations (iteration × day), not unique days
             ).reset_index().rename(columns={'route': 'Passage Route'})
         elif discharge_records:
             discharge_df = pd.concat(discharge_records, ignore_index=True)
