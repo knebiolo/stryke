@@ -1458,11 +1458,17 @@ class simulation():
             # Track allocated flow per facility as we process units
             allocated_flow_by_facility = {f: 0.0 for f in facilities_at_node}
             
-            # CRITICAL: Process units FIRST, then spillway, then others
-            # This ensures total_unit_flow is calculated before spillway needs it
-            sorted_nbors = sorted(nbors, key=lambda x: (
-                0 if 'U' in x else (2 if 'spill' in x else 1)
-            ))
+            # CRITICAL: Process units in operational order, then others, then spillway
+            # Sort by: (1) unit type (units=0, other=1, spillway=2), (2) operational order for units
+            def sort_key(x):
+                if 'U' in x:
+                    return (0, op_order.get(x, 999))  # Units first, sorted by op_order
+                elif 'spill' in x:
+                    return (2, 0)  # Spillway last
+                else:
+                    return (1, 0)  # Other routes in middle
+            
+            sorted_nbors = sorted(nbors, key=sort_key)
             
             for i in sorted_nbors:
                 if 'U' in i:
@@ -2267,6 +2273,15 @@ class simulation():
                         curr_Q = flow_row[1]['DAvgFlow_prorate']
                         day = flow_row[1]['datetimeUTC']
                         
+                        # Reset mortality components at the start of each day
+                        if hasattr(self, '_mortality_components'):
+                            self._mortality_components = {
+                                'impingement': [],
+                                'blade_strike': [],
+                                'barotrauma': [],
+                                'latent': []
+                            }
+                        
                         # Progress update every 10% of days for first few iterations
                         if i < 3 and day_counter % max(1, int(total_days / 10)) == 0:
                             print(f"[INFO] Day {day_counter} of {total_days} (Iteration {int(i+1)})", flush=True)
@@ -2534,12 +2549,12 @@ class simulation():
                                 
                                 # Calculate mortality components from tracked data
                                 if hasattr(self, '_mortality_components') and total_entrained > 0:
-                                    # Average mortality contribution from each factor
+                                    # Sum mortality from all fish processed today (list was cleared at day start)
                                     n_components = len(self._mortality_components['impingement'])
                                     if n_components > 0:
-                                        daily_row_dict['mortality_impingement'] = [np.int64(np.sum(self._mortality_components['impingement'][-n_components:]))]
-                                        daily_row_dict['mortality_blade_strike'] = [np.int64(np.sum(self._mortality_components['blade_strike'][-n_components:]))]
-                                        daily_row_dict['mortality_barotrauma'] = [np.int64(np.sum(self._mortality_components['barotrauma'][-n_components:]))]
+                                        daily_row_dict['mortality_impingement'] = [np.int64(np.sum(self._mortality_components['impingement']))]
+                                        daily_row_dict['mortality_blade_strike'] = [np.int64(np.sum(self._mortality_components['blade_strike']))]
+                                        daily_row_dict['mortality_barotrauma'] = [np.int64(np.sum(self._mortality_components['barotrauma']))]
                                     else:
                                         daily_row_dict['mortality_impingement'] = [np.int64(0)]
                                         daily_row_dict['mortality_blade_strike'] = [np.int64(0)]
