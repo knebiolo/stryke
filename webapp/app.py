@@ -4439,7 +4439,7 @@ def generate_report(sim):
         
         # Add Mortality Factor Breakdown
         if mortality_components and sum(mortality_components.values()) > 0:
-            report_sections.append("<h3>💀 Mortality Factor Breakdown</h3>")
+            report_sections.append("<h3>Mortality Factor Breakdown</h3>")
             
             # Create pie chart
             plt.rcParams.update({'font.size': 9})
