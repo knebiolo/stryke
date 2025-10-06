@@ -275,41 +275,69 @@
         const statusText = document.getElementById("statusText");
         const statusIcon = document.querySelector(".status-icon");
         
-        // Tracking variables
-        let startTime = Date.now();
-        let totalDays = null;
-        let currentDay = 0;
-        let totalIterations = null;
-        let currentIteration = 0;
-        let logLineCount = 0;
+        // Check if simulation already completed
+        const simulationStatus = "{{ simulation_status }}";
+        const reportPath = "{{ report_path }}";
         
-        const params = new URLSearchParams(window.location.search);
-        const runId = params.get('run') || "";
-        
-        const eventSource = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
-        
-        // Handle connection errors
-        eventSource.onerror = function(error) {
-            console.error('EventSource error:', error);
-            if (eventSource.readyState === EventSource.CLOSED) {
-                logOutput.innerHTML += '<div class="log-error">❌ Connection lost. The simulation may still be running on the server. Please check the results page or refresh to reconnect.</div>';
-                statusText.textContent = 'Connection Lost';
-                statusIcon.textContent = '⚠️';
+        if (simulationStatus === 'completed') {
+            // Show completed state immediately
+            progressBar.style.width = '100%';
+            progressPercentage.textContent = '100%';
+            statusText.textContent = '✅ Simulation Already Complete!';
+            statusIcon.className = 'status-icon status-complete';
+            currentActivity.textContent = 'Finished!';
+            currentProgress.textContent = 'Simulation completed';
+            timeRemaining.textContent = 'Done!';
+            timeElapsed.textContent = 'N/A';
+            
+            logOutput.innerHTML = '<div class="log-success">✅ This simulation has already completed successfully!</div>';
+            if (reportPath && reportPath !== 'None') {
+                logOutput.innerHTML += '<div class="log-info">📊 Report is available. Click "View Results" below to see the full report.</div>';
+            } else {
+                logOutput.innerHTML += '<div class="log-info">📊 Simulation output (H5 file) is available. Click "View Results" to access it.</div>';
             }
-        };
+            
+            resultsButton.style.display = "inline-block";
+            
+            // Don't start EventSource connection
+        } else {
+            // Simulation is running - connect to live stream
+            
+            // Tracking variables
+            let startTime = Date.now();
+            let totalDays = null;
+            let currentDay = 0;
+            let totalIterations = null;
+            let currentIteration = 0;
+            let logLineCount = 0;
+            
+            const params = new URLSearchParams(window.location.search);
+            const runId = params.get('run') || "";
+            
+            const eventSource = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
+            
+            // Handle connection errors
+            eventSource.onerror = function(error) {
+                console.error('EventSource error:', error);
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    logOutput.innerHTML += '<div class="log-error">❌ Connection lost. The simulation may still be running on the server. <a href="?run=' + encodeURIComponent(runId) + '">Click here to refresh and check if it completed</a>.</div>';
+                    statusText.textContent = 'Connection Lost';
+                    statusIcon.textContent = '⚠️';
+                }
+            };
 
-        // Update elapsed time every second
-        setInterval(updateElapsedTime, 1000);
+            // Update elapsed time every second
+            setInterval(updateElapsedTime, 1000);
 
-        function updateElapsedTime() {
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
-            timeElapsed.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
+            function updateElapsedTime() {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                timeElapsed.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
 
-        function updateProgress() {
-            if (totalDays && totalDays > 0 && totalIterations && totalIterations > 0) {
+            function updateProgress() {
+                if (totalDays && totalDays > 0 && totalIterations && totalIterations > 0) {
                 // Calculate overall progress across all iterations
                 // Total work = totalDays * totalIterations
                 // Completed work = (currentIteration - 1) * totalDays + currentDay
@@ -338,14 +366,14 @@
                     timeRemaining.textContent = 'Almost done...';
                 }
             } else if (totalIterations && currentIteration > 0) {
-                const percentage = Math.min(Math.round((currentIteration / totalIterations) * 100), 100);
-                progressBar.style.width = percentage + '%';
-                progressPercentage.textContent = percentage + '%';
-                currentProgress.textContent = `Iteration ${currentIteration} of ${totalIterations}`;
+                    const percentage = Math.min(Math.round((currentIteration / totalIterations) * 100), 100);
+                    progressBar.style.width = percentage + '%';
+                    progressPercentage.textContent = percentage + '%';
+                    currentProgress.textContent = `Iteration ${currentIteration} of ${totalIterations}`;
+                }
             }
-        }
 
-        function parseLogLine(text) {
+            function parseLogLine(text) {
             // Detect total days from messages like "will simulate 920 days"
             const totalDaysMatch = text.match(/will simulate\s+(\d+)\s+days?/i);
             if (totalDaysMatch && !totalDays) {
@@ -406,12 +434,12 @@
                 currentActivity.textContent = 'Generating summary';
             }
             
-            if (text.includes('report') || text.includes('Report')) {
-                currentActivity.textContent = 'Creating report';
+                if (text.includes('report') || text.includes('Report')) {
+                    currentActivity.textContent = 'Creating report';
+                }
             }
-        }
 
-        function addLogLine(text) {
+            function addLogLine(text) {
             const line = document.createElement("div");
             line.className = 'log-line';
             
@@ -434,53 +462,54 @@
             logLineCount++;
             
             // Keep log manageable (last 500 lines)
-            if (logLineCount > 500) {
-                logOutput.removeChild(logOutput.firstChild);
+                if (logLineCount > 500) {
+                    logOutput.removeChild(logOutput.firstChild);
+                }
             }
-        }
 
-        eventSource.onmessage = function(event) {
-            const text = event.data;
-            
-            // Parse for progress information
-            parseLogLine(text);
-            
-            // Add to log output
-            addLogLine(text);
-
-            // Check if simulation is complete
-            if (text.includes("[Simulation Complete]") || 
-                text.includes("Completed Simulations") ||
-                text.includes("Simulation completed successfully") ||
-                text.includes("view results")) {
+            eventSource.onmessage = function(event) {
+                const text = event.data;
                 
+                // Parse for progress information
+                parseLogLine(text);
+                
+                // Add to log output
+                addLogLine(text);
+
+                // Check if simulation is complete
+                if (text.includes("[Simulation Complete]") || 
+                    text.includes("Completed Simulations") ||
+                    text.includes("Simulation completed successfully") ||
+                    text.includes("view results")) {
+                    
+                    eventSource.close();
+                    
+                    // Update to complete state
+                    progressBar.style.width = '100%';
+                    progressPercentage.textContent = '100%';
+                    statusText.textContent = '✅ Simulation Complete!';
+                    statusIcon.className = 'status-icon status-complete';
+                    currentActivity.textContent = 'Finished!';
+                    timeRemaining.textContent = 'Done!';
+                    
+                    resultsButton.style.display = "inline-block";
+                }
+            };
+
+            eventSource.onerror = function(event) {
+                addLogLine("[ERROR] Connection lost or server unavailable.");
+                statusText.textContent = '⚠️ Connection Error';
+                currentActivity.textContent = 'Connection lost';
                 eventSource.close();
-                
-                // Update to complete state
-                progressBar.style.width = '100%';
-                progressPercentage.textContent = '100%';
-                statusText.textContent = '✅ Simulation Complete!';
-                statusIcon.className = 'status-icon status-complete';
-                currentActivity.textContent = 'Finished!';
-                timeRemaining.textContent = 'Done!';
-                
-                resultsButton.style.display = "inline-block";
-            }
-        };
+            };
 
-        eventSource.onerror = function(event) {
-            addLogLine("[ERROR] Connection lost or server unavailable.");
-            statusText.textContent = '⚠️ Connection Error';
-            currentActivity.textContent = 'Connection lost';
-            eventSource.close();
-        };
-
-        // Initial activity
-        setTimeout(() => {
-            if (logLineCount === 0) {
-                currentActivity.textContent = 'Initializing simulation...';
-            }
-        }, 2000);
+            // Initial activity
+            setTimeout(() => {
+                if (logLineCount === 0) {
+                    currentActivity.textContent = 'Initializing simulation...';
+                }
+            }, 2000);
+        } // End of else block for running simulation
     </script>
 
 </body>

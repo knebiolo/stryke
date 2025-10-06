@@ -63,7 +63,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../Stry
 from Stryke import stryke
 from Stryke.stryke import epri
 
-RUN_QUEUES = defaultdict(queue.Queue)
+# Use bounded queues to prevent memory issues if connection dies
+# maxsize=1000 means we keep last 1000 messages, older ones dropped
+RUN_QUEUES = defaultdict(lambda: queue.Queue(maxsize=1000))
 
 def get_queue(run_id):
     return RUN_QUEUES[run_id]
@@ -136,7 +138,17 @@ class QueueStream:
                 if line.endswith("\n"):
                     # strip trailing newline and emit
                     try:
-                        self.q.put(self.prefix + line.rstrip("\n"))
+                        # Use put_nowait to avoid blocking if queue is full
+                        # This prevents simulation from stalling if EventSource disconnects
+                        self.q.put_nowait(self.prefix + line.rstrip("\n"))
+                    except queue.Full:
+                        # Queue full - drop oldest messages to make room
+                        # This happens when EventSource disconnects but simulation continues
+                        try:
+                            self.q.get_nowait()  # Remove oldest message
+                            self.q.put_nowait(self.prefix + line.rstrip("\n"))
+                        except Exception:
+                            pass  # If still failing, just drop this message
                     except Exception:
                         pass
                 else:
@@ -4028,8 +4040,44 @@ def run_simulation():
 
 @app.route("/simulation_logs")
 def simulation_logs():
-    # this template should attach to your SSE /stream
-    return render_template("simulation_logs.html")
+    """
+    Show simulation logs page. Checks for completed simulation first.
+    """
+    run_id = request.args.get('run', '')
+    
+    # Check if simulation has already completed by looking for output files
+    proj_dir = session.get('proj_dir')
+    simulation_status = 'running'  # Default
+    report_path = None
+    
+    if proj_dir and os.path.exists(proj_dir):
+        # Check for simulation completion markers
+        marker_file = os.path.join(proj_dir, 'report_path.txt')
+        report_html = os.path.join(proj_dir, 'simulation_report.html')
+        output_h5 = os.path.join(proj_dir, 'Simulation_Output.h5')
+        
+        if os.path.exists(marker_file):
+            # Read the report path from marker file
+            try:
+                with open(marker_file, 'r') as f:
+                    report_path = f.read().strip()
+                    if os.path.exists(report_path):
+                        simulation_status = 'completed'
+            except Exception:
+                pass
+        elif os.path.exists(report_html):
+            # Found report directly
+            report_path = report_html
+            simulation_status = 'completed'
+        elif os.path.exists(output_h5):
+            # Found H5 output (simulation completed but report might be missing)
+            simulation_status = 'completed'
+            report_path = None  # No HTML report, but sim finished
+    
+    return render_template("simulation_logs.html", 
+                         run_id=run_id,
+                         simulation_status=simulation_status,
+                         report_path=report_path)
 
 def generate_discharge_histogram_text(df, column="DAvgFlow_prorate", bins=10):
     """
