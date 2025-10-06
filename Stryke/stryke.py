@@ -2860,36 +2860,28 @@ class simulation():
                         #                 row['day'], row['mean'], row['min'], row['max'], row['std'])
 
                         try:
-                            # whole_params = beta.fit(whole_summ.prob.values)
-                            # whole_median = beta.median(whole_params[0], whole_params[1], whole_params[2], whole_params[3])
-                            # whole_std = beta.std(whole_params[0], whole_params[1], whole_params[2], whole_params[3])
-                            # lcl = beta.ppf(0.025, a=whole_params[0], b=whole_params[1],
-                            #                  loc=whole_params[2], scale=whole_params[3])
-                            # ucl = beta.ppf(0.975, a=whole_params[0], b=whole_params[1],
-                            #                  loc=whole_params[2], scale=whole_params[3])
-                            
-                            logger.info("==== Whole Project Beta Distribution Summary (Survival Probability) ====")
+                            # Empirically summarize whole-project daily survival probabilities.
+                            # Using beta.fit can be unstable when the sample contains 0s or 1s.
+                            # Instead compute empirical mean and bootstrap CI for robustness.
+                            logger.info("==== Whole Project Survival Summary (empirical + bootstrap CI) ====")
+                            mean_emp = whole_summ['prob'].mean()
+                            std_emp = whole_summ['prob'].std()
+                            # Use bootstrap to get a robust CI for the mean
+                            _, lcl_emp, ucl_emp = bootstrap_mean_ci(whole_summ['prob'].values, n_bootstrap=2000, ci=95)
 
-                            # Fit the beta distribution to survival probabilities
-                            whole_params = beta.fit(whole_summ['prob'].values)
-                            a, b, loc, scale = whole_params
-                            
-                            # Summary stats from the fitted distribution
-                            mean = beta.mean(a, b, loc=loc, scale=scale)
-                            std_dev = beta.std(a, b, loc=loc, scale=scale)
-                            lcl = beta.ppf(0.025, a=a, b=b, loc=loc, scale=scale)
-                            ucl = beta.ppf(0.975, a=a, b=b, loc=loc, scale=scale)
-                            
-                            # Log it cleanly
-                            logger.info("Fitted Beta distribution parameters:")
-                            logger.info("  alpha (a) = %.4f, beta (b) = %.4f, loc = %.4f, scale = %.4f", a, b, loc, scale)
-                            logger.info("Distribution summary:")
-                            logger.info("  Mean survival probability = %.4f", mean)
-                            logger.info("  Std deviation (spread)     = %.4f", std_dev)
-                            logger.info("  95%% CI from Beta fit       = [%.4f, %.4f]", lcl, ucl)
-                            
-                            self.beta_dict['%s_%s_%s' % (j, i, 'whole')] = [j, i, 'whole', mean, std_dev, lcl, ucl]
-                        except:
+                            logger.info("Empirical Mean survival probability = %.4f", mean_emp)
+                            logger.info("Empirical Std deviation (spread)     = %.4f", std_emp)
+                            logger.info("95%% CI from bootstrap              = [%.4f, %.4f]", lcl_emp, ucl_emp)
+
+                            # Store an explanatory caption to help downstream reporting (webapp can read this attr)
+                            self.beta_caption = (
+                                "Means shown are empirical averages of per-iteration, per-day survival probabilities. "
+                                "95% intervals are bootstrap estimates. Direct beta distribution fits are sensitive to values exactly 0 or 1 and are not used for the reported mean."
+                            )
+
+                            self.beta_dict['%s_%s_%s' % (j, i, 'whole')] = [j, i, 'whole', mean_emp, std_emp, lcl_emp, ucl_emp]
+                        except Exception as e:
+                            logger.warning(f'Failed to summarize whole project survival for {j},{i}: {e}')
                             continue
                         for l in self.moves:
                             if l > 0:
@@ -2908,26 +2900,30 @@ class simulation():
                             for m in states:
                                 st_df = route_summ[route_summ['state_%s' % (l)] == m]
                                 try:
-                                    st_params = beta.fit(st_df.prob.values)
-                                    st_median = beta.median(st_params[0], st_params[1], st_params[2], st_params[3])
-                                    st_std = beta.std(st_params[0], st_params[1], st_params[2], st_params[3])
-                                    lcl = beta.ppf(0.025, a=st_params[0], b=st_params[1],
-                                                     loc=st_params[2], scale=st_params[3])
-                                    ucl = beta.ppf(0.975, a=st_params[0], b=st_params[1],
-                                                     loc=st_params[2], scale=st_params[3])
-                                except (ValueError, RuntimeError) as e:
-                                    logger.warning(f'Beta fitting failed for state {m}: {e}. Using default values.')
-                                    st_median = 0.
+                                    # Empirical mean and bootstrap CI for each state/route
+                                    st_mean = st_df['prob'].mean()
+                                    st_std = st_df['prob'].std()
+                                    # bootstrap CI for mean (fall back to simple percentiles if short sample)
+                                    try:
+                                        _, st_lcl, st_ucl = bootstrap_mean_ci(st_df['prob'].values, n_bootstrap=2000, ci=95)
+                                    except Exception:
+                                        st_lcl = st_df['prob'].quantile(0.025)
+                                        st_ucl = st_df['prob'].quantile(0.975)
+                                    # Log summary
+                                    logger.debug(f"State {m}: mean={st_mean:.4f}, std={st_std:.4f}, 95CI=[{st_lcl:.4f},{st_ucl:.4f}]")
+                                except Exception as e:
+                                    logger.warning(f'Failed to compute empirical summary for state {m}: {e}. Using defaults.')
+                                    st_mean = 0.
                                     st_std = 0.
-                                    lcl = 0.
-                                    ucl = 0.
+                                    st_lcl = 0.
+                                    st_ucl = 0.
                                 self.beta_dict['%s_%s_%s' % (j, i, m)] = [j,
                                                                           i,
                                                                           m,
-                                                                          st_median,
+                                                                          st_mean,
                                                                           st_std, 
-                                                                          lcl, 
-                                                                          ucl]
+                                                                          st_lcl, 
+                                                                          st_ucl]
                         logger.info("Fit beta distributions to states")
                         del dat
     
@@ -3658,6 +3654,15 @@ class epri():
             #print(self.lengths)
             print("The log normal distribution has a shape parameter s: %s, location: %s and scale: %s" %
                   (round(self.len_dist[0], 4), round(self.len_dist[1], 4), round(self.len_dist[2], 4)))
+            # Also compute empirical mean and standard deviation (in cm)
+            try:
+                self.length_mean_cm = float(np.mean(self.lengths))
+                self.length_sd_cm = float(np.std(self.lengths, ddof=1)) if self.lengths.size > 1 else 0.0
+                logger.info("Empirical fish length mean (cm) = %.4f, sd (cm) = %.4f", self.length_mean_cm, self.length_sd_cm)
+            except Exception as e:
+                logger.warning(f'Failed to compute empirical length mean/sd: {e}')
+                self.length_mean_cm = np.nan
+                self.length_sd_cm = np.nan
 
             
 
