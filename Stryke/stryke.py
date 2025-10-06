@@ -2113,6 +2113,13 @@ class simulation():
         self.hdf = pd.HDFStore(self.hdf_path, mode='a')
         if DIAGNOSTICS_ENABLED:
             print(f"[DIAG] HDF5 file reopened successfully. Current keys: {self.hdf.keys()}", flush=True)
+        
+        # DEBUG: Show critical simulation parameters
+        print(f"[DEBUG RUN START] ========== SIMULATION BEGINNING ==========", flush=True)
+        print(f"[DEBUG RUN START] Project: {getattr(self, 'project_name', 'UNKNOWN')}", flush=True)
+        print(f"[DEBUG RUN START] Population records: {len(self.pop) if hasattr(self, 'pop') else 'NO POP DATA'}", flush=True)
+        print(f"[DEBUG RUN START] Unit params: {len(self.unit_params) if hasattr(self, 'unit_params') else 'NO UNITS'} units", flush=True)
+        
         self._route_flow_logged_keys = set()
         
         # Initialize mortality component tracking for "Wheel of Death" visualization
@@ -2158,8 +2165,10 @@ class simulation():
 
             if np.isnan(penstock_D):
                 barotrauma = False
+                print(f"[DEBUG BARO] Unit {unit}: penstock_D is NaN, barotrauma DISABLED", flush=True)
             else:
                 barotrauma = True
+                print(f"[DEBUG BARO] Unit {unit}: penstock_D={penstock_D:.3f} ft, barotrauma ENABLED", flush=True)
                 
             # if np.isnan(rack_spacing):
             #     rack_spacing = 2 /12.
