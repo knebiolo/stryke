@@ -108,9 +108,10 @@ print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=Tru
  
 class QueueStream:
     """File-like object that writes text lines into a queue.Queue for SSE."""
-    def __init__(self, q, prefix: str = ""):
+    def __init__(self, q, prefix: str = "", log_file=None):
         self.q = q
         self.prefix = prefix or ""
+        self.log_file = log_file
         self._buf = []
         self._lock = threading.Lock()
 
@@ -118,6 +119,13 @@ class QueueStream:
         if not s:
             return 0
         text = str(s)
+        # Also write to debug log file if specified
+        if self.log_file:
+            try:
+                with open(self.log_file, 'a', encoding='utf-8') as f:
+                    f.write(text)
+            except Exception:
+                pass
         with self._lock:
             self._buf.append(text)
             joined = "".join(self._buf)
@@ -3848,11 +3856,19 @@ def run_simulation_in_background_custom(data_dict, q):
     """Background worker for UI-driven simulations."""
     import os, sys, logging
     log = logging.getLogger(__name__)
+    
+    # Also write to a file so we can see everything
+    proj_dir = data_dict.get('proj_dir')
+    log_file = None
+    if proj_dir:
+        log_file = os.path.join(proj_dir, 'simulation_debug.log')
+        with open(log_file, 'w') as f:
+            f.write("=== SIMULATION LOG START ===\n")
 
-    # stream all prints + logger output to this run's queue
+    # stream all prints + logger output to this run's queue AND file
     old_stdout, old_stderr = sys.stdout, sys.stderr
-    sys.stdout = QueueStream(q)
-    sys.stderr = QueueStream(q)
+    sys.stdout = QueueStream(q, log_file=log_file)
+    sys.stderr = QueueStream(q, log_file=log_file)
     h, targets = _attach_queue_log_handler(q)
 
     try:
