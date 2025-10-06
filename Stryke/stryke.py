@@ -1472,6 +1472,26 @@ class simulation():
             # Track allocated flow per facility as we process units
             allocated_flow_by_facility = {f: 0.0 for f in facilities_at_node}
             
+            # Calculate production flow ONCE per facility (not per unit!)
+            prod_Q_by_facility = {}
+            for f in facilities_at_node:
+                min_Q = min_Q_dict.get(f, 0.0)
+                env_Q = env_Q_dict.get(f, 0.0)
+                bypass_Q = bypass_Q_dict.get(f, 0.0)
+                sta_cap = sta_cap_dict.get(f, 0.0)
+                
+                if curr_Q > min_Q:
+                    available_for_prod = curr_Q - env_Q - bypass_Q
+                    prod_Q_by_facility[f] = min(max(available_for_prod, 0.0), sta_cap)
+                else:
+                    prod_Q_by_facility[f] = 0.0
+            
+            # DEBUG: Print facility production flow calculation (first time only)
+            if not hasattr(self, '_facility_prod_printed'):
+                self._facility_prod_printed = True
+                for f, pq in prod_Q_by_facility.items():
+                    print(f"[FACILITY PROD] {f}: curr_Q={curr_Q:.1f}, prod_Q={pq:.1f}, sta_cap={sta_cap_dict.get(f, 0):.1f}", flush=True)
+            
             # CRITICAL: Process units in operational order, then others, then spillway
             # Sort by: (1) unit type (units=0, other=1, spillway=2), (2) operational order for units
             def sort_key(x):
@@ -1502,17 +1522,8 @@ class simulation():
                         except Exception:
                             continue  # skip node if not found
     
-                    sta_cap = sta_cap_dict.get(facility, 0.0)
-                    min_Q = min_Q_dict.get(facility, 0.0)
-                    env_Q = env_Q_dict.get(facility, 0.0)
-                    bypass_Q = bypass_Q_dict.get(facility, 0.0)
-    
-                    # Determine usable production flow
-                    if curr_Q > min_Q:
-                        available_for_prod = curr_Q - env_Q - bypass_Q
-                        prod_Q = min(max(available_for_prod, 0.0), sta_cap)  # Can't exceed station capacity
-                    else:
-                        prod_Q = 0.0
+                    # Get pre-calculated production flow for this facility
+                    prod_Q = prod_Q_by_facility.get(facility, 0.0)
     
                     # Apply operation order logic: units start up in priority sequence
                     unit_cap = Q_dict.get(i, 0.0)  # Unit's maximum capacity
