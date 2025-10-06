@@ -2,38 +2,6 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <!-- Ad<body>
-  <h1>Migratory Route Creation</h1>
-  <p class="instructions">
-    On this page, you'll lay out a simple "map" (or network) showing how fish 
-    migrate through your facility. For a single-unit model, you will only need a 
-    single location — representing the turbine. If you're modeling more complex setups, 
-    you can add extra nodes (like "Spillway" or "Bypass" or other units) and connect them 
-    with edges to show the paths fish might take. Each node has an associated survival rate 
-    or function. When you're finished, click "Save Graph" to confirm these connections.
-  </p>
-  
-  {% if project_loaded %}
-  <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; margin: 20px 0; border-radius: 5px; font-size: 14px;">
-    ✅ <strong>Project Loaded</strong> - Your saved migratory route graph is displayed below. This was saved with your project, so you can proceed to the next step.
-  </div>
-  
-  <!-- Buttons Section -->
-  <div style="display: flex; gap: 10px; align-items: center; margin: 15px 0;">
-      <a href="{{ url_for('population') }}" style="text-decoration: none;">
-          <button type="button" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;">Next: Population →</button>
-      </a>
-  </div>
-  {% endif %}
-  
-  <div class="toolbar" {% if project_loaded %}style="display: none;"{% endif %}>
-    <button onclick="addNode('start')">Add Start Node</button>
-    <button onclick="addNode('interior')">Add Interior Node</button>
-    <button onclick="showUnitModal()">Add Unit Node</button>
-    <button onclick="addNode('end')">Add End Node</button>
-    <button onclick="initiateEdge()">Add Edge</button>
-  </div>
-  <div id="cy"></div>compatibility -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Interactive Graph Editor</title>
   <!-- Include Cytoscape.js via CDN -->
@@ -99,15 +67,30 @@
 </head>
 <body>
   <h1>Migratory Route Creation</h1>
+  
+  {% if project_loaded %}
+  <div style="background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; margin: 20px 0; border-radius: 5px; font-size: 14px;">
+    ✅ <strong>Project Loaded</strong> - Your saved migratory route graph is displayed below. This was saved with your project, so you can proceed to the next step.
+  </div>
+  
+  <!-- Next Button for loaded projects -->
+  <div style="display: flex; gap: 10px; align-items: center; margin: 15px 0;">
+      <a href="{{ url_for('population') }}" style="text-decoration: none;">
+          <button type="button" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;">Next: Population →</button>
+      </a>
+  </div>
+  {% else %}
   <p class="instructions">
-    On this page, you’ll lay out a simple “map” (or network) showing how fish 
+    On this page, you'll lay out a simple "map" (or network) showing how fish 
     migrate through your facility. For a single-unit model, you will only need a 
-    single location — representing the turbine. If you’re modeling more complex setups, 
-    you can add extra nodes (like “Spillway” or “Bypass” or other units) and connect them 
+    single location — representing the turbine. If you're modeling more complex setups, 
+    you can add extra nodes (like "Spillway" or "Bypass" or other units) and connect them 
     with edges to show the paths fish might take. Each node has an associated survival rate 
-    or function. When you’re finished, click “Save Graph” to confirm these connections.
+    or function. When you're finished, click "Save Graph" to confirm these connections.
   </p>
-  <div class="toolbar">
+  {% endif %}
+  
+  <div class="toolbar" {% if project_loaded %}style="display: none;"{% endif %}>
     <button onclick="addNode('start')">Add Start Node</button>
     <button onclick="addNode('interior')">Add Interior Node</button>
     <button onclick="showUnitModal()">Add Unit Node</button>
@@ -407,7 +390,7 @@
       <p style="font-size: 14px; margin: 8px 0;">Save your entire project to continue later:</p>
       
       <form method="post" action="{{ url_for('save_project') }}" style="margin: 10px 0;" class="no-validate">
-          <button type="submit" class="btn-small" style="background: #ffc107; color: #000; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">� Save Project</button>
+          <button type="submit" class="btn-small" style="background: #ffc107; color: #000; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">💾 Save Project</button>
       </form>
       
       <p style="font-size: 12px; color: #666; margin-top: 8px;">

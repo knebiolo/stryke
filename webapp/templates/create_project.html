@@ -137,10 +137,13 @@
                 <option value="multiple_powerhouses_simulated_entrainment_routing" {% if model_setup == 'multiple_powerhouses_simulated_entrainment_routing' %}selected{% endif %}>Multiple Dependent Powerhouses with movement, simulated entrainment, survival </option>
             </select>
 
-            <button type="submit" id="createProjectBtn" data-enable-on-change="true" {% if project_loaded %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Create Project</button>
-            
-            <!-- enable-on-change handled by shared static JS -->
-            <button type="button" onclick="window.location.href='{{ url_for('flow_scenarios') }}'">Next Page →</button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button type="submit" id="createProjectBtn" data-enable-on-change="true" {% if project_loaded %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Create Project</button>
+                
+                {% if project_loaded %}
+                <button type="button" onclick="window.location.href='{{ url_for('flow_scenarios') }}'" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px;">Next Page →</button>
+                {% endif %}
+            </div>
         </form>
         
         <!-- Project Save/Load Section -->

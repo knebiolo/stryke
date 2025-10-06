@@ -160,9 +160,13 @@
                 <textarea name="hydrograph_data" id="hydrograph_data" placeholder="YYYY-MM-DD<TAB>Flow">{{ hydrograph_data or '' }}</textarea>
             </div>
 
-            <button type="submit" id="saveScenarioBtn" {% if project_loaded %}disabled{% endif %}>Save Flow Scenario</button>
-                <button type="submit" id="saveScenarioBtn" data-enable-on-change="true" {% if project_loaded %}disabled{% endif %}>Save Flow Scenario</button>
-            <button type="button" onclick="window.location.href='{{ url_for('facilities') }}'">Next Page →</button>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button type="submit" id="saveScenarioBtn" data-enable-on-change="true" {% if project_loaded %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Flow Scenario</button>
+                
+                {% if project_loaded and flow_scenario_name %}
+                <button type="button" onclick="window.location.href='{{ url_for('facilities') }}'" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px;">Next: Facilities →</button>
+                {% endif %}
+            </div>
         </form>
     </div>
 
