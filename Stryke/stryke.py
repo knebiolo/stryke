@@ -1458,7 +1458,13 @@ class simulation():
             # Track allocated flow per facility as we process units
             allocated_flow_by_facility = {f: 0.0 for f in facilities_at_node}
             
-            for i in nbors:
+            # CRITICAL: Process units FIRST, then spillway, then others
+            # This ensures total_unit_flow is calculated before spillway needs it
+            sorted_nbors = sorted(nbors, key=lambda x: (
+                0 if 'U' in x else (2 if 'spill' in x else 1)
+            ))
+            
+            for i in sorted_nbors:
                 if 'U' in i:
                     # Resolve facility
                     try:
@@ -2882,15 +2888,20 @@ class simulation():
                             df['num_mortalities'] = df['num_entrained'] - df['num_survived']
                         
                         # Calculate probability of entrainment: per-iteration average
-                        # For each iteration: (total entrained in that year) / (population size)
+                        # FIXED: Use initial population (first day) as denominator, not sum of daily entrainments
                         iteration_probs = []
                         for iter_num in df['iteration'].unique():
                             iter_data = df[df['iteration'] == iter_num]
-                            iter_entrained = iter_data['num_entrained'].sum()
-                            # Population size should be consistent within iteration
-                            iter_pop = iter_data['pop_size'].iloc[0] if len(iter_data) > 0 else 0
+                            # Get initial population size (first day of the iteration)
+                            iter_pop = iter_data.iloc[0]['pop_size'] if len(iter_data) > 0 else 0
+                            
                             if iter_pop > 0:
-                                iteration_probs.append(iter_entrained / iter_pop)
+                                # Calculate daily entrainment rates and average them
+                                # This gives the mean probability that a fish present on any given day is entrained
+                                daily_probs = iter_data['num_entrained'] / iter_data['pop_size'].replace(0, np.nan)
+                                daily_probs = daily_probs.fillna(0)  # Handle division by zero
+                                mean_daily_prob = daily_probs.mean()
+                                iteration_probs.append(mean_daily_prob)
                             else:
                                 iteration_probs.append(0.0)
                         prob_entr = np.mean(iteration_probs) if len(iteration_probs) > 0 else 0.0

@@ -4605,9 +4605,8 @@ def generate_report(sim):
         bifurcation_map = {}  # Maps source node -> list of possible target nodes
         all_targets = set()  # All nodes that are targets of bifurcations (actual passage routes)
         try:
-            session_proj_dir = session.get('proj_dir')
-            if not session_proj_dir:
-                session_proj_dir = os.path.dirname(hdf_path)
+            # Use sim.proj_dir instead of session (to avoid "Working outside of request context" error)
+            session_proj_dir = getattr(sim, 'proj_dir', None) or os.path.dirname(hdf_path)
             graph_json_path = os.path.join(session_proj_dir, 'graph.json')
             if os.path.exists(graph_json_path):
                 with open(graph_json_path, 'r') as f:
