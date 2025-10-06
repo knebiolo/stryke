@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enable-on-Change Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-case { 
+            margin: 20px 0; 
+            padding: 15px; 
+            border: 2px solid #ccc; 
+            border-radius: 8px;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button {
+            background: #007BFF;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        input, select { padding: 8px; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>Enable-on-Change Behavior Test</h1>
+    <p>Open browser console to see debug messages. Change any input in a test case and the disabled button should re-enable.</p>
+
+    <div class="test-case">
+        <h2>Test 1: Simple Form</h2>
+        <form>
+            <label>Name: <input type="text" name="name" value="Test"></label><br>
+            <label>Age: <input type="number" name="age" value="25"></label><br>
+            <button type="submit" data-enable-on-change="true" disabled>Save (Initially Disabled)</button>
+        </form>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 2: Dropdown</h2>
+        <form>
+            <label>Choice: 
+                <select name="choice">
+                    <option value="">--Select--</option>
+                    <option value="A">Option A</option>
+                    <option value="B">Option B</option>
+                </select>
+            </label><br>
+            <button type="submit" data-enable-on-change="true" disabled style="background: #ccc; cursor: not-allowed;">Save Dropdown</button>
+        </form>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 3: No Form (Document-level)</h2>
+        <label>Field outside form: <input type="text" name="loose" value="Loose input"></label><br>
+        <button type="submit" data-enable-on-change="true" disabled>Save (Outside Form)</button>
+    </div>
+
+    <div class="test-case">
+        <h2>Test 4: Already Enabled (Should remain enabled)</h2>
+        <form>
+            <label>Field: <input type="text" name="field4" value="Value"></label><br>
+            <button type="submit" data-enable-on-change="true">Save (Already Enabled)</button>
+        </form>
+    </div>
+
+    <script src="../static/enable-on-change.js"></script>
+    <script>
+        console.log('[Test Page] Loaded enable-on-change.js');
+        setTimeout(() => {
+            const disabled = document.querySelectorAll('button[data-enable-on-change="true"]:disabled');
+            console.log('[Test Page] Found', disabled.length, 'disabled buttons with data-enable-on-change="true"');
+        }, 100);
+    </script>
+</body>
+</html>

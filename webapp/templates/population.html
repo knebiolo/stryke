@@ -204,6 +204,7 @@
   </script>
   <script src="{{ url_for('static', filename='autosave.js') }}"></script>
   <script src="{{ url_for('static', filename='validation.js') }}"></script>
+  <script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
 </head>
 <body>
   <div class="container">
@@ -460,7 +461,7 @@
       
       <div style="display: flex; gap: 10px; align-items: center; margin-top: 20px;">
         {% if project_loaded %}
-          <button type="submit" id="savePopulationBtn" style="background-color: #cccccc; cursor: not-allowed;" disabled>Save Population Parameters</button>
+          <button type="submit" id="savePopulationBtn" data-enable-on-change="true" style="background-color: #cccccc; cursor: not-allowed;" disabled>Save Population Parameters</button>
           <a href="{{ url_for('model_setup_summary') }}" style="text-decoration: none;">
             <button type="button" style="background-color: #007BFF; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 5px;">
               Next &rarr;
@@ -491,7 +492,6 @@
           
           // Track form changes to re-enable Save button when project is loaded
           var projectLoaded = {{ 'true' if project_loaded else 'false' }};
-<script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
           if (projectLoaded) {
             var form = document.querySelector('form');
             var saveBtn = document.getElementById('savePopulationBtn');

@@ -1,34 +1,52 @@
 (function(){
-    // Find buttons with data-enable-on-change="true" and enable them when any input/select/textarea
-    // within the same form is changed or receives input.
-    function initEnableOnChange(){
-        var buttons = Array.prototype.slice.call(document.querySelectorAll('button[data-enable-on-change="true"]'));
-        buttons.forEach(function(btn){
-            // if not inside a form, observe the whole document
-            var form = btn.closest('form');
-            if(!form){
-                // watch document-level inputs
-                var inputs = Array.prototype.slice.call(document.querySelectorAll('input, select, textarea'));
+    // Delegated handler: listen at document level so dynamically-added inputs are caught.
+    function handleEvent(e){
+        try{
+            var target = e.target || e.srcElement;
+            if(!target) return;
+            // only consider input/select/textarea events
+            var tag = (target.tagName || '').toLowerCase();
+            if(['input','select','textarea'].indexOf(tag) === -1) return;
+
+            // Find the nearest form (if any)
+            var form = target.closest('form');
+
+            // Determine candidate buttons to enable: those with data-enable-on-change="true"
+            var candidates = [];
+            if(form){
+                candidates = Array.prototype.slice.call(form.querySelectorAll('button[data-enable-on-change="true"]'));
             } else {
-                var inputs = Array.prototype.slice.call(form.querySelectorAll('input, select, textarea'));
+                candidates = Array.prototype.slice.call(document.querySelectorAll('button[data-enable-on-change="true"]'));
             }
 
-            if(!btn.disabled) return; // already enabled
-
-            var enableBtn = function(){
-                btn.disabled = false;
-                // optionally update styling if inline styles exist
-                try{ btn.style.cursor = ''; btn.style.background = ''; } catch(e){}
-                inputs.forEach(function(i){ i.removeEventListener('change', enableBtn); i.removeEventListener('input', enableBtn); });
-            };
-
-            inputs.forEach(function(i){ i.addEventListener('change', enableBtn); i.addEventListener('input', enableBtn); });
-        });
+            candidates.forEach(function(btn){
+                if(btn.disabled){
+                    console.debug('[enable-on-change] enabling button', btn.id || btn.name || btn);
+                    btn.disabled = false;
+                    // restore styling if inline disabled style present
+                    try{ btn.style.cursor = ''; btn.style.background = ''; }catch(e){}
+                }
+            });
+        }catch(err){
+            console.warn('[enable-on-change] handler error', err);
+        }
     }
 
-    if(document.readyState === 'loading'){
-        document.addEventListener('DOMContentLoaded', initEnableOnChange);
-    } else {
-        initEnableOnChange();
+    if(typeof document !== 'undefined'){
+        // Use capture to catch events early in case other handlers stop propagation
+        document.addEventListener('input', handleEvent, true);
+        document.addEventListener('change', handleEvent, true);
+
+        // Also run once on DOMContentLoaded to log status
+        function initLog(){
+            try{
+                var buttons = document.querySelectorAll('button[data-enable-on-change="true"]');
+                if(buttons.length){
+                    console.debug('[enable-on-change] found', buttons.length, 'buttons to monitor');
+                }
+            }catch(e){}
+        }
+        if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initLog);
+        else initLog();
     }
 })();
