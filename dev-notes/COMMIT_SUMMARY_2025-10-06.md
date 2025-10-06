@@ -186,4 +186,5 @@ Files modified: 8 templates, 6 docs created
 **Items Cleaned**: 146 __pycache__ directories + 2 backup files  
 **Templates Fixed**: 8/15  
 **Documentation Created**: 6 files  
+**Railway Timeout Fix**: Increased from 120s to 600s (simulation was completing but connection timing out)  
 **Status**: READY FOR COMMIT ✅
