@@ -1503,14 +1503,28 @@ class simulation():
                     return (1, 0)  # Other routes in middle
             
             sorted_nbors = sorted(nbors, key=sort_key)
-            
+
+            # Build per-facility unit lists (in sorted order) so we can split prod_Q
+            units_by_facility = {}
+            for nb in sorted_nbors:
+                if 'U' in nb:
+                    try:
+                        fac = unit_fac_dict.get(nb) or self.unit_params.at[nb, 'Facility']
+                    except Exception:
+                        continue
+                    units_by_facility.setdefault(fac, []).append(nb)
+
+            # Track processed units per facility so we can compute remaining shares
+            processed_units_by_fac = {f: [] for f in facilities_at_node}
+
             # DEBUG: Print sorting results on first day
             if not hasattr(self, '_neighbor_sort_printed'):
                 self._neighbor_sort_printed = True
                 print(f"[NEIGHBOR DEBUG] Original nbors: {nbors}", flush=True)
                 print(f"[NEIGHBOR DEBUG] Sorted nbors: {sorted_nbors}", flush=True)
                 print(f"[NEIGHBOR DEBUG] op_order dict: {op_order}", flush=True)
-            
+                print(f"[NEIGHBOR DEBUG] units_by_facility: {units_by_facility}", flush=True)
+
             for i in sorted_nbors:
                 if 'U' in i:
                     # Resolve facility
@@ -1524,6 +1538,9 @@ class simulation():
     
                     # Get pre-calculated production flow for this facility
                     prod_Q = prod_Q_by_facility.get(facility, 0.0)
+
+                    # ALLOCATION POLICY MARKER: print every time to confirm which policy ran
+                    print(f"[ALLOC POLICY v2 ACTIVE] Facility={facility}, prod_Q={prod_Q:.1f}", flush=True)
     
                     # Apply operation order logic: units start up in priority sequence
                     unit_cap = Q_dict.get(i, 0.0)  # Unit's maximum capacity
@@ -1532,14 +1549,32 @@ class simulation():
                     # FIXED: Use actually allocated flow from previous units, not their capacity
                     prev_Q = allocated_flow_by_facility.get(facility, 0.0)
     
-                    # Allocate remaining production flow to this unit, up to its capacity
-                    if prev_Q >= prod_Q:
-                        u_Q = 0.0  # Not enough flow left for this unit
+                    # Allocate remaining production flow to this unit.
+                    # New policy: split remaining facility production evenly among remaining units
+                    remaining_prod = prod_Q - prev_Q
+                    remaining_units = []
+                    try:
+                        remaining_units = [u for u in units_by_facility.get(facility, []) if u not in processed_units_by_fac.get(facility, [])]
+                    except Exception:
+                        remaining_units = [i]
+
+                    # Debug: show remaining units and counts to diagnose why one unit may take all flow
+                    try:
+                        print(f"[ALLOC DEBUG] facility={facility}, processed={processed_units_by_fac.get(facility, [])}, remaining_units={remaining_units}, remaining_prod={remaining_prod:.3f}", flush=True)
+                    except Exception:
+                        pass
+
+                    if remaining_units:
+                        share = max(remaining_prod / len(remaining_units), 0.0)
                     else:
-                        u_Q = min(prod_Q - prev_Q, unit_cap)  # Flow available to this unit
-    
-                    # Track the allocated flow for this facility
+                        share = 0.0
+
+                    # Unit gets either its share or up to its capacity
+                    u_Q = min(share, unit_cap)
+
+                    # Track the allocated flow for this facility and mark unit processed
                     allocated_flow_by_facility[facility] = prev_Q + u_Q
+                    processed_units_by_fac.setdefault(facility, []).append(i)
     
                     prob = u_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
