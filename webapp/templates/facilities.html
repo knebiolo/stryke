@@ -120,7 +120,7 @@
             
             <!-- Buttons Section -->
             <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
-                <button type="submit" style="{% if project_loaded and facilities_data %}background: #ccc; cursor: not-allowed;{% else %}background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;{% endif %}" {% if project_loaded and facilities_data %}disabled{% endif %}>Save Facilities</button>
+                <button type="submit" data-enable-on-change="true" style="{% if project_loaded and facilities_data %}background: #ccc; cursor: not-allowed;{% else %}background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;{% endif %}" {% if project_loaded and facilities_data %}disabled{% endif %}>Save Facilities</button>
                 
                 {% if project_loaded and facilities_data %}
                 <a href="{{ url_for('unit_parameters') }}" style="text-decoration: none;">
@@ -281,7 +281,7 @@
         generateFacilityForms();
         
         // Track form changes to re-enable Save button when project is loaded
-        var projectLoaded = {{ 'true' if project_loaded else 'false' }};
+    var projectLoaded = {{ 'true' if project_loaded else 'false' }};
         var hasFacilitiesData = {{ 'true' if facilities_data else 'false' }};
         
         if (projectLoaded && hasFacilitiesData) {

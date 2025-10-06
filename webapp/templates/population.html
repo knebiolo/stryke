@@ -491,6 +491,7 @@
           
           // Track form changes to re-enable Save button when project is loaded
           var projectLoaded = {{ 'true' if project_loaded else 'false' }};
+<script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
           if (projectLoaded) {
             var form = document.querySelector('form');
             var saveBtn = document.getElementById('savePopulationBtn');

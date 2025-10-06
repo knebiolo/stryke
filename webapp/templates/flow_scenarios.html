@@ -160,6 +160,7 @@
             </div>
 
             <button type="submit" id="saveScenarioBtn" {% if project_loaded %}disabled{% endif %}>Save Flow Scenario</button>
+                <button type="submit" id="saveScenarioBtn" data-enable-on-change="true" {% if project_loaded %}disabled{% endif %}>Save Flow Scenario</button>
             <button type="button" onclick="window.location.href='{{ url_for('facilities') }}'">Next Page →</button>
         </form>
     </div>

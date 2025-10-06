@@ -308,7 +308,8 @@
       
       <!-- Buttons Section -->
       <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
-          <button type="submit" {% if project_loaded and has_op_scen_data %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Operating Scenarios</button>
+          <button type="submit" data-enable-on-change="true" {% if project_loaded and has_op_scen_data %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Operating Scenarios</button>
+<script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
           
           {% if project_loaded and has_op_scen_data %}
           <a href="{{ url_for('graph_editor') }}" style="text-decoration: none;">

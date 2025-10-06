@@ -453,7 +453,8 @@
       
       <!-- Buttons Section -->
       <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
-          <button type="submit" {% if project_loaded and session.get('unit_params_lookup') %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Unit Parameters</button>
+          <button type="submit" data-enable-on-change="true" {% if project_loaded and session.get('unit_params_lookup') %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Unit Parameters</button>
+<script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
           
           {% if project_loaded and session.get('unit_params_lookup') %}
           <a href="{{ url_for('operating_scenarios') }}" style="text-decoration: none;">
