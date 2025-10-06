@@ -4724,9 +4724,17 @@ def generate_report(sim):
                             # Map state position -> survival column (survival_{pos-1}) when possible
                             survived = None
                             try:
-                                if pos > 0 and survival_cols and len(survival_cols) >= pos:
-                                    surv_col = survival_cols[pos-1]
+                                # Map the state position to the same-index survival column
+                                # (simulation writes survival_k for state_k)
+                                if pos >= 0 and survival_cols and len(survival_cols) > pos:
+                                    surv_col = survival_cols[pos]
                                     survived = row.get(surv_col)
+                                    # Ensure we check the extracted value
+                                    if pd.notna(survived):
+                                        try:
+                                            survived = int(survived)
+                                        except Exception:
+                                            pass
                             except Exception:
                                 survived = None
                             # This is a passage route (target of a bifurcation decision)
@@ -4924,11 +4932,12 @@ def generate_report(sim):
                             if 'river_node' not in str(state).lower():
                                 survived = None
                                 try:
-                                    if pos > 0 and survival_cols and len(survival_cols) >= pos:
-                                        surv_col = survival_cols[pos-1]
+                                    # Map the state position to the corresponding survival column
+                                    if pos >= 0 and survival_cols and len(survival_cols) > pos:
+                                        surv_col = survival_cols[pos]
                                         survived = row.get(surv_col)
                                         # Normalize to numeric 0/1 when possible
-                                        if pd.notna(surv_col) and survived is not None:
+                                        if pd.notna(survived):
                                             try:
                                                 survived = int(survived)
                                             except Exception:

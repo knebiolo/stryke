@@ -137,6 +137,31 @@
             </select>
 
             <button type="submit" id="createProjectBtn" {% if project_loaded %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Create Project</button>
+            
+            <script>
+            // Enable the Create Project button when any form input changes after page load.
+            (function(){
+                var form = document.getElementById('createProjectForm');
+                if (!form) return;
+                var btn = document.getElementById('createProjectBtn');
+                if (!btn) return;
+
+                // If the button is not disabled initially, nothing to do.
+                if (!btn.disabled) return;
+
+                var enableBtn = function() {
+                    btn.disabled = false;
+                    // remove listeners once enabled to avoid extra work
+                    inputs.forEach(function(i){ i.removeEventListener('change', enableBtn); i.removeEventListener('input', enableBtn); });
+                };
+
+                var inputs = Array.prototype.slice.call(form.querySelectorAll('input, select, textarea'));
+                inputs.forEach(function(i){
+                    i.addEventListener('change', enableBtn);
+                    i.addEventListener('input', enableBtn);
+                });
+            })();
+            </script>
             <button type="button" onclick="window.location.href='{{ url_for('flow_scenarios') }}'">Next Page →</button>
         </form>
         
