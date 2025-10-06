@@ -4189,13 +4189,21 @@ def generate_report(sim):
             unit_params_df = None
         
         # Get mortality component data for "Wheel of Death"
+        # FIXED: Calculate mean across iterations, not sum across all days×iterations
         mortality_components = {}
         if daily_df is not None and not daily_df.empty:
             mort_cols = ['mortality_impingement', 'mortality_blade_strike', 'mortality_barotrauma']
             available_mort_cols = [c for c in mort_cols if c in daily_df.columns]
             if available_mort_cols:
-                for col in available_mort_cols:
-                    mortality_components[col.replace('mortality_', '')] = daily_df[col].sum()
+                # Group by iteration, sum per iteration, then take mean across iterations
+                if 'iteration' in daily_df.columns:
+                    iter_totals = daily_df.groupby('iteration')[available_mort_cols].sum()
+                    for col in available_mort_cols:
+                        mortality_components[col.replace('mortality_', '')] = iter_totals[col].mean()
+                else:
+                    # Fallback if no iteration column
+                    for col in available_mort_cols:
+                        mortality_components[col.replace('mortality_', '')] = daily_df[col].sum()
             else:
                 mortality_components = None
         else:
@@ -4732,6 +4740,14 @@ def generate_report(sim):
                     discharge_records.append(route_day_counts[['Passage Route', 'route_count', 'total_fish', 'estimated_discharge']])
 
         if not combined_route_counts.empty:
+            # FIXED: Counts are across all iterations, so divide by number of iterations to get mean
+            # Get number of iterations from daily_df or default to 1
+            num_iterations = 1
+            if daily_df is not None and 'iteration' in daily_df.columns:
+                num_iterations = daily_df['iteration'].nunique()
+            
+            # Divide counts by number of iterations to show mean per iteration
+            combined_route_counts = combined_route_counts / num_iterations
             combined_route_counts = combined_route_counts.sort_values(ascending=False)
             
             # Calculate actual entrainment rate from route data
@@ -4819,6 +4835,11 @@ def generate_report(sim):
         
         report_sections.append(f"<h3>{discharge_heading}</h3>")
         if discharge_summary is not None and not discharge_summary.empty:
+            # FIXED: Filter out river nodes before display
+            discharge_summary = discharge_summary[
+                ~discharge_summary['Passage Route'].str.contains('river_node', case=False, na=False)
+            ]
+            
             # Map machine IDs to human-readable names
             nodes_df = store["/Nodes"] if "/Nodes" in store.keys() else None
             if nodes_df is not None and not nodes_df.empty:

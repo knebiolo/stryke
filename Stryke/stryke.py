@@ -2829,8 +2829,13 @@ class simulation():
     
                 self.beta_df = pd.DataFrame.from_dict(data=self.beta_dict, orient='index',
                                                        columns=['scenario number','species','state','survival rate','variance','ll','ul'])
-                # For report display, create a passage route version (excludes 'whole' project summary, includes all units and interior nodes)
-                self.beta_df_units_only = self.beta_df[self.beta_df['state'] != 'whole'][['state', 'survival rate', 'variance', 'll', 'ul']].copy()
+                # For report display, create a passage route version (excludes 'whole' project summary and river nodes)
+                # Filter out: 'whole', and any state containing 'river_node' or just 'river'
+                self.beta_df_units_only = self.beta_df[
+                    (self.beta_df['state'] != 'whole') & 
+                    (~self.beta_df['state'].str.contains('river_node', case=False, na=False)) &
+                    (~self.beta_df['state'].str.contains('^river$', case=False, na=False, regex=True))
+                ][['state', 'survival rate', 'variance', 'll', 'ul']].copy()
                 self.beta_df_units_only.rename(columns={'state': 'Passage Route', 'survival rate': 'Mean', 'variance': 'Variance', 'll': 'Lower 95% CI', 'ul': 'Upper 95% CI'}, inplace=True)
                 # try:
                 #     self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
