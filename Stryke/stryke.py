@@ -1191,9 +1191,15 @@ class simulation():
                     try:
                         if route not in self.unit_params.index:
                             logger.warning(f'Route {route} not found in unit_params, skipping barotrauma calculation')
+                            if np.random.random() < 0.01:  # 1% sample
+                                print(f"[BARO DEBUG] Route {route} not in unit_params index", flush=True)
                             baro_surv = 1.0
                         elif pd.isna(self.unit_params.loc[route, 'fb_depth']) or pd.isna(self.unit_params.loc[route, 'submergence_depth']):
                             logger.warning(f'Missing barotrauma parameters for {route}: fb_depth or submergence_depth is NaN')
+                            if np.random.random() < 0.01:  # 1% sample
+                                fb_val = self.unit_params.loc[route, 'fb_depth']
+                                sub_val = self.unit_params.loc[route, 'submergence_depth']
+                                print(f"[BARO DEBUG] Missing params for {route}: fb_depth={fb_val}, submergence_depth={sub_val}", flush=True)
                             baro_surv = 1.0
                         else:
                             # get constants
@@ -1240,8 +1246,13 @@ class simulation():
             
                             # survival probability considering blade strike and barotrauma
                             baro_surv = 1.0 - baro_injury
+                            
+                            # DEBUG: Print barotrauma calculation details (sample 0.1%)
+                            if np.random.random() < 0.001:
+                                print(f"[BARO DEBUG] route={route}, p_ratio={p_ratio:.3f}, beta_0={beta_0:.3f}, beta_1={beta_1:.3f}, baro_injury={baro_injury:.4f}, baro_surv={baro_surv:.4f}", flush=True)
                     except Exception as e:
                         logger.error(f'Error calculating barotrauma for route {route}: {e}')
+                        print(f"[BARO ERROR] Exception for route {route}: {e}", flush=True)
                         baro_surv = 1.0  
                 else:
                     baro_surv = 1.
@@ -1513,6 +1524,10 @@ class simulation():
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(u_Q)
+                    
+                    # DEBUG: Print unit allocation details
+                    if np.random.random() < 0.001 and u_Q > 0:  # 0.1% sample
+                        print(f"[UNIT DEBUG] {i}: prev_Q={prev_Q:.1f}, prod_Q={prod_Q:.1f}, unit_cap={unit_cap:.1f}, u_Q={u_Q:.1f}, prob={prob:.3f}", flush=True)
     
                 elif 'spill' in i:
                     # FIXED: Spillway gets remaining flow after units, environmental, and bypass
@@ -1527,6 +1542,10 @@ class simulation():
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(spill_Q)
+                    
+                    # DEBUG: Print spillway calculation details
+                    if np.random.random() < 0.001:  # 0.1% sample
+                        print(f"[SPILL DEBUG] curr_Q={curr_Q:.1f}, total_unit_flow={total_unit_flow:.1f}, env={total_env_Q:.1f}, bypass={total_bypass_Q:.1f}, spill_Q={spill_Q:.1f}, prob={prob:.3f}", flush=True)
                     
                 else:  # Other bypass paths (non-spillway)
                     facility = unit_fac_dict.get(i, None)
@@ -1595,9 +1614,11 @@ class simulation():
                     continue
                 route_flow_recorder[route_name] = flow_float
             
-        # print("locs:", locs)
-        # print("probs:", probs)
-        # print("probs shape:", probs.shape)
+        # DEBUG: Print routing when units are present
+        if np.any(np.char.find(locs, 'U') >= 0):
+            debug_info = " | ".join([f"{loc}: {prob:.3f} ({flow:.1f} cfs)" for loc, prob, flow in zip(locs, probs, route_flows)])
+            if np.random.random() < 0.001:  # Print 0.1% of the time to avoid spam
+                print(f"[ROUTING DEBUG] Locations: {debug_info}", flush=True)
 
         try:
             new_loc = np.random.choice(locs, p=probs).item()
