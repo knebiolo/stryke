@@ -1440,6 +1440,24 @@ class simulation():
         found_spill = np.char.find(nbors, 'spill') >= 0
     
         if np.any(contains_U):
+            # Calculate total production capacity and environmental/bypass flows
+            facilities_at_node = set()
+            for i in nbors:
+                if 'U' in i:
+                    try:
+                        facility = unit_fac_dict.get(i) or self.unit_params.at[i, 'Facility']
+                        facilities_at_node.add(facility)
+                    except Exception:
+                        continue
+            
+            # Aggregate facility-level flows
+            total_sta_cap = sum(sta_cap_dict.get(f, 0.0) for f in facilities_at_node)
+            total_env_Q = sum(env_Q_dict.get(f, 0.0) for f in facilities_at_node)
+            total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities_at_node)
+            
+            # Track allocated flow per facility as we process units
+            allocated_flow_by_facility = {f: 0.0 for f in facilities_at_node}
+            
             for i in nbors:
                 if 'U' in i:
                     # Resolve facility
@@ -1467,12 +1485,8 @@ class simulation():
                     unit_cap = Q_dict.get(i, 0.0)  # Unit's maximum capacity
                     order = op_order[i]
                     
-                    # Calculate flow already allocated to higher-priority units in same facility
-                    prev_units = [
-                        u for u in op_order
-                        if unit_fac_dict.get(u, None) == facility and op_order[u] < order
-                    ]
-                    prev_Q = sum(Q_dict.get(pu, 0.0) for pu in prev_units)
+                    # FIXED: Use actually allocated flow from previous units, not their capacity
+                    prev_Q = allocated_flow_by_facility.get(facility, 0.0)
     
                     # Allocate remaining production flow to this unit, up to its capacity
                     if prev_Q >= prod_Q:
@@ -1480,12 +1494,36 @@ class simulation():
                     else:
                         u_Q = min(prod_Q - prev_Q, unit_cap)  # Flow available to this unit
     
+                    # Track the allocated flow for this facility
+                    allocated_flow_by_facility[facility] = prev_Q + u_Q
+    
                     prob = u_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(u_Q)
     
-                else:  # Bypass path
+                elif 'spill' in i:
+                    # FIXED: Spillway gets remaining flow after units, environmental, and bypass
+                    # Calculate total flow allocated to units (production flow)
+                    total_unit_flow = sum(route_flows)  # Sum of all unit flows calculated above
+                    
+                    # Spillway gets: total flow - environmental - bypass - unit production
+                    if curr_Q > total_sta_cap + total_env_Q + total_bypass_Q:
+                        # Excess flow goes to spillway
+                        spill_Q = curr_Q - total_sta_cap - total_env_Q - total_bypass_Q
+                    elif curr_Q > total_env_Q + total_bypass_Q:
+                        # Some production, rest to spillway as environmental/bypass
+                        spill_Q = total_env_Q + total_bypass_Q
+                    else:
+                        # All flow through spillway (low flow condition)
+                        spill_Q = curr_Q
+                    
+                    prob = spill_Q / curr_Q if curr_Q > 0 else 0.0
+                    locs.append(i)
+                    probs.append(prob)
+                    route_flows.append(spill_Q)
+                    
+                else:  # Other bypass paths (non-spillway)
                     facility = unit_fac_dict.get(i, None)
                     bypass_Q = bypass_Q_dict.get(facility, 0.0)
                     prob = bypass_Q / curr_Q if curr_Q > 0 else 0.0
