@@ -126,3 +126,29 @@ Output/
 UI/
 Spreadsheet Interface/Old/
 Background/
+
+# Project-specific temporary files
+temp/
+*.h5
+simulation_*.html
+simulation_*.log
+*_debug.log
+
+# User uploads and simulation projects (runtime data)
+uploads/
+simulation_project/
+simulation_report_*/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Dev notes (optional - uncomment to exclude from git)
+# dev-notes/
