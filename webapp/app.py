@@ -4584,7 +4584,24 @@ def generate_report(sim):
         
         # Beta distributions - show all passage routes (units and interior nodes) with ALL iterations
         report_sections.append("<h3>Survival Probability Distributions</h3>")
-        report_sections.append("<p><strong>Note:</strong> Beta distribution parameters are calculated using survival data from ALL fish across ALL iterations and ALL days, providing robust statistical estimates.</p>")
+        # Attempt to display an explanatory caption produced by the simulation summarizer.
+        caption_text = None
+        try:
+            if "/Beta_Distributions_Units" in store.keys():
+                meta = store.get_storer("Beta_Distributions_Units").attrs
+            elif "/Beta_Distributions" in store.keys():
+                meta = store.get_storer("Beta_Distributions").attrs
+            else:
+                meta = None
+            if meta is not None and hasattr(meta, 'beta_caption'):
+                caption_text = meta.beta_caption
+        except Exception:
+            caption_text = None
+
+        if caption_text:
+            report_sections.append(f"<p style='margin-top:4px; color:#666; font-size:0.9em; font-style:italic;'>{caption_text}</p>")
+        else:
+            report_sections.append("<p style='margin-top:4px; color:#666; font-size:0.9em; font-style:italic;'><strong>Note:</strong> Means shown are empirical averages of per-iteration, per-day survival probabilities; 95% intervals are bootstrap estimates. Direct beta fits can be sensitive to exact 0/1 values and are not used for the reported means.</p>")
         if "/Beta_Distributions_Units" in store.keys():
             add_section("Beta Distributions (Passage Routes Only)", "/Beta_Distributions_Units", units)
         else:
@@ -5086,13 +5103,41 @@ def generate_report(sim):
             if 'num_mortality' not in df.columns and {'num_survived','pop_size'} <= set(df.columns):
                 df['num_mortality'] = df['pop_size'] - df['num_survived']
 
-            def create_daily_hist(data, col, title):
+            def compute_one_in_n_stats(values, ns=(10, 100, 1000)):
+                """Compute literal 1-in-N day thresholds: value exceeded on average once every N days.
+                Returns dict n -> threshold (float) and observed_count.
+                """
+                out = {}
+                total_days = len(values)
+                for n in ns:
+                    if total_days == 0:
+                        out[n] = {'threshold': 0.0, 'observed_days': 0, 'total_days': 0}
+                        continue
+                    q = 1.0 - 1.0 / float(n)
+                    try:
+                        thr = float(np.nanquantile(values, q))
+                    except Exception:
+                        thr = float(values.quantile(q)) if hasattr(values, 'quantile') else 0.0
+                    observed = int((values >= thr).sum())
+                    out[n] = {'threshold': thr, 'observed_days': observed, 'total_days': total_days}
+                return out
+
+            def create_daily_hist(data, col, title, one_in_n_stats=None):
                 plt.rcParams.update({'font.size': 8})
                 fig = plt.figure()
                 if col in data.columns:
                     # Include zeros by filling NaN with 0 instead of dropping
                     values = data[col].fillna(0)
                     plt.hist(values, bins=20, edgecolor='black')
+                    # Draw vertical lines for thresholds
+                    if one_in_n_stats:
+                        colors = {10: '#d95f02', 100: '#1b9e77', 1000: '#7570b3'}
+                        for n, info in one_in_n_stats.items():
+                            thr = info.get('threshold', 0.0)
+                            if thr is None:
+                                continue
+                            plt.axvline(thr, color=colors.get(n, 'black'), linestyle='--', linewidth=1.2, label=f'1-in-{n}: {thr:.0f}')
+                        plt.legend(fontsize=8)
                 plt.xlabel(col.replace('_', ' ').title())
                 plt.ylabel("Frequency")
                 plt.title(title)
@@ -5102,34 +5147,67 @@ def generate_report(sim):
                 buf.seek(0)
                 return base64.b64encode(buf.getvalue()).decode('utf-8')
 
-            entr_img = create_daily_hist(df, 'num_entrained', 'Daily Entrainment Distribution') if 'num_entrained' in df.columns else None
-            mort_img = create_daily_hist(df, 'num_mortality', 'Daily Mortality Distribution') if 'num_mortality' in df.columns else None
+            # Precompute one-in-N stats for entrainment and mortality
+            entr_stats = None
+            mort_stats = None
+            if 'num_entrained' in df.columns:
+                values = df['num_entrained'].fillna(0)
+                entr_stats = compute_one_in_n_stats(values, ns=(10, 100, 1000))
+            if 'num_mortality' in df.columns:
+                values_m = df['num_mortality'].fillna(0)
+                mort_stats = compute_one_in_n_stats(values_m, ns=(10, 100, 1000))
 
-            report_sections.append("<div style='display:flex; gap:20px; justify-content:center; flex-wrap:wrap'>")
-            # AFTER (safe):
+            entr_img = create_daily_hist(df, 'num_entrained', 'Daily Entrainment Distribution', one_in_n_stats=entr_stats) if 'num_entrained' in df.columns else None
+            mort_img = create_daily_hist(df, 'num_mortality', 'Daily Mortality Distribution', one_in_n_stats=mort_stats) if 'num_mortality' in df.columns else None
+
+            # Build a two-column panel: left = entrainment histogram & summary; right = mortality histogram & summary
+            left_col = []
+            right_col = []
+
             entr_html = (
                 f'<img src="data:image/png;base64,{entr_img}" style="max-width:100%; height:auto;" />'
                 if entr_img else "<p>No 'num_entrained' data available.</p>"
             )
-            
-            report_sections.append(
-                "<div style='flex:1; min-width:300px; text-align:center;'>"
-                "<h3>Daily Entrainment</h3>"
-                f"{entr_html}"
-                "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
-                "Figure 5: Daily distribution of fish entrainment events showing frequency of different entrainment magnitudes."
-                "</p>"
-                "</div>"
-            )
+            left_col.append("<div style='flex:1; min-width:300px; text-align:center;'>")
+            left_col.append("<h3>Daily Entrainment</h3>")
+            left_col.append(entr_html)
+            left_col.append("<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>Figure 5: Daily distribution of fish entrainment events showing frequency of different entrainment magnitudes.</p>")
+
+            # One-in-N summary for entrainment
+            if entr_stats:
+                entr_summary_lines = []
+                for n, info in entr_stats.items():
+                    thr = info['threshold']
+                    observed = info['observed_days']
+                    total = info['total_days']
+                    observed_str = f"(observed {observed} days → ~1 in {int(total/observed) if observed>0 else '∞'} days)" if observed>0 else "(observed 0 days)"
+                    entr_summary_lines.append(f"1-in-{n} day event: {int(thr)} fish {observed_str}")
+                entr_summary_html = '<br/>'.join(entr_summary_lines)
+                left_col.append(f"<div style='text-align:left; padding:10px; background:#eef7ff; border-radius:6px; margin:8px;'>{entr_summary_html}</div>")
+
+            left_col.append("</div>")
+
+            # Mortality column
             if mort_img:
-                report_sections.append(
-                    f"<div style='flex:1; min-width:300px; text-align:center;'><h3>Daily Mortality</h3>"
-                    f"<img src='data:image/png;base64,{mort_img}' style='max-width:100%; height:auto;' />"
-                    "<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>"
-                    "Figure 6: Daily distribution of fish mortalities showing frequency of different mortality counts per day."
-                    "</p></div>"
-                )
-            report_sections.append("</div>")
+                right_col.append("<div style='flex:1; min-width:300px; text-align:center;'>")
+                right_col.append("<h3>Daily Mortality</h3>")
+                right_col.append(f"<img src='data:image/png;base64,{mort_img}' style='max-width:100%; height:auto;' />")
+                right_col.append("<p style='font-size:0.9em; color:#666; margin-top:8px; font-style:italic;'>Figure 6: Daily distribution of fish mortalities showing frequency of different mortality counts per day.</p>")
+                if mort_stats:
+                    mort_summary_lines = []
+                    for n, info in mort_stats.items():
+                        thr = info['threshold']
+                        observed = info['observed_days']
+                        total = info['total_days']
+                        observed_str = f"(observed {observed} days → ~1 in {int(total/observed) if observed>0 else '∞'} days)" if observed>0 else "(observed 0 days)"
+                        mort_summary_lines.append(f"1-in-{n} day mortality: {int(thr)} fish {observed_str}")
+                    mort_summary_html = '<br/>'.join(mort_summary_lines)
+                    right_col.append(f"<div style='text-align:left; padding:10px; background:#fff0f0; border-radius:6px; margin:8px;'>{mort_summary_html}</div>")
+                right_col.append("</div>")
+
+            # Append combined panel
+            combined_html = "<div style='display:flex; gap:20px; justify-content:center; flex-wrap:wrap'>" + "".join(left_col) + "".join(right_col) + "</div>"
+            report_sections.append(combined_html)
         else:
             report_sections.append("<p>No daily data available.</p>")
 
