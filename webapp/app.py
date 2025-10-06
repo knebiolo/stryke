@@ -4269,7 +4269,6 @@ def generate_report(sim):
             f"<h1>Simulation Report for Project: {getattr(sim, 'project_name', 'N/A')}</h1>",
             f"<p><strong>Project Notes:</strong> {getattr(sim, 'project_notes', 'N/A')}</p>",
             f"<p><strong>Model Setup:</strong> {getattr(sim, 'model_setup', 'N/A')}</p>",
-            f"<p><strong>Units:</strong> {getattr(sim, 'units_session', 'N/A')}</p>",
             f"<p>Report generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
             exec_summary_html,
             diagnostic_html,
@@ -4821,6 +4820,15 @@ def generate_report(sim):
         
         report_sections.append(f"<h3>{discharge_heading}</h3>")
         if discharge_summary is not None and not discharge_summary.empty:
+            # Map machine IDs to human-readable names
+            nodes_df = store["/Nodes"] if "/Nodes" in store.keys() else None
+            if nodes_df is not None and not nodes_df.empty:
+                # Create mapping from Location (machine ID) to ID (human name)
+                node_name_map = dict(zip(nodes_df['Location'], nodes_df['ID']))
+                discharge_summary['Passage Route'] = discharge_summary['Passage Route'].map(
+                    lambda x: node_name_map.get(x, x)  # Use mapping or keep original if not found
+                )
+            
             discharge_summary = discharge_summary.sort_values('total_discharge', ascending=False)
             total_fish_all_routes = combined_route_counts.sum()
             if total_fish_all_routes and total_fish_all_routes > 0:
