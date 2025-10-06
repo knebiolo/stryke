@@ -4055,6 +4055,7 @@ def simulation_logs():
         marker_file = os.path.join(proj_dir, 'report_path.txt')
         report_html = os.path.join(proj_dir, 'simulation_report.html')
         output_h5 = os.path.join(proj_dir, 'Simulation_Output.h5')
+        debug_log = os.path.join(proj_dir, 'simulation_debug.log')
         
         if os.path.exists(marker_file):
             # Read the report path from marker file
@@ -4073,6 +4074,18 @@ def simulation_logs():
             # Found H5 output (simulation completed but report might be missing)
             simulation_status = 'completed'
             report_path = None  # No HTML report, but sim finished
+        
+        # Check if simulation is actually in progress by looking at debug log
+        # If debug log exists and was modified recently (< 60 seconds), sim is running
+        if simulation_status == 'running' and os.path.exists(debug_log):
+            try:
+                import time
+                mtime = os.path.getmtime(debug_log)
+                if time.time() - mtime > 60:
+                    # Log hasn't been updated in 60 seconds - might be stalled
+                    simulation_status = 'stalled'
+            except Exception:
+                pass
     
     return render_template("simulation_logs.html", 
                          run_id=run_id,

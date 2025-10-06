@@ -300,6 +300,21 @@
             resultsButton.style.display = "inline-block";
             
             // Don't start EventSource connection
+        } else if (simulationStatus === 'stalled') {
+            // Simulation appears to be stalled
+            progressBar.style.width = '50%';
+            progressPercentage.textContent = '?%';
+            statusText.textContent = '⚠️ Simulation May Be Stalled';
+            statusIcon.textContent = '⚠️';
+            currentActivity.textContent = 'Checking status...';
+            
+            logOutput.innerHTML = '<div class="log-warning">⚠️ Simulation appears to have stalled or is taking longer than expected.</div>';
+            logOutput.innerHTML += '<div class="log-info">Checking every 10 seconds for completion... <button onclick="location.reload()">🔄 Refresh Now</button></div>';
+            
+            // Poll for completion every 10 seconds
+            setInterval(() => {
+                location.reload();
+            }, 10000);
         } else {
             // Simulation is running - connect to live stream
             
@@ -316,13 +331,24 @@
             
             const eventSource = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
             
+            // Fallback: Poll for completion every 30 seconds in case EventSource fails
+            const completionCheckInterval = setInterval(() => {
+                console.log('Polling for completion...');
+                // Just reload the page - it will check for completion files
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    console.log('EventSource closed, checking for completion...');
+                    location.reload();
+                }
+            }, 30000); // Check every 30 seconds
+            
             // Handle connection errors
             eventSource.onerror = function(error) {
                 console.error('EventSource error:', error);
                 if (eventSource.readyState === EventSource.CLOSED) {
-                    logOutput.innerHTML += '<div class="log-error">❌ Connection lost. The simulation may still be running on the server. <a href="?run=' + encodeURIComponent(runId) + '">Click here to refresh and check if it completed</a>.</div>';
-                    statusText.textContent = 'Connection Lost';
+                    logOutput.innerHTML += '<div class="log-error">❌ Connection lost. Checking for completion every 30 seconds... <button onclick="location.reload()">🔄 Check Now</button></div>';
+                    statusText.textContent = 'Connection Lost - Auto-checking...';
                     statusIcon.textContent = '⚠️';
+                    currentActivity.textContent = 'Waiting for completion...';
                 }
             };
 
@@ -483,6 +509,7 @@
                     text.includes("view results")) {
                     
                     eventSource.close();
+                    clearInterval(completionCheckInterval); // Stop polling
                     
                     // Update to complete state
                     progressBar.style.width = '100%';
