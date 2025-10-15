@@ -131,7 +131,7 @@
             <div class="accordion-content">
 
               {% if i > 1 %}
-                <button type="button" onclick="copyFromPrevious({{ outer_index }}, {{ i }})">Copy from previous unit</button>
+                <button type="button" class="copy-previous-btn" data-outer="{{ outer_index }}" data-unit="{{ i }}">Copy from previous unit</button>
               {% endif %}
 
               <!-- Two-column container -->
@@ -463,6 +463,25 @@
           {% endif %}
       </div>
     </form>
+
+  <!-- Expose unit params lookup to JS -->
+  <script id="stryke-unit-lookup" type="application/json">
+    {{ session.get('unit_params_lookup', {}) | tojson }}
+  </script>
+
+  <script>
+    // Attach handlers for copy previous buttons
+    document.addEventListener('DOMContentLoaded', function(){
+      const lookup = JSON.parse(document.getElementById('stryke-unit-lookup').textContent || '{}') || {};
+      document.querySelectorAll('.copy-previous-btn').forEach(btn => {
+        btn.addEventListener('click', function(){
+          const outer = btn.getAttribute('data-outer');
+          const unit = btn.getAttribute('data-unit');
+          copyFromPrevious(parseInt(outer,10), parseInt(unit,10));
+        });
+      });
+    });
+  </script>
     
     <!-- Save Project Section -->
     <div class="project-management" style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-top: 30px; border-left: 4px solid #ffc107;">
@@ -470,7 +489,7 @@
         <p style="font-size: 14px; margin: 8px 0;">Save your entire project to continue later:</p>
         
         <form method="post" action="{{ url_for('save_project') }}" style="margin: 10px 0;" class="no-validate">
-            <button type="submit" class="btn-small" style="background: #ffc107; color: #000; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">� Save Project</button>
+            <button type="submit" class="btn-small" style="background: #ffc107; color: #000; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">💾 Save Project</button>
         </form>
         
         <p style="font-size: 12px; color: #666; margin-top: 8px;">
@@ -480,9 +499,9 @@
   </div>
   
   <script>
-    // Load unit parameters from session
-    const unitParamsLookup = {{ session.get('unit_params_lookup', {}) | tojson }};
-    console.log("Loaded unit_params_lookup:", unitParamsLookup);
+  // Load unit parameters from session via JSON script block
+  const unitParamsLookup = JSON.parse(document.getElementById('stryke-unit-lookup').textContent || '{}') || {};
+  console.log("Loaded unit_params_lookup:", unitParamsLookup);
 
     // Populate form fields with loaded data
     function populateLoadedData() {

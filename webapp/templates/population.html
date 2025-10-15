@@ -207,6 +207,10 @@
   <script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
 </head>
 <body>
+  <!-- Expose server-side data for population page -->
+  <script id="stryke-pop-data" type="application/json">
+    {{ {'project_loaded': project_loaded} | tojson }}
+  </script>
   <div class="container">
     <a href="{{ url_for('index') }}" class="nav-link">Home</a>
     <h1>Population Parameters</h1>
@@ -491,7 +495,8 @@
           document.getElementById("entrainmentChoice").addEventListener("change", toggleEntrainmentChoice);
           
           // Track form changes to re-enable Save button when project is loaded
-          var projectLoaded = {{ 'true' if project_loaded else 'false' }};
+          const __popData = JSON.parse(document.getElementById('stryke-pop-data').textContent || '{}') || {};
+          var projectLoaded = !!__popData.project_loaded;
           if (projectLoaded) {
             var form = document.querySelector('form');
             var saveBtn = document.getElementById('savePopulationBtn');

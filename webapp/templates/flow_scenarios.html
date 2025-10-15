@@ -87,6 +87,14 @@
     {% endif %}
 </head>
 <body>
+    <script id="stryke-flow-data" type="application/json">
+        {{ {
+            'project_loaded': project_loaded,
+            'units': units,
+            'scenario_type': scenario_type,
+            'scenario_name': scenario_name
+        } | tojson }}
+    </script>
     <div class="container">
         <a href="{{ url_for('index') }}" class="nav-link">Home</a>
         <h1>Flow Scenarios</h1>
@@ -164,7 +172,7 @@
                 <button type="submit" id="saveScenarioBtn" data-enable-on-change="true" {% if project_loaded %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Save Flow Scenario</button>
                 
                 {% if project_loaded and scenario_name %}
-                <button type="button" onclick="window.location.href='{{ url_for('facilities') }}'" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px;">Next: Facilities →</button>
+                <a href="{{ url_for('facilities') }}" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; text-decoration: none; display: inline-block;">Next: Facilities →</a>
                 {% endif %}
             </div>
         </form>
@@ -215,7 +223,9 @@
                 // Enable/disable Save button based on changes
                 const saveBtn = document.getElementById('saveScenarioBtn');
                 if (saveBtn) {
-                    const isProjectLoaded = {{ 'true' if project_loaded else 'false' }};
+                    // Read project-loaded flag from JSON script block
+                    const __flowData = JSON.parse(document.getElementById('stryke-flow-data').textContent || '{}') || {};
+                    const isProjectLoaded = !!__flowData.project_loaded;
                     if (isProjectLoaded) {
                         saveBtn.disabled = !formChanged;
                     } else {

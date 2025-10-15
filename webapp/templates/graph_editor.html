@@ -66,6 +66,10 @@
   <script src="{{ url_for('static', filename='autosave.js') }}"></script>
 </head>
 <body>
+  <!-- Expose server-side graph data safely -->
+  <script id="stryke-graph-data" type="application/json">
+    {{ {'project_loaded': project_loaded, 'graph_data': graph_data or {}} | tojson }}
+  </script>
   <h1>Migratory Route Creation</h1>
   
   {% if project_loaded %}
@@ -140,19 +144,18 @@
     }
     document.addEventListener("DOMContentLoaded", loadUnitParameters);
 
-    // Load graph data if available
-    var loadedGraphData = {{ graph_data | tojson | safe }};
-    console.log("Raw loadedGraphData:", loadedGraphData);
+    // Load graph data from JSON script block
+    const __strykeGraphBlock = JSON.parse(document.getElementById('stryke-graph-data').textContent || '{}') || {};
+    const loadedGraphData = __strykeGraphBlock.graph_data || {};
+    const projectLoadedFlag = !!__strykeGraphBlock.project_loaded;
+    console.log("Raw loadedGraphData:", loadedGraphData, 'projectLoaded=', projectLoadedFlag);
     var initialElements = [];
     if (loadedGraphData && loadedGraphData.elements) {
-      // Cytoscape format: graph_data.elements.nodes and graph_data.elements.edges
       var nodes = loadedGraphData.elements.nodes || [];
       var edges = loadedGraphData.elements.edges || [];
       initialElements = nodes.concat(edges);
       console.log("Loaded graph with " + nodes.length + " nodes and " + edges.length + " edges");
-      console.log("initialElements:", initialElements);
     } else if (loadedGraphData && loadedGraphData.nodes && loadedGraphData.edges) {
-      // Fallback for old format
       initialElements = loadedGraphData.nodes.concat(loadedGraphData.edges);
       console.log("Loaded graph (old format) with " + loadedGraphData.nodes.length + " nodes and " + loadedGraphData.edges.length + " edges");
     } else {
@@ -216,31 +219,37 @@
         }
         
       ],
-      layout: { 
-        name: '{% if project_loaded %}breadthfirst{% else %}grid{% endif %}',
-        {% if project_loaded %}
-        directed: true,
-        spacingFactor: 1.5,
-        avoidOverlap: true,
-        nodeDimensionsIncludeLabels: true
-        {% else %}
-        rows: 1
-        {% endif %}
-      },
+      // Layout and interaction options are computed based on project load state
+      layout: (function(){
+        if (projectLoadedFlag) {
+          return {
+            name: 'breadthfirst',
+            directed: true,
+            spacingFactor: 1.5,
+            avoidOverlap: true,
+            nodeDimensionsIncludeLabels: true
+          };
+        } else {
+          return {
+            name: 'grid',
+            rows: 1
+          };
+        }
+      })(),
       userZoomingEnabled: true,
       userPanningEnabled: true,
-      boxSelectionEnabled: {% if project_loaded %}false{% else %}true{% endif %},
-      autoungrabify: {% if project_loaded %}true{% else %}false{% endif %}
+      boxSelectionEnabled: projectLoadedFlag ? false : true,
+      autoungrabify: projectLoadedFlag ? true : false
     });
 
-    {% if not project_loaded %}
     // Delete key removes selected nodes or edges (only when not loaded).
-    document.addEventListener('keydown', function(event) {
-      if (event.key === 'Delete') {
-        cy.$(':selected').remove();
-      }
-    });
-    {% endif %}
+    if (!projectLoadedFlag) {
+      document.addEventListener('keydown', function(event) {
+        if (event.key === 'Delete') {
+          cy.$(':selected').remove();
+        }
+      });
+    }
 
     // When adding a node, we set its id equal to its label.
     function addNode(type, labelOverride, survFunOverride) {

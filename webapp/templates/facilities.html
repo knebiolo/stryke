@@ -87,6 +87,15 @@
     <script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
 </head>
 <body>
+    <!-- Expose server-side data safely to JS -->
+    <script id="stryke-fac-data" type="application/json">
+        {{ {
+            'facilities_data': facilities_data or [],
+            'project_loaded': project_loaded,
+            'sim_mode': sim_mode,
+            'units': units
+        } | tojson }}
+    </script>
     <div class="container">
         <a href="{{ url_for('index') }}" class="nav-link">Home</a>
         <h1>Facility Information</h1>
@@ -121,7 +130,8 @@
             
             <!-- Buttons Section -->
             <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px;">
-                <button type="submit" data-enable-on-change="true" style="{% if project_loaded and facilities_data %}background: #ccc; cursor: not-allowed;{% else %}background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; margin: 0;{% endif %}" {% if project_loaded and facilities_data %}disabled{% endif %}>Save Facilities</button>
+                {# Use class-based disabled styling to avoid embedding Jinja inside style attributes #}
+                <button type="submit" data-enable-on-change="true" class="save-facilities-btn" {% if project_loaded and facilities_data %}disabled aria-disabled="true"{% endif %}>Save Facilities</button>
                 
                 {% if project_loaded and facilities_data %}
                 <a href="{{ url_for('unit_parameters') }}" style="text-decoration: none;">
@@ -147,9 +157,13 @@
     </div>
 
     <script>
-        // Load facilities data from backend
-        const facilitiesData = {{ facilities_data | tojson }};
-        console.log("Loaded facilities data:", facilitiesData);
+    // Load facilities data from backend (safely via JSON script tag)
+    const __strykeFacData = JSON.parse(document.getElementById('stryke-fac-data').textContent || '{}') || {};
+    const facilitiesData = __strykeFacData.facilities_data || [];
+    const projectLoaded = !!__strykeFacData.project_loaded;
+    const simMode = __strykeFacData.sim_mode || '';
+    const units = __strykeFacData.units || 'metric';
+    console.log("Loaded facilities data:", facilitiesData, projectLoaded, simMode, units);
 
         function generateFacilityForms() {
             var simMode = "{{ sim_mode }}";  
@@ -282,10 +296,8 @@
         generateFacilityForms();
         
         // Track form changes to re-enable Save button when project is loaded
-    var projectLoaded = {{ 'true' if project_loaded else 'false' }};
-        var hasFacilitiesData = {{ 'true' if facilities_data else 'false' }};
-        
-        if (projectLoaded && hasFacilitiesData) {
+        // Use values from the JSON data block parsed earlier: projectLoaded, facilitiesData
+        if (projectLoaded && facilitiesData && facilitiesData.length > 0) {
             var form = document.querySelector('form');
             var saveBtn = form.querySelector('button[type="submit"]');
             var originalFormData = new FormData(form);
@@ -306,9 +318,8 @@
                 }
                 if (changed && saveBtn) {
                     saveBtn.disabled = false;
-                    saveBtn.style.backgroundColor = '#007BFF';
-                    saveBtn.style.color = 'white';
-                    saveBtn.style.cursor = 'pointer';
+                    saveBtn.classList.remove('disabled');
+                    saveBtn.classList.add('enabled');
                 }
             });
             

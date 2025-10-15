@@ -94,9 +94,6 @@
             background: #138496;
         }
     </style>
-    <script src="{{ url_for('static', filename='autosave.js') }}"></script>
-    <script src="{{ url_for('static', filename='validation.js') }}"></script>
-    <script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
 </head>
 <body>
     <div class="container">
@@ -141,7 +138,7 @@
                 <button type="submit" id="createProjectBtn" data-enable-on-change="true" {% if project_loaded %}disabled style="background: #ccc; cursor: not-allowed;"{% endif %}>Create Project</button>
                 
                 {% if project_loaded %}
-                <button type="button" onclick="window.location.href='{{ url_for('flow_scenarios') }}'" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px;">Next Page →</button>
+                <a href="{{ url_for('flow_scenarios') }}" style="background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 10px 15px; text-decoration: none; display: inline-block;">Next Page →</a>
                 {% endif %}
             </div>
         </form>
@@ -173,8 +170,10 @@
         </div>
     </div>
     
+    <!-- Load static helpers once, at the end of the document -->
     <script src="{{ url_for('static', filename='autosave.js') }}"></script>
     <script src="{{ url_for('static', filename='validation.js') }}"></script>
+    <script src="{{ url_for('static', filename='enable-on-change.js') }}"></script>
     {% if project_loaded %}
     <script>
         // Clear auto-save when project is loaded to prevent restore prompt
