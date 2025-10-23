@@ -5019,16 +5019,23 @@ def generate_report(sim):
                     discharge_records.append(route_day_counts[['Passage Route', 'route_count', 'total_fish', 'estimated_discharge']])
 
         if not combined_route_counts.empty:
-            # Debug: log combined counts BEFORE dividing by iterations
+            # Debug: log combined counts BEFORE computing summaries
             try:
                 print(f"[ROUTE AGG DEBUG] combined_route_counts raw_sum={combined_route_counts.sum()}, entries={len(combined_route_counts)}", flush=True)
             except Exception:
                 pass
-            # FIXED: Counts are across all iterations, so divide by number of iterations to get mean
+
             # Get number of iterations from daily_df or default to 1
             num_iterations = 1
             if daily_df is not None and 'iteration' in daily_df.columns:
                 num_iterations = daily_df['iteration'].nunique()
+
+            # Keep both total counts (sum across iterations) and mean per-iteration for reference
+            total_counts = combined_route_counts.copy()
+            try:
+                mean_counts = total_counts / num_iterations
+            except Exception:
+                mean_counts = total_counts
 
             # Debug: log num_iterations and total entrained from Daily (if present)
             try:
@@ -5036,17 +5043,15 @@ def generate_report(sim):
             except Exception:
                 total_daily_entr = None
             print(f"[ROUTE AGG DEBUG] num_iterations={num_iterations}, total_entrained_from_Daily={total_daily_entr}", flush=True)
-            
-            # Divide counts by number of iterations to show mean per iteration
-            combined_route_counts = combined_route_counts / num_iterations
-            # Debug: log combined counts AFTER dividing
             try:
-                print(f"[ROUTE AGG DEBUG] combined_route_counts mean_sum={combined_route_counts.sum()}, entries={len(combined_route_counts)}", flush=True)
+                print(f"[ROUTE AGG DEBUG] total_counts_sum={total_counts.sum()}, mean_counts_sum={mean_counts.sum()}, entries={len(total_counts)}", flush=True)
             except Exception:
                 pass
-            combined_route_counts = combined_route_counts.sort_values(ascending=False)
-            
-            # Calculate actual entrainment rate from route data
+
+            # Use totals for reporting (user expects simulation totals, not per-iteration means)
+            combined_route_counts = total_counts.sort_values(ascending=False)
+
+            # Calculate actual entrainment rate from route data (using totals)
             total_passage_fish = combined_route_counts.sum()
             turbine_routes = combined_route_counts[combined_route_counts.index.str.contains('U', case=True, na=False)]
             entrained_fish = turbine_routes.sum()
@@ -5081,9 +5086,13 @@ def generate_report(sim):
             buf.seek(0)
             pie_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
 
+            # Prepare table showing simulation TOTALS (not per-iteration means)
+            counts_int = combined_route_counts.values.astype(int)
+            counts_formatted = [f"{x:,}" for x in counts_int]
             route_table = pd.DataFrame({
                 'Passage Route': combined_route_counts.index,
-                'Number of Fish': combined_route_counts.values.astype(int),
+                # Display formatted totals with thousands separators for readability
+                'Number of Fish': counts_formatted,
                 'Percentage': (combined_route_counts.values / combined_route_counts.sum() * 100).round(1)
             })
 
