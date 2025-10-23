@@ -1197,6 +1197,7 @@ def fit_distributions():
     summary_text = ""
     log_text = ""
     plot_filename = ""
+    other_filename = ""
     
     # ✅ Enforce session folder requirement - no fallback to global folder
     sim_folder = g.get("user_sim_folder")
@@ -1226,6 +1227,48 @@ def fit_distributions():
             
             def parse_list(text):
                 return [item.strip() for item in text.split(',') if item.strip()] if text else []
+
+            # Small helpers to compute AD and information-criteria metrics locally
+            import math as _math
+            from scipy.stats import pareto as _pareto, lognorm as _lognorm, weibull_min as _weibull
+
+            def anderson_darling_statistic_local(sample, cdf_fn):
+                x = np.sort(np.asarray(sample))
+                n = x.size
+                if n == 0:
+                    return None
+                eps = 1e-12
+                F = np.clip(cdf_fn(x), eps, 1.0 - eps)
+                i = np.arange(1, n + 1)
+                S = np.sum((2 * i - 1) * (np.log(F) + np.log(1.0 - F[::-1])))
+                A2 = -n - S / n
+                return float(A2)
+
+            def compute_loglik_aic_local(obs, dist_obj, params, floc_fixed=True):
+                if params is None:
+                    return (None, None, None, None)
+                obs = np.asarray(obs)
+                n = obs.size
+                if n == 0:
+                    return (None, None, None, None)
+                try:
+                    sh, loc, scale = params[0], params[1], params[2]
+                    pdf = dist_obj.pdf(obs, sh, loc=loc, scale=scale)
+                    pdf = np.clip(pdf, 1e-300, None)
+                    loglik = float(np.sum(np.log(pdf)))
+                    k = 2 if floc_fixed else 3
+                    aic = 2 * k - 2 * loglik
+                    if n - k - 1 > 0:
+                        aicc = aic + (2 * k * (k + 1)) / float(n - k - 1)
+                    else:
+                        aicc = aic
+                    bic = _math.log(n) * k - 2 * loglik
+                    return (loglik, aic, aicc, bic)
+                except Exception:
+                    return (None, None, None, None)
+
+            # Prepare a container for passing structured metrics to the template
+            fit_metrics = {}
             
             try:
                 month = [int(m) for m in parse_list(month_str)]
@@ -1287,7 +1330,7 @@ def fit_distributions():
             except Exception as e:
                 sys.stdout = old_stdout
                 flash(f"Error during fitting: {e}")
-                return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
+                return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename, other_filename=other_filename, fit_metrics=fit_metrics)
             finally:
                 captured_output = mystdout.getvalue()
                 sys.stdout = old_stdout
@@ -1328,6 +1371,66 @@ def fit_distributions():
                 report_text = f"Error generating detailed summary report: {e}"
             
             log_text = report_text
+
+            # Build structured fit metrics for display on the UI
+            try:
+                observations = np.asarray(fish.epri.FishPerMft3.values)
+            except Exception:
+                observations = np.array([])
+
+            # helper to safely read params
+            def _params_of(attr):
+                try:
+                    return getattr(fish, attr)
+                except Exception:
+                    return None
+
+            # Pareto
+            pareto_params = _params_of('dist_pareto')
+            pareto_loglik, pareto_aic, pareto_aicc, pareto_bic = compute_loglik_aic_local(observations, _pareto, pareto_params, floc_fixed=True)
+            try:
+                pareto_ad = anderson_darling_statistic_local(observations, lambda x: _pareto.cdf(x, pareto_params[0], loc=pareto_params[1], scale=pareto_params[2])) if pareto_params is not None else None
+            except Exception:
+                pareto_ad = None
+            fit_metrics['Pareto'] = {
+                'params': pareto_params,
+                'ks_p': getattr(fish, 'pareto_t', 'N/A'),
+                'loglik': pareto_loglik,
+                'aicc': pareto_aicc,
+                'ad': pareto_ad,
+            }
+
+            # Log Normal
+            lognorm_params = _params_of('dist_lognorm')
+            lognorm_loglik, lognorm_aic, lognorm_aicc, lognorm_bic = compute_loglik_aic_local(observations, _lognorm, lognorm_params, floc_fixed=True)
+            try:
+                lognorm_ad = anderson_darling_statistic_local(observations, lambda x: _lognorm.cdf(x, lognorm_params[0], loc=lognorm_params[1], scale=lognorm_params[2])) if lognorm_params is not None else None
+            except Exception:
+                lognorm_ad = None
+            fit_metrics['Log Normal'] = {
+                'params': lognorm_params,
+                'ks_p': getattr(fish, 'log_normal_t', 'N/A'),
+                'loglik': lognorm_loglik,
+                'aicc': lognorm_aicc,
+                'ad': lognorm_ad,
+            }
+
+            # Weibull
+            weibull_params = _params_of('dist_weibull')
+            weibull_loglik, weibull_aic, weibull_aicc, weibull_bic = compute_loglik_aic_local(observations, _weibull, weibull_params, floc_fixed=True)
+            try:
+                weibull_ad = anderson_darling_statistic_local(observations, lambda x: _weibull.cdf(x, weibull_params[0], loc=weibull_params[1], scale=weibull_params[2])) if weibull_params is not None else None
+            except Exception:
+                weibull_ad = None
+            fit_metrics['Weibull'] = {
+                'params': weibull_params,
+                'ks_p': getattr(fish, 'weibull_t', 'N/A'),
+                'loglik': weibull_loglik,
+                'aicc': weibull_aicc,
+                'ad': weibull_ad,
+            }
+
+            # Only Pareto, Log Normal, and Weibull are included here
             
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             log_filename_full = os.path.join(sim_folder, "fitting_results_log.txt")
@@ -1336,16 +1439,16 @@ def fit_distributions():
                 log_file.write(f"{timestamp} - Report: {report_text}\n")
                 log_file.write("--------------------------------------------------\n")
             
-            return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
+            return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename, other_filename=other_filename, fit_metrics=fit_metrics)
 
         except Exception as e:
             sys.stdout = old_stdout
             error_message = f"ERROR: {e}"
             print(error_message)
-            return render_template('fit_distributions.html', summary=error_message)
+            return render_template('fit_distributions.html', summary=error_message, plot_filename=plot_filename, other_filename=other_filename, fit_metrics=fit_metrics)
              
     else:
-        return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename)
+        return render_template('fit_distributions.html', summary=summary_text, log_text=log_text, plot_filename=plot_filename, other_filename=other_filename)
 
 @app.route('/plot/<filename>')
 def serve_plot(filename):
@@ -3167,51 +3270,51 @@ def population():
         },
         {
             "name": "Perca, Great Lakes, Met Winter",
-            "dist": "Pareto",
-            "shape": "0.3831",
+            "dist": "Log Normal",
+            "shape": "1.50",
             "location": "0",
-            "scale": "24.4615",
-            "max_ent_rate": "3.54",
-            "occur_prob": "0.4426",
-            "length shape": "0.1231",
-            "length location": "-14.7021",
-            "length scale": "24.4615"
+            "scale": "0.02",
+            "max_ent_rate": "1.0",
+            "occur_prob": "0.40",
+            "length shape": "0.50",
+            "length location": "-5.0",
+            "length scale": "10.0"
         },
         {
             "name": "Perca, Great Lakes, Met Spring",
             "dist": "Log Normal",
-            "shape": "2.8141",
+            "shape": "1.50",
             "location": "0",
-            "scale": "0.0871",
-            "max_ent_rate": "48.32",
-            "occur_prob": "0.8276",
-            "length shape": "0.2716",
-            "length location": "-9.5459",
-            "length scale": "16.8826"
+            "scale": "0.03",
+            "max_ent_rate": "1.5",
+            "occur_prob": "0.60",
+            "length shape": "0.50",
+            "length location": "-5.0",
+            "length scale": "10.0"
         },
         {
             "name": "Perca, Great Lakes, Met Summer",
             "dist": "Log Normal",
-            "shape": "3.2221",
+            "shape": "1.50",
             "location": "0",
-            "scale": "0.2197",
-            "max_ent_rate": "32.81",
-            "occur_prob": "0.7849",
-            "length shape": "0.537",
-            "length location": "-1.1236",
-            "length scale": "3.6604"
+            "scale": "0.04",
+            "max_ent_rate": "2.0",
+            "occur_prob": "0.80",
+            "length shape": "0.50",
+            "length location": "-5.0",
+            "length scale": "10.0"
         },
         {
             "name": "Perca, Great Lakes, Met Fall",
             "dist": "Log Normal",
-            "shape": "2.4307",
+            "shape": "1.50",
             "location": "0",
-            "scale": "0.1207",
-            "max_ent_rate": "34.7",
-            "occur_prob": "0.7957",
-            "length shape": "0.2627",
-            "length location": "-0.3852",
-            "length scale": "8.2808"
+            "scale": "0.03",
+            "max_ent_rate": "1.2",
+            "occur_prob": "0.70",
+            "length shape": "0.50",
+            "length location": "-5.0",
+            "length scale": "10.0"
         },
         {
             "name": "Pimephales, Great Lakes, Met Winter",
@@ -3445,6 +3548,16 @@ def population():
 
         # ...
     ]
+
+    # Normalize species names: strip leading/trailing whitespace so entries like
+    # " Esox" and " Etheostoma" won't include accidental spaces when matched.
+    for _s in species_defaults:
+        try:
+            if isinstance(_s.get('name'), str):
+                _s['name'] = _s['name'].strip()
+        except Exception:
+            # Be defensive: if an entry is malformed, skip it rather than crash
+            continue
 
     if request.method == 'POST':
         #print("starting population post route", flush=True)
@@ -4086,7 +4199,7 @@ def simulation_logs():
                     simulation_status = 'stalled'
             except Exception:
                 pass
-    
+
     return render_template("simulation_logs.html", 
                          run_id=run_id,
                          simulation_status=simulation_status,
@@ -5280,6 +5393,98 @@ def generate_report(sim):
             report_sections.append(combined_html)
         else:
             report_sections.append("<p>No daily data available.</p>")
+
+        # --- Annual summary: Mean annual entrainment & mortality with 95% CI ---
+        annual_summary_html = None
+        try:
+            # Prefer Yearly_Summary written by the simulation (single-row summary)
+            if yearly_df is not None and not yearly_df.empty:
+                row = yearly_df.iloc[0]
+                entr_mean = row.get('mean_yearly_entrainment', None)
+                entr_lcl = row.get('lcl_yearly_entrainment', None)
+                entr_ucl = row.get('ucl_yearly_entrainment', None)
+                mort_mean = row.get('mean_yearly_mortality', None)
+                mort_lcl = row.get('lcl_yearly_mortality', None)
+                mort_ucl = row.get('ucl_yearly_mortality', None)
+                if any(v is not None for v in (entr_mean, entr_lcl, entr_ucl, mort_mean, mort_lcl, mort_ucl)):
+                    def fmt(v):
+                        try:
+                            return f"{int(v):,}"
+                        except Exception:
+                            return 'N/A'
+                    annual_summary_html = f"<div style='display:flex; gap:20px; flex-wrap:wrap; margin:10px 0;'>"
+                    annual_summary_html += f"<div style='flex:1; min-width:220px; padding:10px; background:#f0f8ff; border-radius:6px;'><strong>Mean Annual Entrainment</strong><br/>{fmt(entr_mean)}<br/><small style='color:#666;'>95% CI: {fmt(entr_lcl)} – {fmt(entr_ucl)}</small></div>"
+                    annual_summary_html += f"<div style='flex:1; min-width:220px; padding:10px; background:#fff6f6; border-radius:6px;'><strong>Mean Annual Mortality</strong><br/>{fmt(mort_mean)}<br/><small style='color:#666;'>95% CI: {fmt(mort_lcl)} – {fmt(mort_ucl)}</small></div>"
+                    annual_summary_html += "</div>"
+            # Fallback: compute per-iteration sums from daily table if available
+            if annual_summary_html is None and daily_df is not None and not daily_df.empty:
+                if 'iteration' in daily_df.columns:
+                    try:
+                        by_iter = daily_df.groupby('iteration').agg({'num_entrained':'sum','num_mortality':'sum'})
+                        # compute mean and empirical 95% interval
+                        entr_vals = by_iter['num_entrained'].values
+                        mort_vals = by_iter['num_mortality'].values if 'num_mortality' in by_iter.columns else None
+                        def emp_stats(arr):
+                            a = np.array(arr, dtype=float)
+                            mean = np.nanmean(a)
+                            lcl = np.nanpercentile(a, 2.5) if a.size>0 else np.nan
+                            ucl = np.nanpercentile(a, 97.5) if a.size>0 else np.nan
+                            return mean, lcl, ucl
+                        em, el, eu = emp_stats(entr_vals)
+                        if mort_vals is not None:
+                            mm, ml, mu = emp_stats(mort_vals)
+                        else:
+                            mm = ml = mu = np.nan
+                        def fmt2(v):
+                            try:
+                                return f"{int(round(float(v))):,}"
+                            except Exception:
+                                return 'N/A'
+                        annual_summary_html = f"<div style='display:flex; gap:20px; flex-wrap:wrap; margin:10px 0;'>"
+                        annual_summary_html += f"<div style='flex:1; min-width:220px; padding:10px; background:#f0f8ff; border-radius:6px;'><strong>Mean Annual Entrainment</strong><br/>{fmt2(em)}<br/><small style='color:#666;'>95% CI: {fmt2(el)} – {fmt2(eu)}</small></div>"
+                        annual_summary_html += f"<div style='flex:1; min-width:220px; padding:10px; background:#fff6f6; border-radius:6px;'><strong>Mean Annual Mortality</strong><br/>{fmt2(mm)}<br/><small style='color:#666;'>95% CI: {fmt2(ml)} – {fmt2(mu)}</small></div>"
+                        annual_summary_html += "</div>"
+                    except Exception:
+                        annual_summary_html = None
+        except Exception:
+            annual_summary_html = None
+
+        if annual_summary_html:
+            # Insert minimal, unstyled annual summary lines per request
+            # Format: "Average Annual Entrapment: YYY (XXX - ZZZ)"
+            try:
+                # crude parsing of the html created above to extract numbers (we built it),
+                # but safer to reconstruct from available numeric variables if present.
+                # Prefer Yearly_Summary values
+                if yearly_df is not None and not yearly_df.empty:
+                    row = yearly_df.iloc[0]
+                    e_mean = row.get('mean_yearly_entrainment', None)
+                    e_lcl = row.get('lcl_yearly_entrainment', None)
+                    e_ucl = row.get('ucl_yearly_entrainment', None)
+                    m_mean = row.get('mean_yearly_mortality', None)
+                    m_lcl = row.get('lcl_yearly_mortality', None)
+                    m_ucl = row.get('ucl_yearly_mortality', None)
+                else:
+                    # fallback values used when we computed stats from iterations
+                    e_mean = em if 'em' in locals() else None
+                    e_lcl = el if 'el' in locals() else None
+                    e_ucl = eu if 'eu' in locals() else None
+                    m_mean = mm if 'mm' in locals() else None
+                    m_lcl = ml if 'ml' in locals() else None
+                    m_ucl = mu if 'mu' in locals() else None
+
+                def s(v):
+                    try:
+                        return f"{int(round(float(v))):,}"
+                    except Exception:
+                        return 'N/A'
+
+                report_sections.append("<h2>Annual Summary</h2>")
+                report_sections.append(f"<p>Average Annual Entrainment: {s(e_mean)} ({s(e_lcl)} - {s(e_ucl)})</p>")
+                report_sections.append(f"<p>Average Annual Mortality: {s(m_mean)} ({s(m_lcl)} - {s(m_ucl)})</p>")
+            except Exception:
+                # In case of unexpected errors, skip adding the block
+                pass
 
         # Time Series Plots - Daily Entrainment with Error Bars
         report_sections.append("<h2>Daily Average Entrainment Over Time</h2>")
