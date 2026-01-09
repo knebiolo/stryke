@@ -2216,6 +2216,11 @@ class simulation():
             op_order_dict[unit] = row['op_order']
             rack_spacing = self.facility_params.at[row['Facility'],'Rack Spacing']
             penstock_D = row['ps_D'] #self.unit_params.at[row['Facility'],'ps_D']
+            ada = float(row['ada'])
+            if ada > 1.0:
+                raise ValueError(
+                    f"Unit {unit} efficiency {ada:.3f} must be a fraction (0-1), not a percent."
+                )
 
             if np.isnan(penstock_D):
                 barotrauma = False
@@ -2231,7 +2236,7 @@ class simulation():
                 param_dict = {'H': float(row['H']),
                               'RPM': float(row['RPM']),
                               'D': float(row['D']),
-                              'ada': float(row['ada']),
+                              'ada': ada,
                               'N': float(row['N']),
                               'Qopt': float(row['Qopt']),
                               'Qper': float(row['Qopt'] / row['Qcap']),
@@ -2243,7 +2248,7 @@ class simulation():
                 param_dict = {'H': float(row['H']),
                               'RPM': float(row['RPM']),
                               'D': float(row['D']),
-                              'ada': float(row['ada']),
+                              'ada': ada,
                               'N': float(row['N']),
                               'Qopt': float(row['Qopt']),
                               'Qper': float(row['Qopt'] / row['Qcap']),
@@ -2255,7 +2260,7 @@ class simulation():
                 param_dict = {'H': float(row['H']),
                               'RPM': float(row['RPM']),
                               'D': float(row['D']),
-                              'ada': float(row['ada']),
+                              'ada': ada,
                               'N': float(row['N']),
                               'Qper': float(row['Qopt'] / row['Qcap']),
                               'iota': float(row['iota']),
@@ -2992,24 +2997,17 @@ class simulation():
                         if 'num_mortalities' not in df.columns:
                             df['num_mortalities'] = df['num_entrained'] - df['num_survived']
                         
-                        # Calculate probability of entrainment: per-iteration average
-                        # FIXED: Use initial population (first day) as denominator, not sum of daily entrainments
+                        # Calculate probability of entrainment: per-iteration proportion
+                        # Use total entrained divided by total fish simulated in each iteration.
                         iteration_probs = []
-                        for iter_num in df['iteration'].unique():
-                            iter_data = df[df['iteration'] == iter_num]
-                            # Get initial population size (first day of the iteration)
-                            iter_pop = iter_data.iloc[0]['pop_size'] if len(iter_data) > 0 else 0
-                            
-                            if iter_pop > 0:
-                                # Calculate daily entrainment rates and average them
-                                # This gives the mean probability that a fish present on any given day is entrained
-                                daily_probs = iter_data['num_entrained'] / iter_data['pop_size'].replace(0, np.nan)
-                                daily_probs = daily_probs.fillna(0)  # Handle division by zero
-                                mean_daily_prob = daily_probs.mean()
-                                iteration_probs.append(mean_daily_prob)
+                        for iter_num, iter_data in df.groupby('iteration'):
+                            total_pop = float(iter_data['pop_size'].sum())
+                            total_entr = float(iter_data['num_entrained'].sum())
+                            if total_pop > 0:
+                                iteration_probs.append(total_entr / total_pop)
                             else:
                                 iteration_probs.append(0.0)
-                        prob_entr = np.mean(iteration_probs) if len(iteration_probs) > 0 else 0.0
+                        prob_entr = float(np.mean(iteration_probs)) if iteration_probs else 0.0
                         
                         # Assuming bootstrap_mean_ci and summarize_ci are available
                         entrained_mean, entrained_lower, entrained_upper = bootstrap_mean_ci(df['num_entrained'])
@@ -3545,6 +3543,96 @@ class epri():
             # existing code
             print("Finished WeibullMinFit.", flush=True)
             
+        def GammaFit(self):
+            """
+            Fits a Gamma distribution to the filtered EPRI dataset to model entrainment
+            rates. Stores fitted parameters on the object as self.dist_gamma.
+            """
+            print("Starting GammaFit...", flush=True)
+            from scipy.stats import gamma
+            try:
+                data = np.asarray(self.epri.FishPerMft3.values)
+                self.dist_gamma = None
+                self.dist_gamma_free = None
+                self.dist_gamma_choice = None
+                # Only fit if data present
+                if data.size > 0:
+                    # fixed-loc fit
+                    try:
+                        self.dist_gamma = gamma.fit(data, floc=0)
+                    except Exception:
+                        self.dist_gamma = None
+                    # free-loc fit
+                    try:
+                        self.dist_gamma_free = gamma.fit(data)
+                    except Exception:
+                        self.dist_gamma_free = None
+
+                    if self.dist_gamma is not None:
+                        print("Gamma fixed-loc params (k, loc, scale):", round(self.dist_gamma[0],4), round(self.dist_gamma[1],4), round(self.dist_gamma[2],4))
+                    if self.dist_gamma_free is not None:
+                        print("Gamma free-loc params (k, loc, scale):", round(self.dist_gamma_free[0],4), round(self.dist_gamma_free[1],4), round(self.dist_gamma_free[2],4))
+
+                else:
+                    print("GammaFit: no data to fit", flush=True)
+            except Exception as e:
+                print(f"GammaFit failed: {e}", flush=True)
+                self.dist_gamma = None
+                self.dist_gamma_free = None
+
+            # Compute simple model selection stats for gamma fits and pick a preferred variant
+            try:
+                def _compute_stats(params, arr, floc_fixed=True):
+                    if params is None or arr.size == 0:
+                        return (None, None, None, None, None)
+                    try:
+                        sh, loc, sc = params[0], params[1], params[2]
+                        pdf = gamma.pdf(arr, sh, loc=loc, scale=sc)
+                        pdf = np.clip(pdf, 1e-300, None)
+                        loglik = float(np.sum(np.log(pdf)))
+                        k = 2 if floc_fixed else 3
+                        aic = 2 * k - 2 * loglik
+                        n = arr.size
+                        if n - k - 1 > 0:
+                            aicc = aic + (2 * k * (k + 1)) / float(n - k - 1)
+                        else:
+                            aicc = aic
+                        bic = math.log(n) * k - 2 * loglik
+                        # AD stat
+                        x = np.sort(arr)
+                        n = x.size
+                        eps = 1e-12
+                        F = np.clip(gamma.cdf(x, sh, loc=loc, scale=sc), eps, 1.0 - eps)
+                        i = np.arange(1, n + 1)
+                        S = np.sum((2 * i - 1) * (np.log(F) + np.log(1.0 - F[::-1])))
+                        A2 = -n - S / n
+                        return (loglik, aic, aicc, bic, float(A2))
+                    except Exception:
+                        return (None, None, None, None, None)
+
+                arr = np.asarray(self.epri.FishPerMft3.values)
+                self.gamma_fixed_stats = _compute_stats(self.dist_gamma, arr, floc_fixed=True)
+                self.gamma_free_stats = _compute_stats(self.dist_gamma_free, arr, floc_fixed=False)
+
+                # Choose which to prefer: free only if AICc improves by >=2
+                self.gamma_choice = 'fixed'
+                if self.gamma_free_stats[2] is not None and self.gamma_fixed_stats[2] is not None:
+                    if self.gamma_free_stats[2] + 2.0 <= self.gamma_fixed_stats[2]:
+                        self.gamma_choice = 'free'
+                elif self.gamma_free_stats[2] is not None and self.gamma_fixed_stats[2] is None:
+                    self.gamma_choice = 'free'
+
+                if self.gamma_choice == 'free':
+                    self.dist_gamma_choice = self.dist_gamma_free
+                else:
+                    self.dist_gamma_choice = self.dist_gamma
+            except Exception:
+                self.gamma_fixed_stats = (None, None, None, None, None)
+                self.gamma_free_stats = (None, None, None, None, None)
+                self.gamma_choice = 'fixed'
+                self.dist_gamma_choice = self.dist_gamma
+
+            print("Finished GammaFit.", flush=True)
         def LogNormalFit(self):
             """
             Fits a Log Normal distribution to the filtered EPRI dataset to model entrainment
@@ -3780,6 +3868,28 @@ class epri():
                                                  scale=self.dist_weibull[2], size=1000)
             else:
                 weibull_sample = np.array([])
+
+            # GEV / Extreme sample (if available)
+            try:
+                from scipy.stats import genextreme
+                if hasattr(self, 'dist_extreme') and self.dist_extreme is not None:
+                    extreme_sample = genextreme.rvs(self.dist_extreme[0], loc=self.dist_extreme[1],
+                                                     scale=self.dist_extreme[2], size=1000)
+                else:
+                    extreme_sample = np.array([])
+            except Exception:
+                extreme_sample = np.array([])
+
+            # Gamma sample (if available)
+            try:
+                from scipy.stats import gamma
+                if hasattr(self, 'dist_gamma') and self.dist_gamma is not None:
+                    gamma_sample = gamma.rvs(self.dist_gamma[0], loc=self.dist_gamma[1],
+                                              scale=self.dist_gamma[2], size=1000)
+                else:
+                    gamma_sample = np.array([])
+            except Exception:
+                gamma_sample = np.array([])
         
             # Get the observed entrainment data.
             observations = self.epri.FishPerMft3.values
@@ -3791,36 +3901,89 @@ class epri():
             self.pareto_t = round(t1[1], 4)
             self.log_normal_t = round(t2[1], 4)
             self.weibull_t = round(t3[1], 4)
+            # Gamma KS test
+            try:
+                t4 = ks_2samp(observations, gamma_sample, alternative='two-sided')
+                self.gamma_t = round(t4[1], 4)
+            except Exception:
+                self.gamma_t = "N/A"
+            # Extreme (GEV) KS test
+            try:
+                t5 = ks_2samp(observations, extreme_sample, alternative='two-sided')
+                self.extreme_t = round(t5[1], 4)
+            except Exception:
+                self.extreme_t = "N/A"
         
-            # Set matplotlib style parameters.
-            plt.rcParams['font.size'] = 6
+            # Set matplotlib style parameters and create a 2x3 grid for plots.
+            plt.rcParams['font.size'] = 8
             plt.rcParams['font.family'] = 'serif'
-            figSize = (4, 4)
-            
-            # Create a 2x2 subplot figure.
-            fig, axs = plt.subplots(2, 2, tight_layout=True, figsize=figSize)
-            
-            # Plot the histogram of the log-transformed observed data.
-            axs[0, 0].hist(np.log(observations), color='darkorange', density=True)
-            axs[0, 0].set_title('Observations')
-            axs[0, 0].set_xlabel('org per Mft3')
-            
-            # Plot the histogram for the Pareto simulated sample.
-            axs[0, 1].hist(np.log(pareto_sample), color='blue', lw=2, density=True)
-            axs[0, 1].set_title('Pareto p = %s' % (self.pareto_t))
-            axs[0, 1].set_xlabel('org per Mft3')
-            
-            # Plot the histogram for the Log Normal simulated sample.
-            axs[1, 0].hist(np.log(lognorm_sample), color='blue', lw=2, density=True)
-            axs[1, 0].set_title('Log Normal p = %s' % (self.log_normal_t))
-            axs[1, 0].set_xlabel('org per Mft3')
-            
-            # Plot the histogram for the Weibull simulated sample.
-            axs[1, 1].hist(np.log(weibull_sample), color='darkorange', lw=2, density=True)
-            axs[1, 1].set_title('Weibull p = %s' % (self.weibull_t))
-            axs[1, 1].set_xlabel('org per Mft3')
-            
-            
+            figSize = (10, 6)
+
+            # Create a 2x3 subplot figure: rows x cols = 2 x 3
+            fig, axs = plt.subplots(2, 3, tight_layout=True, figsize=figSize)
+            axs = np.asarray(axs)
+
+            # Map axes to slots for clarity
+            ax_obs = axs[0, 0]
+            ax_pareto = axs[0, 1]
+            ax_lognorm = axs[0, 2]
+            ax_weibull = axs[1, 0]
+            ax_gamma = axs[1, 1]
+            ax_extreme = axs[1, 2]
+
+            # Plot the histogram of the observed data (already log-transformed upstream).
+            if observations.size > 0:
+                # observations are already log-transformed before fits; plot directly
+                ax_obs.hist(observations, color='darkorange', density=True, bins=30)
+            else:
+                ax_obs.text(0.5, 0.5, 'No observations', ha='center', va='center')
+            ax_obs.set_title('Observations')
+            ax_obs.set_xlabel('org per Mft3')
+
+            # Pareto
+            if pareto_sample.size > 0:
+                ax_pareto.hist(np.log(pareto_sample), color='blue', lw=1, density=True, bins=30)
+            else:
+                ax_pareto.text(0.5, 0.5, 'No Pareto fit', ha='center', va='center')
+            ax_pareto.set_title(f'Pareto p = {self.pareto_t}')
+            ax_pareto.set_xlabel('org per Mft3')
+
+            # Log Normal
+            if lognorm_sample.size > 0:
+                ax_lognorm.hist(np.log(lognorm_sample), color='blue', lw=1, density=True, bins=30)
+            else:
+                ax_lognorm.text(0.5, 0.5, 'No LogNormal fit', ha='center', va='center')
+            ax_lognorm.set_title(f'Log Normal p = {self.log_normal_t}')
+            ax_lognorm.set_xlabel('org per Mft3')
+
+            # Weibull
+            if weibull_sample.size > 0:
+                # weibull sample is in original scale; take log to match observed-data axis
+                ax_weibull.hist(np.log(weibull_sample), color='darkorange', lw=1, density=True, bins=30)
+            else:
+                ax_weibull.text(0.5, 0.5, 'No Weibull fit', ha='center', va='center')
+            ax_weibull.set_title(f'Weibull p = {self.weibull_t}')
+            ax_weibull.set_xlabel('org per Mft3')
+
+            # Gamma
+            if 'gamma_sample' in locals() and gamma_sample.size > 0:
+                ax_gamma.hist(np.log(gamma_sample), color='green', lw=1, density=True, bins=30)
+            else:
+                ax_gamma.text(0.5, 0.5, 'No Gamma fit', ha='center', va='center')
+            ax_gamma.set_title(f'Gamma p = {getattr(self, "gamma_t", "N/A")}')
+            ax_gamma.set_xlabel('org per Mft3')
+
+            # Extreme
+            if 'extreme_sample' in locals() and extreme_sample.size > 0:
+                ax_extreme.hist(np.log(extreme_sample), color='purple', lw=1, density=True, bins=30)
+            else:
+                ax_extreme.text(0.5, 0.5, 'No Extreme fit', ha='center', va='center')
+            ax_extreme.set_title(f'Extreme p = {getattr(self, "extreme_t", "N/A")}')
+            ax_extreme.set_xlabel('org per Mft3')
+
+            # Removed rotated summary text to avoid layout issues in PDF pages.
+            # Keep plot titles concise; detailed stats are available in summary_output().
+
             return fig
             #plt.show()
             
@@ -3879,6 +4042,15 @@ class epri():
                 weibull_ks = getattr(self, 'weibull_t', "N/A")
             else:
                 weibull_shape = weibull_loc = weibull_scale = weibull_ks = "N/A"
+
+            # For Gamma:
+            if hasattr(self, 'dist_gamma') and self.dist_gamma is not None:
+                gamma_shape = round(self.dist_gamma[0], 4)
+                gamma_loc = round(self.dist_gamma[1], 4)
+                gamma_scale = round(self.dist_gamma[2], 4)
+                gamma_ks = getattr(self, 'gamma_t', "N/A")
+            else:
+                gamma_shape = gamma_loc = gamma_scale = gamma_ks = "N/A"
             
             # Build the report lines.
             lines = []
@@ -3919,6 +4091,34 @@ class epri():
             lines.append(f"   Location: {weibull_loc}")
             lines.append(f"   Scale: {weibull_scale}")
             lines.append(f"   KS p-value: {weibull_ks}")
+            lines.append("")
+            lines.append("Gamma Distribution:")
+            lines.append(f"   Shape: {gamma_shape}")
+            lines.append(f"   Location: {gamma_loc}")
+            lines.append(f"   Scale: {gamma_scale}")
+            lines.append(f"   KS p-value: {gamma_ks}")
+            # Include Gamma fit statistics (fixed vs free) if available
+            try:
+                g_fixed = getattr(self, 'gamma_fixed_stats', None)
+                g_free = getattr(self, 'gamma_free_stats', None)
+                g_choice = getattr(self, 'gamma_choice', None)
+                if g_fixed is not None:
+                    gf_loglik, gf_aic, gf_aicc, gf_bic, gf_ad = g_fixed
+                    lines.append("   Gamma (fixed-loc) stats:")
+                    lines.append(f"      LogLik: {gf_loglik}")
+                    lines.append(f"      AICc: {gf_aicc}")
+                    lines.append(f"      AD stat: {gf_ad}")
+                if g_free is not None:
+                    gr_loglik, gr_aic, gr_aicc, gr_bic, gr_ad = g_free
+                    lines.append("   Gamma (free-loc) stats:")
+                    lines.append(f"      LogLik: {gr_loglik}")
+                    lines.append(f"      AICc: {gr_aicc}")
+                    lines.append(f"      AD stat: {gr_ad}")
+                if g_choice is not None:
+                    lines.append(f"   Preferred Gamma variant: {g_choice}")
+            except Exception:
+                # best effort - do not fail report generation
+                pass
             lines.append("--------------------------------------------------")
             
             final_report = "\n".join(lines)

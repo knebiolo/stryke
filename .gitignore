@@ -126,6 +126,7 @@ Output/
 UI/
 Spreadsheet Interface/Old/
 Background/
+.ai_journal/
 
 # Project-specific temporary files
 temp/

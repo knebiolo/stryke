@@ -146,6 +146,33 @@
       <h2>Fitting Results</h2>
       <a href="{{ url_for('download_report_zip') }}" class="btn btn-primary">Download Results</a>
       <p>{{ summary }}</p>
+      {% if fit_metrics %}
+      <h3>Fit Metrics</h3>
+      <table style="width:100%; border-collapse: collapse;">
+        <thead>
+          <tr>
+            <th style="border-bottom:1px solid #ccc; text-align:left; padding:6px">Distribution</th>
+            <th style="border-bottom:1px solid #ccc; text-align:left; padding:6px">Params (shape, loc, scale)</th>
+            <th style="border-bottom:1px solid #ccc; text-align:left; padding:6px">AICc</th>
+            <th style="border-bottom:1px solid #ccc; text-align:left; padding:6px">AD</th>
+            <th style="border-bottom:1px solid #ccc; text-align:left; padding:6px">KS p</th>
+            <th style="border-bottom:1px solid #ccc; text-align:left; padding:6px">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dname, info in fit_metrics.items() %}
+          <tr>
+            <td style="padding:6px">{{ dname }}</td>
+            <td style="padding:6px">{% if info.params %}({{ info.params[0]|round(4) }}, {{ info.params[1]|round(4) }}, {{ info.params[2]|round(4) }}){% else %}N/A{% endif %}</td>
+            <td style="padding:6px">{% if info.aicc is defined and info.aicc is not none %}{{ info.aicc|round(3) }}{% else %}N/A{% endif %}</td>
+            <td style="padding:6px">{% if info.ad is defined and info.ad is not none %}{{ info.ad|round(4) }}{% elif info.ad_fixed is defined %}Fixed: {{ info.ad_fixed }} Free: {{ info.ad_free }}{% else %}N/A{% endif %}</td>
+            <td style="padding:6px">{{ info.ks_p }}</td>
+            <td style="padding:6px">{% if info.choice is defined %}{{ info.choice }}{% else %}&nbsp;{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
       <h3>Generated Plot:</h3>
       <img src="{{ url_for('serve_plot', filename=plot_filename) }}" alt="Fitting Results">
       <img src="{{ url_for('serve_plot', filename=other_filename) }}" alt="Simulated Lengths">

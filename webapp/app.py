@@ -4069,6 +4069,7 @@ def run_simulation():
     # Store run info in session
     session['last_run_id'] = run_id
     session['output_name'] = output_name
+    session['last_run_started_at'] = time.time()
     
     # Prepare data dictionary
     log = logging.getLogger(__name__)
@@ -4163,11 +4164,22 @@ def simulation_logs():
     simulation_status = 'running'  # Default
     report_path = None
     
+    run_started_at = session.get('last_run_started_at')
+
+    def is_fresh(path):
+        if not run_started_at:
+            return True
+        try:
+            return os.path.getmtime(path) >= run_started_at
+        except Exception:
+            return False
+
     if proj_dir and os.path.exists(proj_dir):
         # Check for simulation completion markers
         marker_file = os.path.join(proj_dir, 'report_path.txt')
         report_html = os.path.join(proj_dir, 'simulation_report.html')
-        output_h5 = os.path.join(proj_dir, 'Simulation_Output.h5')
+        output_name = session.get('output_name', 'simulation_output')
+        output_h5 = os.path.join(proj_dir, f"{output_name}.h5")
         debug_log = os.path.join(proj_dir, 'simulation_debug.log')
         
         if os.path.exists(marker_file):
@@ -4175,15 +4187,17 @@ def simulation_logs():
             try:
                 with open(marker_file, 'r') as f:
                     report_path = f.read().strip()
-                    if os.path.exists(report_path):
+                    if os.path.exists(report_path) and is_fresh(report_path):
                         simulation_status = 'completed'
+                    else:
+                        report_path = None
             except Exception:
                 pass
-        elif os.path.exists(report_html):
+        elif os.path.exists(report_html) and is_fresh(report_html):
             # Found report directly
             report_path = report_html
             simulation_status = 'completed'
-        elif os.path.exists(output_h5):
+        elif os.path.exists(output_h5) and is_fresh(output_h5):
             # Found H5 output (simulation completed but report might be missing)
             simulation_status = 'completed'
             report_path = None  # No HTML report, but sim finished
@@ -4194,7 +4208,9 @@ def simulation_logs():
             try:
                 import time
                 mtime = os.path.getmtime(debug_log)
-                if time.time() - mtime > 60:
+                if run_started_at and mtime < run_started_at:
+                    pass
+                elif time.time() - mtime > 60:
                     # Log hasn't been updated in 60 seconds - might be stalled
                     simulation_status = 'stalled'
             except Exception:
