@@ -417,13 +417,23 @@ def logout():
     user_upload_dir = session.get('user_upload_dir')
     user_sim_folder = session.get('user_sim_folder')
 
-    if user_upload_dir and os.path.exists(user_upload_dir):
-        clear_folder(user_upload_dir)
-        os.rmdir(user_upload_dir)
+    def _safe_rmtree(base_dir, target_dir):
+        if not target_dir:
+            return
+        base_abs = os.path.abspath(base_dir)
+        target_abs = os.path.abspath(target_dir)
+        if not target_abs.startswith(base_abs + os.sep):
+            raise PermissionError(f"Refusing to delete outside {base_abs}")
+        if os.path.exists(target_abs):
+            shutil.rmtree(target_abs, ignore_errors=False)
 
-    if user_sim_folder and os.path.exists(user_sim_folder):
-        clear_folder(user_sim_folder)
-        os.rmdir(user_sim_folder)
+    try:
+        if user_upload_dir:
+            _safe_rmtree(app.config['UPLOAD_FOLDER'], user_upload_dir)
+        if user_sim_folder:
+            _safe_rmtree(SIM_PROJECT_FOLDER, user_sim_folder)
+    except Exception as e:
+        app.logger.warning("Logout cleanup failed: %s", e)
 
     session.clear()
     flash("Logged out successfully.")
