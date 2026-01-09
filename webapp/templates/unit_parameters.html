@@ -119,6 +119,7 @@
       Once you finish entering these parameters, click “Save Unit Parameters” to move on to the next step.
     </p>
     <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {% if session.facilities_data is defined and session.facility_units is defined %}
         {% for facility in session.facilities_data %}
           {% set outer_index = loop.index0 %}
@@ -489,6 +490,7 @@
         <p style="font-size: 14px; margin: 8px 0;">Save your entire project to continue later:</p>
         
         <form method="post" action="{{ url_for('save_project') }}" style="margin: 10px 0;" class="no-validate">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="btn-small" style="background: #ffc107; color: #000; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">💾 Save Project</button>
         </form>
         

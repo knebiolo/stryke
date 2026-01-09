@@ -114,6 +114,7 @@
         </p>
 
         <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="project_name">Project Name:</label>
             <input type="text" name="project_name" id="project_name" maxlength="50" value="{{ project_name or '' }}" required>
 
@@ -151,11 +152,13 @@
             <div class="btn-group">
                 <!-- Save Project -->
                 <form method="post" action="{{ url_for('save_project') }}" style="display: inline-block; margin: 0;" class="no-validate">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn-small">💾 Save Project</button>
                 </form>
                 
                 <!-- Load Project -->
                 <form method="post" action="{{ url_for('load_project') }}" enctype="multipart/form-data" style="display: inline-block; margin: 0;" class="no-validate">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <label for="project_file_create" class="btn-small btn-load" style="cursor: pointer; margin: 0;">
                         📂 Load Project
                         <input type="file" id="project_file_create" name="project_file" accept=".stryke" 

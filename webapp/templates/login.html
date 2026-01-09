@@ -66,6 +66,7 @@
             <p class="error">{{ error }}</p>
         {% endif %}
         <form method="POST" action="{{ url_for('login') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="password">Password:</label>
             <input type="password" name="password" id="password" required>
             <button type="submit">Login</button>

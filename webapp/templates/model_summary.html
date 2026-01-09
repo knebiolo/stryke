@@ -322,6 +322,7 @@
       <h3 style="margin-top: 0; color: #0056b3;">💾 Save Your Project</h3>
       <p style="margin: 10px 0;">Before running the simulation, save your project to preserve your work:</p>
       <form method="post" action="{{ url_for('save_project') }}" style="display: inline-block;" class="no-validate">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn-save-project">💾 Save Project Now</button>
       </form>
       <p style="font-size: 13px; color: #666; margin-top: 8px;">
@@ -331,6 +332,7 @@
     
     <!-- Big Red Run Simulation Button -->
     <form method="post" action="{{ url_for('run_simulation') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button type="submit" class="big-red-button">Run Simulation</button>
     </form>
     

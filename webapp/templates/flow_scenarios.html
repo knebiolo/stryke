@@ -110,6 +110,7 @@
             “Save Scenario” to move on.
         </p>
         <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="scenario_type">Scenario Type:</label>
             <select name="scenario_type" id="scenario_type" onchange="toggleFields()">
                 <option value="static" {% if scenario_type != 'hydrograph' %}selected{% endif %}>Static</option>

@@ -101,6 +101,7 @@
     
     <!-- Simulation Upload Form -->
     <form method="post" action="{{ url_for('upload_simulation') }}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="form-group">
         <label for="excel_file">Select Simulation Spreadsheet:</label>
         <input type="file" name="excel_file" accept=".xlsx,.xls" required>

@@ -225,6 +225,7 @@
         these population details in your final results.
     </p>
     <form method="post" action="{{ url_for('population') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <!-- Row for Species Name and Common Name -->
       <div class="flex-row">
         <div>

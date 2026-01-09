@@ -90,6 +90,7 @@
   <div class="container">
     <h1>Fit Distributions</h1>
     <form method="post" action="{{ url_for('fit_distributions') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="form-group">
         <label for="states">States:</label>
         <input type="text" name="states" placeholder="e.g., WI, MN" value="{{ request.form.states or '' }}">

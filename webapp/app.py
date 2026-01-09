@@ -35,10 +35,12 @@ import json
 import traceback
 import logging
 import logging.handlers
+import secrets
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
 import tables
 import filelock
-from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.exceptions import HTTPException, NotFound, RequestEntityTooLarge
+from werkzeug.utils import secure_filename
 
 DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostic prints
 
@@ -49,9 +51,10 @@ os.environ["PYPROJ_GLOBAL_CONTEXT"] = "ON"
 
 try:
     import pyproj
-except ImportError:
-    subprocess.run(["pip", "install", "--no-cache-dir", "pyproj"])
-    import pyproj
+except ImportError as exc:
+    raise ImportError(
+        "pyproj is required but not installed. Install it in the environment before running the webapp."
+    ) from exc
     
 # Explicitly add the parent directory of Stryke to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
@@ -219,6 +222,32 @@ if not app.config['PASSWORD']:
     app.logger.warning("APP_PASSWORD not set; using insecure dev password — set it in your environment!")
     app.config['PASSWORD'] = 'expensive5rudabega!@1'  # dev fallback only
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+
+MAX_UPLOAD_MB = _env_int("MAX_UPLOAD_MB", 200)
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
+app.config["SESSION_COOKIE_SECURE"] = _env_flag("SESSION_COOKIE_SECURE", False)
+app.config["DEBUG_ROUTES_ENABLED"] = _env_flag("ENABLE_DEBUG_ROUTES", False)
+
+ALLOWED_EXCEL_EXTENSIONS = {".xls", ".xlsx", ".xlsm"}
+ALLOWED_JSON_EXTENSIONS = {".json"}
+ALLOWED_STRYKE_EXTENSIONS = {".stryke"}
+
 # Set session lifetime to 1 day (adjust as needed)
 app.permanent_session_lifetime = timedelta(days=1)
 
@@ -274,6 +303,11 @@ def _validate_and_normalize_inputs(data):
 
     return norm, missing, bad
 
+def _validate_extension(filename: str, allowed: set) -> None:
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in allowed:
+        raise ValueError(f"Invalid file type: {ext}")
+
 @app.errorhandler(NotFound)
 def handle_404(e):
     # Simple 404, no scary traceback
@@ -298,6 +332,28 @@ def handle_exception(e):
 
     # Minimal safe response
     return "Internal Server Error", 500
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(e):
+    return f"Upload too large. Max upload size is {MAX_UPLOAD_MB} MB.", 413
+
+def _get_csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": _get_csrf_token()}
+
+@app.before_request
+def csrf_protect():
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        token = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+        if not token or token != session.get("csrf_token"):
+            return "Invalid CSRF token", 400
 
 @app.before_request
 def attach_session_paths_to_g():
@@ -336,12 +392,23 @@ def require_login_and_setup():
 def login():
     error = None
     if request.method == 'POST':
+        max_attempts = _env_int("MAX_LOGIN_ATTEMPTS", 5)
+        window_seconds = _env_int("LOGIN_WINDOW_SECONDS", 600)
+        attempts = session.get("login_attempts", {"count": 0, "first_ts": time.time()})
+        if time.time() - attempts.get("first_ts", 0) > window_seconds:
+            attempts = {"count": 0, "first_ts": time.time()}
+        if attempts.get("count", 0) >= max_attempts:
+            return "Too many login attempts. Try again later.", 429
+
         if request.form.get('password') == app.config['PASSWORD']:
             session['logged_in'] = True
             session['user_dir'] = uuid.uuid4().hex  # Unique directory per session
+            session.pop("login_attempts", None)
             flash("Logged in successfully!")
             return redirect(url_for('index'))
         else:
+            attempts["count"] = attempts.get("count", 0) + 1
+            session["login_attempts"] = attempts
             error = 'Invalid password. Please try again.'
     return render_template('login.html', error=error)
 
@@ -527,6 +594,16 @@ def upload_simulation():
         if not file or file.filename.strip() == '':
             flash('No file selected')
             return render_template('upload_simulation.html')
+
+        safe_name = secure_filename(file.filename)
+        if not safe_name:
+            flash('Invalid file name')
+            return render_template('upload_simulation.html')
+        try:
+            _validate_extension(safe_name, ALLOWED_EXCEL_EXTENSIONS)
+        except ValueError:
+            flash('Invalid file type. Please upload an Excel file (.xls, .xlsx, .xlsm).')
+            return render_template('upload_simulation.html')
     
         user_upload_dir = session.get('user_upload_dir')
         user_sim_folder = session.get('user_sim_folder')
@@ -538,9 +615,9 @@ def upload_simulation():
         os.makedirs(user_sim_folder, exist_ok=True)
     
         # Save the raw upload into the user's upload inbox
-        up_file_path = os.path.join(user_upload_dir, file.filename)
+        up_file_path = os.path.join(user_upload_dir, safe_name)
         file.save(up_file_path)
-        flash(f'File successfully uploaded: {file.filename}')
+        flash(f'File successfully uploaded: {safe_name}')
     
         # --- Create a unique run sandbox under this user's sim folder ---
         run_id = uuid.uuid4().hex
@@ -548,12 +625,12 @@ def upload_simulation():
         os.makedirs(run_dir, exist_ok=True)
     
         # Copy the uploaded Excel into the run sandbox
-        simulation_file_path = os.path.join(run_dir, file.filename)
+        simulation_file_path = os.path.join(run_dir, safe_name)
         shutil.copy(up_file_path, simulation_file_path)
     
         # Point Stryke at the run sandbox
         ws = run_dir # per-run directory (prevents collisions)
-        wks = file.filename
+        wks = safe_name
         output_name = 'Simulation_Output'
     
         # So /report and other views know where to look for THIS run
@@ -1144,7 +1221,51 @@ def load_project():
         # Restore population
         if project_data.get('population'):
             df = pd.DataFrame(project_data['population'])
-            df.to_csv(os.path.join(sim_folder, 'population.csv'), index=False)
+            pop_csv_path = os.path.join(sim_folder, 'population.csv')
+            df.to_csv(pop_csv_path, index=False)
+            session['population_csv_path'] = pop_csv_path
+
+            # Ensure required columns exist for simulation
+            expected_columns = [
+                "Species", "Common Name", "Scenario", "Iterations", "Fish",
+                "Simulate Choice", "Entrainment Choice", "Modeled Species",
+                "vertical_habitat", "beta_0", "beta_1", "fish_type",
+                "dist", "shape", "location", "scale",
+                "max_ent_rate", "occur_prob",
+                "Length_mean", "Length_sd", "U_crit",
+                "length shape", "length location", "length scale"
+            ]
+            for col in expected_columns:
+                if col not in df.columns:
+                    df[col] = None
+            df = df[expected_columns]
+
+            df_clean = df.where(pd.notnull(df), None)
+            session['population_data_for_sim'] = df_clean.to_dict(orient='records')
+
+            summary_column_mapping = {
+                "Species": "Species Name",
+                "Common Name": "Common Name",
+                "Scenario": "Scenario",
+                "Iterations": "Iterations",
+                "Fish": "Fish",
+                "vertical_habitat": "Vertical Habitat",
+                "beta_0": "Beta 0",
+                "beta_1": "Beta 1",
+                "shape": "Empirical Shape",
+                "location": "Empirical Location",
+                "scale": "Empirical Scale",
+                "max_ent_rate": "Max Entr Rate",
+                "occur_prob": "Occur Prob",
+                "Length_mean": "Length Mean (in)",
+                "Length_sd": "Length SD (in)",
+                "U_crit": "Ucrit (ft/s)",
+                "length shape": "Length Shape",
+                "length location": "Length Location",
+                "length scale": "Length Scale"
+            }
+            df_summary = df.rename(columns=summary_column_mapping)
+            session['population_dataframe_for_summary'] = df_summary.to_json(orient='records')
         
         # Restore operating scenarios
         if project_data.get('operating_scenarios'):
@@ -1454,11 +1575,15 @@ def fit_distributions():
 def serve_plot(filename):
     # Use the session-specific simulation folder if available.
     sim_folder = g.get("user_sim_folder", SIM_PROJECT_FOLDER)
-    file_path = os.path.join(sim_folder, filename)
+    if not filename.lower().endswith(".png"):
+        return "Invalid file type", 400
+    try:
+        file_path = _safe_path(sim_folder, filename)
+    except PermissionError:
+        return "Not allowed", 403
     if os.path.exists(file_path):
         return send_file(file_path, mimetype='image/png')
-    else:
-        return "Plot not found", 404
+    return "Plot not found", 404
 
     
 @app.route("/plot_lengths")
@@ -4259,6 +4384,8 @@ def get_simulation_instance():
 @app.route('/debug_report_path')
 def debug_report_path():
     import os
+    if not app.config.get("DEBUG_ROUTES_ENABLED"):
+        return "Not Found", 404
     try:
         proj_dir = session.get('proj_dir')
         path_file = os.path.join(proj_dir, "report_path.txt")
@@ -5627,6 +5754,8 @@ def download_zip_alias():
 # Quick route map to spot mismatches (remove in prod)
 @app.get('/_debug_routes')
 def _debug_routes():
+    if not app.config.get("DEBUG_ROUTES_ENABLED"):
+        return "Not Found", 404
     lines = []
     for rule in app.url_map.iter_rules():
         methods = ",".join(sorted(m for m in rule.methods if m in ("GET","POST","PUT","DELETE","PATCH")))

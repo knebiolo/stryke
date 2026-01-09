@@ -116,6 +116,7 @@
             through the specific unit.   
         </p>
         <form method="post" id="facilities_form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label for="num_facilities">
                 Number of Facilities:
                 <span class="tooltip">?
@@ -147,6 +148,7 @@
             <p style="font-size: 14px; margin: 8px 0;">Save your entire project to continue later:</p>
             
             <form method="post" action="{{ url_for('save_project') }}" style="margin: 10px 0;" class="no-validate">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="btn-small" style="background: #ffc107; color: #000; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 500;">💾 Save Project</button>
             </form>
             
