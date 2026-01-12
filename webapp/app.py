@@ -506,6 +506,7 @@ class _SafeQueueStream:
 def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
     import os, sys, logging
     log = logging.getLogger(__name__)
+    success = False
 
     # resolve Excel path (handles bare filename vs absolute)
     excel_path = wks if os.path.isabs(wks) else os.path.join(ws, wks)
@@ -546,6 +547,7 @@ def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
                 sim.run(); sim.summary()
         else:
             sim.run(); sim.summary()
+        success = True
             
         # Generate and save the report for XLS simulations
         log.info("Generating simulation report...")
@@ -564,7 +566,12 @@ def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
             log.info("Report generated and saved to %s", report_path)
         except Exception as e:
             log.warning("Failed to generate report: %s", e)
-            
+
+        if success:
+            complete_marker = os.path.join(sim.proj_dir, "simulation_complete.flag")
+            with open(complete_marker, "w", encoding="utf-8") as f:
+                f.write(datetime.now().isoformat())
+
         log.info("Simulation completed successfully.")
     except Exception as e:
         log.exception("Simulation failed (XLS).")
@@ -645,6 +652,7 @@ def upload_simulation():
     
         # So /report and other views know where to look for THIS run
         session['proj_dir'] = run_dir
+        session['run_dir'] = run_dir
         session['output_name'] = output_name
         session['last_run_id'] = run_id
     
@@ -735,6 +743,9 @@ def _safe_path(base_dir: str, *parts: str) -> str:
     if not target.startswith(base_abs + os.sep):
         raise PermissionError("Not allowed")
     return target
+
+def _get_active_run_dir():
+    return session.get('run_dir') or session.get('proj_dir')
 
 @app.route('/results')
 def results():
@@ -4116,6 +4127,7 @@ def run_simulation_in_background_custom(data_dict, q):
     """Background worker for UI-driven simulations."""
     import os, sys, logging
     log = logging.getLogger(__name__)
+    success = False
     
     # Also write to a file so we can see everything
     proj_dir = data_dict.get('proj_dir')
@@ -4148,6 +4160,7 @@ def run_simulation_in_background_custom(data_dict, q):
         # Run simulation
         sim.run()
         sim.summary()
+        success = True
         
         # Generate and save the report
         log.info("Generating simulation report...")
@@ -4163,6 +4176,10 @@ def run_simulation_in_background_custom(data_dict, q):
             f.write(report_path)
             
         log.info("Report generated and saved to %s", report_path)
+        if success:
+            complete_marker = os.path.join(proj_dir, "simulation_complete.flag")
+            with open(complete_marker, "w", encoding="utf-8") as f:
+                f.write(datetime.now().isoformat())
         log.info("Simulation completed successfully.")
     except Exception as e:
         log.exception("Simulation failed (UI-driven).")
@@ -4205,6 +4222,14 @@ def run_simulation():
     session['last_run_id'] = run_id
     session['output_name'] = output_name
     session['last_run_started_at'] = time.time()
+
+    user_root = session.get('user_sim_folder')
+    if not user_root:
+        flash("Session expired. Please log in again.")
+        return redirect(url_for('login'))
+    run_dir = os.path.join(user_root, run_id)
+    os.makedirs(run_dir, exist_ok=True)
+    session['run_dir'] = run_dir
     
     # Prepare data dictionary
     log = logging.getLogger(__name__)
@@ -4259,7 +4284,7 @@ def run_simulation():
         pop_df = session['population_data_for_sim']
     
     data_dict = {
-        'proj_dir': proj_dir,
+        'proj_dir': run_dir,
         'project_name': session.get('project_name'),
         'project_notes': session.get('project_notes'),
         'model_setup': session.get('model_setup'),
@@ -4295,7 +4320,12 @@ def simulation_logs():
     run_id = request.args.get('run', '')
     
     # Check if simulation has already completed by looking for output files
-    proj_dir = session.get('proj_dir')
+    user_root = session.get('user_sim_folder')
+    proj_dir = None
+    if run_id and user_root:
+        proj_dir = os.path.join(user_root, run_id)
+    if not proj_dir:
+        proj_dir = session.get('run_dir') or session.get('proj_dir')
     simulation_status = 'running'  # Default
     report_path = None
     
@@ -4313,6 +4343,7 @@ def simulation_logs():
         # Check for simulation completion markers
         marker_file = os.path.join(proj_dir, 'report_path.txt')
         report_html = os.path.join(proj_dir, 'simulation_report.html')
+        complete_marker = os.path.join(proj_dir, "simulation_complete.flag")
         output_name = session.get('output_name', 'simulation_output')
         output_h5 = os.path.join(proj_dir, f"{output_name}.h5")
         debug_log = os.path.join(proj_dir, 'simulation_debug.log')
@@ -4332,7 +4363,10 @@ def simulation_logs():
             # Found report directly
             report_path = report_html
             simulation_status = 'completed'
-        elif os.path.exists(output_h5) and is_fresh(output_h5):
+        elif os.path.exists(complete_marker) and is_fresh(complete_marker):
+            simulation_status = 'completed'
+            report_path = None
+        elif os.path.exists(output_h5) and is_fresh(output_h5) and not run_started_at:
             # Found H5 output (simulation completed but report might be missing)
             simulation_status = 'completed'
             report_path = None  # No HTML report, but sim finished
@@ -4386,7 +4420,7 @@ def get_simulation_instance():
         pass
     sim = Simulation()
     # Retrieve the project directory from the session.
-    sim.proj_dir = session.get('proj_dir')
+    sim.proj_dir = _get_active_run_dir()
     # Retrieve the output_name from the session, or use a default.
     sim.output_name = session.get('output_name', 'simulation_output')
     return sim
@@ -4397,7 +4431,7 @@ def debug_report_path():
     if not app.config.get("DEBUG_ROUTES_ENABLED"):
         return "Not Found", 404
     try:
-        proj_dir = session.get('proj_dir')
+        proj_dir = _get_active_run_dir()
         path_file = os.path.join(proj_dir, "report_path.txt")
         if not os.path.exists(path_file):
             return f"<p>report_path.txt not found: {path_file}</p>", 404
@@ -4413,7 +4447,7 @@ def debug_report_path():
 def report():
     log = current_app.logger
 
-    proj_dir = session.get('proj_dir')
+    proj_dir = _get_active_run_dir()
     if not proj_dir or not os.path.isdir(proj_dir):
         flash('Session expired or run not initialized.')
         return redirect(url_for('upload_simulation'))
@@ -5742,7 +5776,7 @@ def generate_report(sim):
 
 @app.route('/download_report')
 def download_report():
-    proj_dir = session.get('proj_dir')
+    proj_dir = _get_active_run_dir()
     if not proj_dir:
         return "<p>Error: No project directory in session.</p>", 400
 
@@ -5774,7 +5808,7 @@ def _debug_routes():
 
 @app.route('/download_report_zip')
 def download_report_zip():
-    proj_dir = session.get('proj_dir')
+    proj_dir = _get_active_run_dir()
     if not proj_dir:
         return "<h1>Session missing proj_dir</h1>", 500
     if not os.path.exists(proj_dir):
