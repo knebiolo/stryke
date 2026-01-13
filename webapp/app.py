@@ -2092,6 +2092,8 @@ def unit_parameters():
         rename_map = {
             "facility": "Facility",  # if applicable; often auto-filled
             "unit": "Unit",          # if applicable; might be generated automatically
+            "penstock_id": "Penstock_ID",
+            "penstock_qcap": "Penstock_Qcap",
             "type": "Runner Type",
             "velocity": "intake_vel",
             "order": "op_order",
@@ -2127,7 +2129,7 @@ def unit_parameters():
             # Update length_fields to include the new fields (assuming they are measured in meters).
             length_fields = ["intake_vel", "H", "D", "B", "D1", "D2",
                              "fb_depth", "ps_D", "ps_length", "submergence_depth", "elevation_head"]
-            flow_fields = ["Qopt", "Qcap"]
+            flow_fields = ["Qopt", "Qcap", "Penstock_Qcap"]
 
             for col in length_fields:
                 if col in df_units.columns:
@@ -2188,7 +2190,7 @@ def unit_parameters():
                     
                     length_fields = ["intake_vel", "H", "D", "B", "D1", "D2",
                                    "fb_depth", "ps_D", "ps_length", "submergence_depth", "elevation_head"]
-                    flow_fields = ["Qopt", "Qcap"]
+                    flow_fields = ["Qopt", "Qcap", "Penstock_Qcap"]
                     
                     for col in length_fields:
                         if col in df.columns:
@@ -4702,7 +4704,7 @@ def generate_report(sim):
                     if key == '/Unit_Parameters':
                         for c, factor in [
                             ('intake_vel', 0.3048), ('D', 0.3048), ('H', 0.3048),
-                            ('Qopt', 0.0283168), ('Qcap', 0.0283168), ('B', 0.3048),
+                            ('Qopt', 0.0283168), ('Qcap', 0.0283168), ('Penstock_Qcap', 0.0283168), ('B', 0.3048),
                             ('D1', 0.3048), ('D2', 0.3048)
                         ]:
                             if c in df.columns:
@@ -4943,6 +4945,166 @@ def generate_report(sim):
             </div>
             """)
         
+        # Driver diagnostics (unit-level) for identifying outsized effects.
+        driver_df = None
+        if "/Driver_Diagnostics" in store.keys():
+            driver_df = store["/Driver_Diagnostics"]
+        elif "/Unit_Parameters" in store.keys():
+            try:
+                unit_params = store["/Unit_Parameters"]
+                beta_units = store["/Beta_Distributions_Units"] if "/Beta_Distributions_Units" in store.keys() else None
+                route_flows = store["/Route_Flows"] if "/Route_Flows" in store.keys() else None
+                if isinstance(unit_params, pd.DataFrame) and not unit_params.empty:
+                    tmp_diag = unit_params.copy()
+                    tmp_diag["route"] = tmp_diag.index.astype(str)
+                    preferred_cols = [
+                        "H", "RPM", "D", "N", "Qopt", "Qcap",
+                        "D1", "D2", "B", "ada", "intake_vel",
+                        "ps_D", "ps_length", "fb_depth", "submergence_depth"
+                    ]
+                    keep_cols = ["route"] + [c for c in preferred_cols if c in tmp_diag.columns]
+                    tmp_diag = tmp_diag[keep_cols]
+
+                    if isinstance(beta_units, pd.DataFrame) and not beta_units.empty:
+                        beta_units = beta_units.copy()
+                        rename_map = {}
+                        if "Passage Route" in beta_units.columns:
+                            rename_map["Passage Route"] = "route"
+                        if "state" in beta_units.columns:
+                            rename_map["state"] = "route"
+                        if "Mean" in beta_units.columns:
+                            rename_map["Mean"] = "survival_mean"
+                        if "survival rate" in beta_units.columns:
+                            rename_map["survival rate"] = "survival_mean"
+                        if "Variance" in beta_units.columns:
+                            rename_map["Variance"] = "survival_variance"
+                        if "variance" in beta_units.columns:
+                            rename_map["variance"] = "survival_variance"
+                        if "Lower 95% CI" in beta_units.columns:
+                            rename_map["Lower 95% CI"] = "survival_lcl"
+                        if "ll" in beta_units.columns:
+                            rename_map["ll"] = "survival_lcl"
+                        if "Upper 95% CI" in beta_units.columns:
+                            rename_map["Upper 95% CI"] = "survival_ucl"
+                        if "ul" in beta_units.columns:
+                            rename_map["ul"] = "survival_ucl"
+                        if rename_map:
+                            beta_units.rename(columns=rename_map, inplace=True)
+
+                        if "route" in beta_units.columns:
+                            beta_keep = [
+                                c for c in [
+                                    "route",
+                                    "survival_mean",
+                                    "survival_variance",
+                                    "survival_lcl",
+                                    "survival_ucl"
+                                ] if c in beta_units.columns
+                            ]
+                            if beta_keep:
+                                beta_units = beta_units[beta_keep]
+                                numeric_cols = [c for c in beta_keep if c != "route"]
+                                if numeric_cols:
+                                    beta_units = beta_units.groupby("route", as_index=False)[numeric_cols].mean()
+                                tmp_diag = tmp_diag.merge(beta_units, on="route", how="left")
+
+                    if isinstance(route_flows, pd.DataFrame) and not route_flows.empty:
+                        rf = route_flows.copy()
+                        if "route" in rf.columns and "discharge_cfs" in rf.columns:
+                            rf["route"] = rf["route"].astype(str)
+                            route_mean = rf.groupby("route")["discharge_cfs"].mean()
+                            tmp_diag = tmp_diag.merge(
+                                route_mean.rename("mean_discharge_cfs"),
+                                left_on="route",
+                                right_index=True,
+                                how="left"
+                            )
+                            unit_routes = set(tmp_diag["route"].dropna().astype(str).tolist())
+                            unit_mean = route_mean[route_mean.index.isin(unit_routes)]
+                            unit_total = float(unit_mean.sum())
+                            share_series = None
+                            if unit_total > 0:
+                                share_series = unit_mean / unit_total
+                            else:
+                                total_all = float(route_mean.sum())
+                                if total_all > 0:
+                                    share_series = route_mean / total_all
+                            if share_series is not None:
+                                tmp_diag = tmp_diag.merge(
+                                    share_series.rename("flow_share"),
+                                    left_on="route",
+                                    right_index=True,
+                                    how="left"
+                                )
+
+                    if "flow_share" in tmp_diag.columns and "survival_mean" in tmp_diag.columns:
+                        tmp_diag["mortality_weight"] = tmp_diag["flow_share"] * (1 - tmp_diag["survival_mean"])
+                    driver_df = tmp_diag
+            except Exception:
+                driver_df = None
+        if isinstance(driver_df, pd.DataFrame) and not driver_df.empty:
+            report_sections.append("<h3>Driver Diagnostics (Unit-Level)</h3>")
+            report_sections.append(
+                "<p style='margin-top:4px; color:#666; font-size:0.9em; font-style:italic;'>"
+                "Flow share is computed from mean discharge in the Route_Flows table. "
+                "Weighted Mortality Index = flow_share * (1 - survival_mean). "
+                "Higher values indicate outsized contributions to project-wide mortality."
+                "</p>"
+            )
+
+            display_df = driver_df.copy()
+            if 'route' not in display_df.columns:
+                display_df['route'] = display_df.index.astype(str)
+
+            if 'flow_share' in display_df.columns:
+                display_df['flow_share_pct'] = display_df['flow_share'] * 100.0
+
+            sort_col = None
+            if 'mortality_weight' in display_df.columns:
+                sort_col = 'mortality_weight'
+            elif 'flow_share' in display_df.columns:
+                sort_col = 'flow_share'
+            if sort_col:
+                display_df = display_df.sort_values(sort_col, ascending=False)
+
+            col_candidates = [
+                ('route', 'Route'),
+                ('flow_share_pct', 'Flow Share (%)'),
+                ('mean_discharge_cfs', 'Mean Discharge (cfs)'),
+                ('survival_mean', 'Survival Mean'),
+                ('survival_lcl', 'Survival LCL'),
+                ('survival_ucl', 'Survival UCL'),
+                ('mortality_weight', 'Weighted Mortality Index'),
+                ('H', 'H'),
+                ('RPM', 'RPM'),
+                ('D', 'D'),
+                ('N', 'N'),
+                ('Qopt', 'Qopt'),
+                ('Qcap', 'Qcap'),
+                ('ps_D', 'ps_D'),
+                ('ps_length', 'ps_length'),
+            ]
+
+            display_cols = [c for c, _ in col_candidates if c in display_df.columns]
+            if display_cols:
+                display_df = display_df[display_cols]
+                display_df = display_df.rename(columns={c: label for c, label in col_candidates if c in display_cols})
+                for col in display_df.columns:
+                    if pd.api.types.is_numeric_dtype(display_df[col]):
+                        display_df[col] = display_df[col].round(4)
+                report_sections.append(
+                    f"<div style='overflow-x:auto;'>{display_df.to_html(index=False, border=1, classes='table')}</div>"
+                )
+            else:
+                report_sections.append("<p>No driver diagnostics columns available.</p>")
+
+            report_sections.append(
+                "<p style='margin-top:4px; color:#666; font-size:0.9em; font-style:italic;'>"
+                "Note: Double-runner penstocks can be approximated by representing each runner as a separate unit "
+                "or splitting penstock flow if routing effects appear overstated."
+                "</p>"
+            )
+
         # Beta distributions - show all passage routes (units and interior nodes) with ALL iterations
         report_sections.append("<h3>Survival Probability Distributions</h3>")
         # Attempt to display an explanatory caption produced by the simulation summarizer.

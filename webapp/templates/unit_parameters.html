@@ -170,6 +170,34 @@
                     </tr>
                     <tr>
                       <th>
+                        Penstock ID
+                        <span class="tooltip">?
+                          <span class="tooltip-text">
+                            Parameter: Penstock ID<br>Data Type: String<br>Default: One penstock per unit
+                          </span>
+                        </span>
+                      </th>
+                      <td>
+                        {% set unit_key = facility.Facility ~ "|" ~ i|string %}
+                        {% set params = session.get('unit_params_lookup', {}).get(unit_key, {}) %}
+                        <input type="text" name="penstock_id_{{ outer_index }}_{{ i }}" placeholder="Penstock ID" value="{{ params.get('Penstock_ID', '') }}">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>
+                        Penstock Capacity
+                        <span class="tooltip">?
+                          <span class="tooltip-text">
+                            Parameter: Penstock Capacity (m^3/s)<br>Data Type: Float<br>Default: Sum of unit Qcap
+                          </span>
+                        </span>
+                      </th>
+                      <td>
+                        <input type="number" step="any" name="penstock_qcap_{{ outer_index }}_{{ i }}" placeholder="Penstock Capacity" value="{{ params.get('Penstock_Qcap', '') }}">
+                      </td>
+                    </tr>
+                    <tr>
+                      <th>
                         Runner Type
                         <span class="tooltip">?
                           <span class="tooltip-text">
@@ -528,6 +556,8 @@
             // Map CSV column names to form field patterns
             const fieldMappings = {
               'Runner Type': 'type',
+              'Penstock_ID': 'penstock_id',
+              'Penstock_Qcap': 'penstock_qcap',
               'intake_vel': 'velocity',
               'op_order': 'order',
               'H': 'H',
