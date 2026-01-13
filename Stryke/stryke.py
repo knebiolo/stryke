@@ -1561,7 +1561,7 @@ class simulation():
                 pen_allocs = allocate_proportional(prod_Q_by_facility.get(facility, 0.0), pen_caps)
                 for pen_id, pen_flow in pen_allocs.items():
                     pen_units = penstocks.get(pen_id, [])
-                    unit_caps = {u: float(q_cap_dict.get(u, 0.0) or 0.0) for u in pen_units}
+                    unit_caps = {u: float(cap_dict.get(u, 0.0) or 0.0) for u in pen_units}
                     unit_allocs = allocate_proportional(pen_flow, unit_caps)
                     unit_flow_allocations.update(unit_allocs)
 
