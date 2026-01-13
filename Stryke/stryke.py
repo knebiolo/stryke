@@ -340,6 +340,8 @@ class simulation():
             self.unit_params['D'] = self.unit_params.D * 3.28084
             self.unit_params['Qopt'] = self.unit_params.Qopt * 35.31469989
             self.unit_params['Qcap'] = self.unit_params.Qcap * 35.31469989
+            if 'Penstock_Qcap' in self.unit_params.columns:
+                self.unit_params['Penstock_Qcap'] = self.unit_params.Penstock_Qcap * 35.31469989
             self.unit_params['B'] = self.unit_params.B * 3.28084
             self.unit_params['D1'] = self.unit_params.D1 * 3.28084
             self.unit_params['D2'] = self.unit_params.D2 * 3.28084
@@ -514,7 +516,8 @@ class simulation():
                     'B', 'D', 'D1', 'D2', 'H', 'N', 'Qcap', 'Qopt',
                     'RPM', 'ada', 'intake_vel', 'iota', 'lambda',
                     'op_order', 'roughness',
-                    'fb_depth', 'ps_D', 'ps_length', 'submergence_depth', 'elevation_head'
+                    'fb_depth', 'ps_D', 'ps_length', 'submergence_depth', 'elevation_head',
+                    'Penstock_Qcap'
                 ],
                 index_col="Unit_Name"
             )
@@ -1426,6 +1429,8 @@ class simulation():
                  op_order,
                  cap_dict,
                  unit_fac_dict,
+                 penstock_id_dict=None,
+                 penstock_cap_dict=None,
                  route_flow_recorder=None):
         """
         Simulates the movement of a fish through a hydroelectric project's
@@ -1454,6 +1459,27 @@ class simulation():
         found_spill = np.char.find(nbors, 'spill') >= 0
     
         if np.any(contains_U):
+            def allocate_proportional(total_flow, cap_map):
+                allocations = {k: 0.0 for k in cap_map}
+                remaining = float(total_flow or 0.0)
+                remaining_caps = {
+                    k: float(v or 0.0) for k, v in cap_map.items() if v is not None and float(v or 0.0) > 0.0
+                }
+                while remaining > 1e-9 and remaining_caps:
+                    cap_sum = sum(remaining_caps.values())
+                    if cap_sum <= 0.0:
+                        break
+                    remaining_start = remaining
+                    for k in list(remaining_caps.keys()):
+                        share = remaining_start * (remaining_caps[k] / cap_sum)
+                        alloc = min(share, remaining_caps[k])
+                        allocations[k] += alloc
+                        remaining_caps[k] -= alloc
+                        remaining -= alloc
+                        if remaining_caps[k] <= 1e-9:
+                            remaining_caps.pop(k, None)
+                return allocations
+
             # Calculate total production capacity and environmental/bypass flows
             facilities_at_node = set()
             for i in nbors:
@@ -1463,15 +1489,10 @@ class simulation():
                         facilities_at_node.add(facility)
                     except Exception:
                         continue
-            
-            # Aggregate facility-level flows
-            total_sta_cap = sum(sta_cap_dict.get(f, 0.0) for f in facilities_at_node)
+
             total_env_Q = sum(env_Q_dict.get(f, 0.0) for f in facilities_at_node)
             total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities_at_node)
-            
-            # Track allocated flow per facility as we process units
-            allocated_flow_by_facility = {f: 0.0 for f in facilities_at_node}
-            
+
             # Calculate production flow ONCE per facility (not per unit!)
             prod_Q_by_facility = {}
             for f in facilities_at_node:
@@ -1479,19 +1500,13 @@ class simulation():
                 env_Q = env_Q_dict.get(f, 0.0)
                 bypass_Q = bypass_Q_dict.get(f, 0.0)
                 sta_cap = sta_cap_dict.get(f, 0.0)
-                
+
                 if curr_Q > min_Q:
                     available_for_prod = curr_Q - env_Q - bypass_Q
                     prod_Q_by_facility[f] = min(max(available_for_prod, 0.0), sta_cap)
                 else:
                     prod_Q_by_facility[f] = 0.0
-            
-            # DEBUG: Print facility production flow calculation (first time only)
-            if not hasattr(self, '_facility_prod_printed'):
-                self._facility_prod_printed = True
-                for f, pq in prod_Q_by_facility.items():
-                    print(f"[FACILITY PROD] {f}: curr_Q={curr_Q:.1f}, prod_Q={pq:.1f}, sta_cap={sta_cap_dict.get(f, 0):.1f}", flush=True)
-            
+
             # CRITICAL: Process units in operational order, then others, then spillway
             # Sort by: (1) unit type (units=0, other=1, spillway=2), (2) operational order for units
             def sort_key(x):
@@ -1501,11 +1516,12 @@ class simulation():
                     return (2, 0)  # Spillway last
                 else:
                     return (1, 0)  # Other routes in middle
-            
+
             sorted_nbors = sorted(nbors, key=sort_key)
 
-            # Build per-facility unit lists (in sorted order) so we can split prod_Q
+            # Build per-facility unit lists and penstock grouping
             units_by_facility = {}
+            penstocks_by_facility = {}
             for nb in sorted_nbors:
                 if 'U' in nb:
                     try:
@@ -1513,9 +1529,12 @@ class simulation():
                     except Exception:
                         continue
                     units_by_facility.setdefault(fac, []).append(nb)
-
-            # Track processed units per facility so we can compute remaining shares
-            processed_units_by_fac = {f: [] for f in facilities_at_node}
+                    pen_id = None
+                    if penstock_id_dict:
+                        pen_id = penstock_id_dict.get(nb)
+                    if not pen_id:
+                        pen_id = f"{fac}|{nb}"
+                    penstocks_by_facility.setdefault(fac, {}).setdefault(pen_id, []).append(nb)
 
             # DEBUG: Print sorting results on first day
             if not hasattr(self, '_neighbor_sort_printed'):
@@ -1524,88 +1543,48 @@ class simulation():
                 print(f"[NEIGHBOR DEBUG] Sorted nbors: {sorted_nbors}", flush=True)
                 print(f"[NEIGHBOR DEBUG] op_order dict: {op_order}", flush=True)
                 print(f"[NEIGHBOR DEBUG] units_by_facility: {units_by_facility}", flush=True)
+                print(f"[NEIGHBOR DEBUG] penstocks_by_facility: {penstocks_by_facility}", flush=True)
+
+            unit_flow_allocations = {}
+            for facility, penstocks in penstocks_by_facility.items():
+                if not penstocks:
+                    continue
+                pen_caps = {}
+                for pen_id, pen_units in penstocks.items():
+                    cap_val = None
+                    if penstock_cap_dict is not None:
+                        cap_val = penstock_cap_dict.get(pen_id)
+                    if cap_val is None or (isinstance(cap_val, float) and np.isnan(cap_val)):
+                        cap_val = sum(float(q_cap_dict.get(u, 0.0) or 0.0) for u in pen_units)
+                    pen_caps[pen_id] = float(cap_val) if cap_val is not None else 0.0
+
+                pen_allocs = allocate_proportional(prod_Q_by_facility.get(facility, 0.0), pen_caps)
+                for pen_id, pen_flow in pen_allocs.items():
+                    pen_units = penstocks.get(pen_id, [])
+                    unit_caps = {u: float(q_cap_dict.get(u, 0.0) or 0.0) for u in pen_units}
+                    unit_allocs = allocate_proportional(pen_flow, unit_caps)
+                    unit_flow_allocations.update(unit_allocs)
+
+            total_unit_flow = sum(unit_flow_allocations.values())
+            if not hasattr(self, '_penstock_alloc_warned'):
+                prod_total = sum(prod_Q_by_facility.values())
+                if total_unit_flow - prod_total > 1e-6:
+                    logger.warning("Total unit flow (%.3f) exceeds production flow (%.3f). Check penstock caps.", total_unit_flow, prod_total)
+                self._penstock_alloc_warned = True
 
             for i in sorted_nbors:
                 if 'U' in i:
-                    # Resolve facility
-                    try:
-                        facility = unit_fac_dict[i]
-                    except KeyError:
-                        try:
-                            facility = self.unit_params.at[i, 'Facility']
-                        except Exception:
-                            continue  # skip node if not found
-    
-                    # Get pre-calculated production flow for this facility
-                    prod_Q = prod_Q_by_facility.get(facility, 0.0)
-
-                    # ALLOCATION POLICY MARKER: print every time to confirm which policy ran
-                    print(f"[ALLOC POLICY v2 ACTIVE] Facility={facility}, prod_Q={prod_Q:.1f}", flush=True)
-    
-                    # Apply operation order logic: units start up in priority sequence
-                    unit_cap = Q_dict.get(i, 0.0)  # Unit's maximum capacity
-                    order = op_order[i]
-                    
-                    # FIXED: Use actually allocated flow from previous units, not their capacity
-                    prev_Q = allocated_flow_by_facility.get(facility, 0.0)
-    
-                    # Allocate remaining production flow to this unit.
-                    # New policy: split remaining facility production evenly among remaining units
-                    remaining_prod = prod_Q - prev_Q
-                    remaining_units = []
-                    try:
-                        remaining_units = [u for u in units_by_facility.get(facility, []) if u not in processed_units_by_fac.get(facility, [])]
-                    except Exception:
-                        remaining_units = [i]
-
-                    # Debug: show remaining units and counts to diagnose why one unit may take all flow
-                    try:
-                        print(f"[ALLOC DEBUG] facility={facility}, processed={processed_units_by_fac.get(facility, [])}, remaining_units={remaining_units}, remaining_prod={remaining_prod:.3f}", flush=True)
-                    except Exception:
-                        pass
-
-                    if remaining_units:
-                        share = max(remaining_prod / len(remaining_units), 0.0)
-                    else:
-                        share = 0.0
-
-                    # Unit gets either its share or up to its capacity
-                    u_Q = min(share, unit_cap)
-
-                    # Track the allocated flow for this facility and mark unit processed
-                    allocated_flow_by_facility[facility] = prev_Q + u_Q
-                    processed_units_by_fac.setdefault(facility, []).append(i)
-    
+                    u_Q = float(unit_flow_allocations.get(i, 0.0) or 0.0)
                     prob = u_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(u_Q)
-                    
-                    # DEBUG: Print unit allocation details (first time for each unit)
-                    unit_debug_key = f'_unit_debug_{i}'
-                    if not hasattr(self, unit_debug_key):
-                        setattr(self, unit_debug_key, True)
-                        print(f"[UNIT DEBUG] {i}: prev_Q={prev_Q:.1f}, prod_Q={prod_Q:.1f}, unit_cap={unit_cap:.1f}, u_Q={u_Q:.1f}, prob={prob:.3f}", flush=True)
-    
                 elif 'spill' in i:
-                    # FIXED: Spillway gets remaining flow after units, environmental, and bypass
-                    # Calculate total flow allocated to units (production flow)
-                    total_unit_flow = sum(route_flows)  # Sum of all unit flows calculated above
-                    
-                    # Spillway gets: remaining flow after units, environmental, and bypass
-                    # Use actual allocated flow to units, not station capacity
                     spill_Q = max(0.0, curr_Q - total_unit_flow - total_env_Q - total_bypass_Q)
-                    
                     prob = spill_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(spill_Q)
-                    
-                    # DEBUG: Print spillway calculation details (first time only)
-                    if not hasattr(self, '_spill_debug_printed'):
-                        self._spill_debug_printed = True
-                        print(f"[SPILL DEBUG] curr_Q={curr_Q:.1f}, total_unit_flow={total_unit_flow:.1f}, env={total_env_Q:.1f}, bypass={total_bypass_Q:.1f}, spill_Q={spill_Q:.1f}, prob={prob:.3f}", flush=True)
-                    
                 else:  # Other bypass paths (non-spillway)
                     facility = unit_fac_dict.get(i, None)
                     bypass_Q = bypass_Q_dict.get(facility, 0.0)
@@ -2204,6 +2183,10 @@ class simulation():
         op_order_dict = {}
         q_cap_dict = {}
         unit_fac_dict = {}
+        penstock_id_dict = {}
+        penstock_units = defaultdict(list)
+        penstock_cap_inputs = defaultdict(list)
+        penstock_fac_dict = {}
         #logger.debug('building unit dictionaries')
         #print("Setting up unit parameters...", flush=True)
         for index, row in self.unit_params.iterrows():
@@ -2214,6 +2197,23 @@ class simulation():
             intake_vel_dict[unit] = row['intake_vel']
             units.append(unit)
             op_order_dict[unit] = row['op_order']
+            penstock_id = row.get('Penstock_ID', None)
+            if penstock_id is None or (isinstance(penstock_id, float) and np.isnan(penstock_id)):
+                penstock_id = f"{row['Facility']}|{row['Unit']}"
+            penstock_id = str(penstock_id).strip() if str(penstock_id).strip() else f"{row['Facility']}|{row['Unit']}"
+            penstock_id_dict[unit] = penstock_id
+            penstock_units[penstock_id].append(unit)
+            penstock_facility = row['Facility']
+            if penstock_id in penstock_fac_dict and penstock_fac_dict[penstock_id] != penstock_facility:
+                logger.warning("Penstock_ID %s appears in multiple facilities (%s vs %s).", penstock_id, penstock_fac_dict[penstock_id], penstock_facility)
+            else:
+                penstock_fac_dict[penstock_id] = penstock_facility
+            penstock_qcap = row.get('Penstock_Qcap', None)
+            if penstock_qcap is not None and not (isinstance(penstock_qcap, float) and np.isnan(penstock_qcap)):
+                try:
+                    penstock_cap_inputs[penstock_id].append(float(penstock_qcap))
+                except (TypeError, ValueError):
+                    pass
             rack_spacing = self.facility_params.at[row['Facility'],'Rack Spacing']
             penstock_D = row['ps_D'] #self.unit_params.at[row['Facility'],'ps_D']
             ada = float(row['ada'])
@@ -2271,6 +2271,13 @@ class simulation():
                               'intake_vel':float(row['intake_vel']),
                               'rack_spacing':float(rack_spacing)}
                 u_param_dict[unit] = param_dict
+        penstock_cap_dict = {}
+        for pen_id, unit_list in penstock_units.items():
+            if penstock_cap_inputs.get(pen_id):
+                pen_cap = max(penstock_cap_inputs[pen_id])
+            else:
+                pen_cap = sum(float(q_cap_dict.get(u, 0.0) or 0.0) for u in unit_list)
+            penstock_cap_dict[pen_id] = float(pen_cap) if pen_cap is not None else 0.0
         #("Completed unit parameters setup.", flush=True)
     
         # Create survival dictionary from nodes.
@@ -2565,6 +2572,7 @@ class simulation():
                                             return self.movement(location, status, speed,
                                                                  self.graph, intake_vel_dict, Q_dict,
                                                                  op_order_dict, q_cap_dict, unit_fac_dict,
+                                                                 penstock_id_dict, penstock_cap_dict,
                                                                  route_flow_recorder=route_flow_recorder)
                                 
                                         v_movement = np.vectorize(safe_movement)
@@ -3085,6 +3093,108 @@ class simulation():
                     logger.info(f'Cannot write to Excel file (likely web app run): {e}')
                 except Exception as e:
                     logger.warning(f'Unexpected error writing to Excel: {e}')
+
+                # Build driver diagnostics (unit-level) for downstream reporting.
+                self.driver_diagnostics = None
+                try:
+                    unit_params = store['Unit_Parameters'] if '/Unit_Parameters' in store.keys() else None
+                    route_flows = store['Route_Flows'] if '/Route_Flows' in store.keys() else None
+
+                    if isinstance(unit_params, pd.DataFrame) and not unit_params.empty:
+                        diag = unit_params.copy()
+                        diag['route'] = diag.index.astype(str)
+
+                        preferred_cols = [
+                            'H', 'RPM', 'D', 'N', 'Qopt', 'Qcap',
+                            'D1', 'D2', 'B', 'ada', 'intake_vel',
+                            'ps_D', 'ps_length', 'fb_depth', 'submergence_depth'
+                        ]
+                        keep_cols = ['route'] + [c for c in preferred_cols if c in diag.columns]
+                        diag = diag[keep_cols]
+
+                        if isinstance(self.beta_df_units_only, pd.DataFrame) and not self.beta_df_units_only.empty:
+                            beta_units = self.beta_df_units_only.copy()
+                            rename_map = {}
+                            if 'Passage Route' in beta_units.columns:
+                                rename_map['Passage Route'] = 'route'
+                            if 'state' in beta_units.columns:
+                                rename_map['state'] = 'route'
+                            if 'Mean' in beta_units.columns:
+                                rename_map['Mean'] = 'survival_mean'
+                            if 'survival rate' in beta_units.columns:
+                                rename_map['survival rate'] = 'survival_mean'
+                            if 'Variance' in beta_units.columns:
+                                rename_map['Variance'] = 'survival_variance'
+                            if 'variance' in beta_units.columns:
+                                rename_map['variance'] = 'survival_variance'
+                            if 'Lower 95% CI' in beta_units.columns:
+                                rename_map['Lower 95% CI'] = 'survival_lcl'
+                            if 'll' in beta_units.columns:
+                                rename_map['ll'] = 'survival_lcl'
+                            if 'Upper 95% CI' in beta_units.columns:
+                                rename_map['Upper 95% CI'] = 'survival_ucl'
+                            if 'ul' in beta_units.columns:
+                                rename_map['ul'] = 'survival_ucl'
+                            beta_units.rename(columns=rename_map, inplace=True)
+
+                            if 'route' in beta_units.columns:
+                                beta_keep = [
+                                    c for c in [
+                                        'route',
+                                        'survival_mean',
+                                        'survival_variance',
+                                        'survival_lcl',
+                                        'survival_ucl'
+                                    ] if c in beta_units.columns
+                                ]
+                                if beta_keep:
+                                    beta_units = beta_units[beta_keep]
+                                    numeric_cols = [c for c in beta_keep if c != 'route']
+                                    if numeric_cols:
+                                        beta_units = beta_units.groupby('route', as_index=False)[numeric_cols].mean()
+                                    diag = diag.merge(beta_units, on='route', how='left')
+
+                        if isinstance(route_flows, pd.DataFrame) and not route_flows.empty:
+                            rf = route_flows.copy()
+                            if 'route' in rf.columns and 'discharge_cfs' in rf.columns:
+                                rf['route'] = rf['route'].astype(str)
+                                route_mean = rf.groupby('route')['discharge_cfs'].mean()
+                                diag = diag.merge(
+                                    route_mean.rename('mean_discharge_cfs'),
+                                    left_on='route',
+                                    right_index=True,
+                                    how='left'
+                                )
+
+                                unit_routes = set(diag['route'].dropna().astype(str).tolist())
+                                unit_mean = route_mean[route_mean.index.isin(unit_routes)]
+                                unit_total = float(unit_mean.sum())
+
+                                share_series = None
+                                if unit_total > 0:
+                                    share_series = unit_mean / unit_total
+                                else:
+                                    total_all = float(route_mean.sum())
+                                    if total_all > 0:
+                                        share_series = route_mean / total_all
+
+                                if share_series is not None:
+                                    diag = diag.merge(
+                                        share_series.rename('flow_share'),
+                                        left_on='route',
+                                        right_index=True,
+                                        how='left'
+                                    )
+
+                        if 'flow_share' in diag.columns and 'survival_mean' in diag.columns:
+                            diag['mortality_weight'] = diag['flow_share'] * (1 - diag['survival_mean'])
+
+                        self.driver_diagnostics = diag
+                        if DIAGNOSTICS_ENABLED and isinstance(diag, pd.DataFrame):
+                            print(f"[DIAG] Driver diagnostics rows: {len(diag)}", flush=True)
+                except Exception as e:
+                    logger.warning(f'Failed to build driver diagnostics: {e}')
+                    self.driver_diagnostics = None
     
             # Close summary statistics section
             print("="*60 + "\n", flush=True)
@@ -3096,6 +3206,8 @@ class simulation():
             store.put("Beta_Distributions", self.beta_df, format="table", data_columns=True)
             store.put("Beta_Distributions_Units", self.beta_df_units_only, format="table", data_columns=True)
             store.put("Yearly_Summary", self.cum_sum, format="table", data_columns=True)
+            if isinstance(getattr(self, 'driver_diagnostics', None), pd.DataFrame):
+                store.put("Driver_Diagnostics", self.driver_diagnostics, format="table", data_columns=True)
     
         return
                 
