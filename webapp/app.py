@@ -2200,16 +2200,22 @@ def unit_parameters():
                         if col in df.columns:
                             df[col] = pd.to_numeric(df[col], errors='coerce') / conv_flow
                 
-                unit_params_list = df.to_dict('records')
+                df_clean = df.where(pd.notnull(df), "")
+                unit_params_list = df_clean.to_dict('records')
                 print(f"DEBUG unit_params GET: converted to {len(unit_params_list)} records", flush=True)
                 
                 # Create a lookup dictionary: {"facility|unit": params_dict}
                 # Use string keys instead of tuples for JSON serialization
                 unit_params_lookup = {}
                 for params in unit_params_list:
-                    facility = params.get('Facility', '')
-                    unit = params.get('Unit', '')
-                    key = f"{facility}|{str(unit)}"  # String key instead of tuple
+                    facility = str(params.get('Facility', '') or '').strip()
+                    unit_raw = params.get('Unit', '')
+                    if isinstance(unit_raw, (int, float, np.integer, np.floating)):
+                        unit_raw = float(unit_raw)
+                        unit = str(int(unit_raw)) if unit_raw.is_integer() else str(unit_raw)
+                    else:
+                        unit = str(unit_raw).strip()
+                    key = f"{facility}|{unit}"  # String key instead of tuple
                     unit_params_lookup[key] = params
                 print(f"DEBUG unit_params GET: created lookup with {len(unit_params_lookup)} entries", flush=True)
                 
