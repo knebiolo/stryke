@@ -1418,6 +1418,102 @@ class simulation():
         
             # return finished product and enjoy functionality of networkx
             self.graph = route
+
+    def compute_unit_flow_allocations(self,
+                                      curr_Q,
+                                      unit_nodes,
+                                      min_Q_dict,
+                                      env_Q_dict,
+                                      bypass_Q_dict,
+                                      sta_cap_dict,
+                                      unit_fac_dict,
+                                      penstock_id_dict,
+                                      penstock_cap_dict,
+                                      cap_dict):
+        def allocate_proportional(total_flow, cap_map):
+            allocations = {k: 0.0 for k in cap_map}
+            remaining = float(total_flow or 0.0)
+            remaining_caps = {
+                k: float(v or 0.0)
+                for k, v in cap_map.items()
+                if v is not None and float(v or 0.0) > 0.0
+            }
+            while remaining > 1e-9 and remaining_caps:
+                cap_sum = sum(remaining_caps.values())
+                if cap_sum <= 0.0:
+                    break
+                remaining_start = remaining
+                for k in list(remaining_caps.keys()):
+                    share = remaining_start * (remaining_caps[k] / cap_sum)
+                    alloc = min(share, remaining_caps[k])
+                    allocations[k] += alloc
+                    remaining_caps[k] -= alloc
+                    remaining -= alloc
+                    if remaining_caps[k] <= 1e-9:
+                        remaining_caps.pop(k, None)
+            return allocations
+
+        facilities_at_node = set()
+        for unit in unit_nodes:
+            facility = unit_fac_dict.get(unit)
+            if facility is None and hasattr(self, "unit_params") and self.unit_params is not None:
+                if unit in self.unit_params.index:
+                    facility = self.unit_params.at[unit, 'Facility']
+            if facility is not None:
+                facilities_at_node.add(facility)
+
+        total_env_Q = sum(env_Q_dict.get(f, 0.0) for f in facilities_at_node)
+        total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities_at_node)
+
+        prod_Q_by_facility = {}
+        for f in facilities_at_node:
+            min_Q = min_Q_dict.get(f, 0.0)
+            env_Q = env_Q_dict.get(f, 0.0)
+            bypass_Q = bypass_Q_dict.get(f, 0.0)
+            sta_cap = sta_cap_dict.get(f, 0.0)
+
+            if curr_Q > min_Q:
+                available_for_prod = curr_Q - env_Q - bypass_Q
+                prod_Q_by_facility[f] = min(max(available_for_prod, 0.0), sta_cap)
+            else:
+                prod_Q_by_facility[f] = 0.0
+
+        penstocks_by_facility = {}
+        for unit in unit_nodes:
+            facility = unit_fac_dict.get(unit)
+            if facility is None and hasattr(self, "unit_params") and self.unit_params is not None:
+                if unit in self.unit_params.index:
+                    facility = self.unit_params.at[unit, 'Facility']
+            if facility is None:
+                continue
+            pen_id = None
+            if penstock_id_dict:
+                pen_id = penstock_id_dict.get(unit)
+            if not pen_id:
+                pen_id = f"{facility}|{unit}"
+            penstocks_by_facility.setdefault(facility, {}).setdefault(pen_id, []).append(unit)
+
+        unit_flow_allocations = {}
+        for facility, penstocks in penstocks_by_facility.items():
+            if not penstocks:
+                continue
+            pen_caps = {}
+            for pen_id, pen_units in penstocks.items():
+                cap_val = None
+                if penstock_cap_dict is not None:
+                    cap_val = penstock_cap_dict.get(pen_id)
+                if cap_val is None or (isinstance(cap_val, float) and np.isnan(cap_val)):
+                    cap_val = sum(float(cap_dict.get(u, 0.0) or 0.0) for u in pen_units)
+                pen_caps[pen_id] = float(cap_val) if cap_val is not None else 0.0
+
+            pen_allocs = allocate_proportional(prod_Q_by_facility.get(facility, 0.0), pen_caps)
+            for pen_id, pen_flow in pen_allocs.items():
+                pen_units = penstocks.get(pen_id, [])
+                unit_caps = {u: float(cap_dict.get(u, 0.0) or 0.0) for u in pen_units}
+                unit_allocs = allocate_proportional(pen_flow, unit_caps)
+                unit_flow_allocations.update(unit_allocs)
+
+        return unit_flow_allocations, prod_Q_by_facility, total_env_Q, total_bypass_Q
  
     def movement(self,
                  location,
@@ -1459,53 +1555,22 @@ class simulation():
         found_spill = np.char.find(nbors, 'spill') >= 0
     
         if np.any(contains_U):
-            def allocate_proportional(total_flow, cap_map):
-                allocations = {k: 0.0 for k in cap_map}
-                remaining = float(total_flow or 0.0)
-                remaining_caps = {
-                    k: float(v or 0.0) for k, v in cap_map.items() if v is not None and float(v or 0.0) > 0.0
-                }
-                while remaining > 1e-9 and remaining_caps:
-                    cap_sum = sum(remaining_caps.values())
-                    if cap_sum <= 0.0:
-                        break
-                    remaining_start = remaining
-                    for k in list(remaining_caps.keys()):
-                        share = remaining_start * (remaining_caps[k] / cap_sum)
-                        alloc = min(share, remaining_caps[k])
-                        allocations[k] += alloc
-                        remaining_caps[k] -= alloc
-                        remaining -= alloc
-                        if remaining_caps[k] <= 1e-9:
-                            remaining_caps.pop(k, None)
-                return allocations
-
-            # Calculate total production capacity and environmental/bypass flows
-            facilities_at_node = set()
-            for i in nbors:
-                if 'U' in i:
-                    try:
-                        facility = unit_fac_dict.get(i) or self.unit_params.at[i, 'Facility']
-                        facilities_at_node.add(facility)
-                    except Exception:
-                        continue
-
-            total_env_Q = sum(env_Q_dict.get(f, 0.0) for f in facilities_at_node)
-            total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities_at_node)
-
-            # Calculate production flow ONCE per facility (not per unit!)
-            prod_Q_by_facility = {}
-            for f in facilities_at_node:
-                min_Q = min_Q_dict.get(f, 0.0)
-                env_Q = env_Q_dict.get(f, 0.0)
-                bypass_Q = bypass_Q_dict.get(f, 0.0)
-                sta_cap = sta_cap_dict.get(f, 0.0)
-
-                if curr_Q > min_Q:
-                    available_for_prod = curr_Q - env_Q - bypass_Q
-                    prod_Q_by_facility[f] = min(max(available_for_prod, 0.0), sta_cap)
-                else:
-                    prod_Q_by_facility[f] = 0.0
+            unit_nodes = [i for i in nbors if 'U' in i]
+            (unit_flow_allocations,
+             prod_Q_by_facility,
+             total_env_Q,
+             total_bypass_Q) = self.compute_unit_flow_allocations(
+                curr_Q,
+                unit_nodes,
+                min_Q_dict,
+                env_Q_dict,
+                bypass_Q_dict,
+                sta_cap_dict,
+                unit_fac_dict,
+                penstock_id_dict,
+                penstock_cap_dict,
+                cap_dict
+            )
 
             # CRITICAL: Process units in operational order, then others, then spillway
             # Sort by: (1) unit type (units=0, other=1, spillway=2), (2) operational order for units
@@ -1519,51 +1584,13 @@ class simulation():
 
             sorted_nbors = sorted(nbors, key=sort_key)
 
-            # Build per-facility unit lists and penstock grouping
-            units_by_facility = {}
-            penstocks_by_facility = {}
-            for nb in sorted_nbors:
-                if 'U' in nb:
-                    try:
-                        fac = unit_fac_dict.get(nb) or self.unit_params.at[nb, 'Facility']
-                    except Exception:
-                        continue
-                    units_by_facility.setdefault(fac, []).append(nb)
-                    pen_id = None
-                    if penstock_id_dict:
-                        pen_id = penstock_id_dict.get(nb)
-                    if not pen_id:
-                        pen_id = f"{fac}|{nb}"
-                    penstocks_by_facility.setdefault(fac, {}).setdefault(pen_id, []).append(nb)
-
             # DEBUG: Print sorting results on first day
             if not hasattr(self, '_neighbor_sort_printed'):
                 self._neighbor_sort_printed = True
                 print(f"[NEIGHBOR DEBUG] Original nbors: {nbors}", flush=True)
                 print(f"[NEIGHBOR DEBUG] Sorted nbors: {sorted_nbors}", flush=True)
                 print(f"[NEIGHBOR DEBUG] op_order dict: {op_order}", flush=True)
-                print(f"[NEIGHBOR DEBUG] units_by_facility: {units_by_facility}", flush=True)
-                print(f"[NEIGHBOR DEBUG] penstocks_by_facility: {penstocks_by_facility}", flush=True)
-
-            unit_flow_allocations = {}
-            for facility, penstocks in penstocks_by_facility.items():
-                if not penstocks:
-                    continue
-                pen_caps = {}
-                for pen_id, pen_units in penstocks.items():
-                    cap_val = None
-                    if penstock_cap_dict is not None:
-                        cap_val = penstock_cap_dict.get(pen_id)
-                    if cap_val is None or (isinstance(cap_val, float) and np.isnan(cap_val)):
-                        cap_val = sum(float(q_cap_dict.get(u, 0.0) or 0.0) for u in pen_units)
-                    pen_caps[pen_id] = float(cap_val) if cap_val is not None else 0.0
-
-                pen_allocs = allocate_proportional(prod_Q_by_facility.get(facility, 0.0), pen_caps)
-                for pen_id, pen_flow in pen_allocs.items():
-                    pen_units = penstocks.get(pen_id, [])
-                    unit_caps = {u: float(cap_dict.get(u, 0.0) or 0.0) for u in pen_units}
-                    unit_allocs = allocate_proportional(pen_flow, unit_caps)
-                    unit_flow_allocations.update(unit_allocs)
+                print(f"[NEIGHBOR DEBUG] facilities_at_node: {list(prod_Q_by_facility.keys())}", flush=True)
 
             total_unit_flow = sum(unit_flow_allocations.values())
             if not hasattr(self, '_penstock_alloc_warned'):
@@ -2423,7 +2450,6 @@ class simulation():
                         sta_cap = {}
 
                         for u in units:
-                            u_param_dict[u]['Q'] = curr_Q
                             unit_df = self.unit_params.loc[[u]]
                             fac = unit_df.iat[0, unit_df.columns.get_loc('Facility')]
                             if fac not in sta_cap:
@@ -2433,6 +2459,21 @@ class simulation():
                             
 
                         Q_dict['sta_cap'] = sta_cap
+
+                        unit_flow_allocations, _, _, _ = self.compute_unit_flow_allocations(
+                            curr_Q,
+                            units,
+                            min_Q_dict,
+                            env_Q_dict,
+                            bypass_Q_dict,
+                            sta_cap,
+                            unit_fac_dict,
+                            penstock_id_dict,
+                            penstock_cap_dict,
+                            q_cap_dict
+                        )
+                        for u in units:
+                            u_param_dict[u]['Q'] = float(unit_flow_allocations.get(u, 0.0) or 0.0)
 
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
                         #logger.info('Q-Dict Built')
