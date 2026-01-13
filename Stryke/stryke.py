@@ -1430,27 +1430,60 @@ class simulation():
                                       penstock_id_dict,
                                       penstock_cap_dict,
                                       cap_dict):
-        def allocate_proportional(total_flow, cap_map):
-            allocations = {k: 0.0 for k in cap_map}
+        def safe_float(val, default=0.0):
+            try:
+                if val is None or (isinstance(val, float) and np.isnan(val)):
+                    return default
+                return float(val)
+            except (TypeError, ValueError):
+                return default
+
+        def penstock_sort_key(pen_id):
+            pid = "" if pen_id is None else str(pen_id).strip()
+            if pid.isdigit():
+                return (0, int(pid))
+            try:
+                return (0, float(pid))
+            except (TypeError, ValueError):
+                digits = "".join(ch for ch in pid if ch.isdigit())
+                if digits:
+                    return (1, int(digits))
+                return (2, pid.lower())
+
+        def allocate_units_sequential(total_flow, units_in_order, qopt_map, cap_map, min_start):
+            allocations = {u: 0.0 for u in units_in_order}
             remaining = float(total_flow or 0.0)
-            remaining_caps = {
-                k: float(v or 0.0)
-                for k, v in cap_map.items()
-                if v is not None and float(v or 0.0) > 0.0
-            }
-            while remaining > 1e-9 and remaining_caps:
-                cap_sum = sum(remaining_caps.values())
-                if cap_sum <= 0.0:
+            if remaining <= 0.0:
+                return allocations
+
+            for u in units_in_order:
+                if remaining <= 0.0 or remaining < min_start:
                     break
-                remaining_start = remaining
-                for k in list(remaining_caps.keys()):
-                    share = remaining_start * (remaining_caps[k] / cap_sum)
-                    alloc = min(share, remaining_caps[k])
-                    allocations[k] += alloc
-                    remaining_caps[k] -= alloc
-                    remaining -= alloc
-                    if remaining_caps[k] <= 1e-9:
-                        remaining_caps.pop(k, None)
+                qcap = safe_float(cap_map.get(u, 0.0))
+                if qcap <= 0.0:
+                    continue
+                qopt = safe_float(qopt_map.get(u, 0.0))
+                target = qopt if qopt > 0.0 else qcap
+                target = min(target, qcap)
+                alloc = min(remaining, target)
+                allocations[u] = alloc
+                remaining -= alloc
+
+            if remaining > 0.0:
+                for u in units_in_order:
+                    if remaining <= 0.0:
+                        break
+                    qcap = safe_float(cap_map.get(u, 0.0))
+                    if qcap <= 0.0:
+                        continue
+                    current = allocations.get(u, 0.0)
+                    headroom = max(qcap - current, 0.0)
+                    if headroom <= 0.0:
+                        continue
+                    add = min(remaining, headroom)
+                    allocations[u] = current + add
+                    remaining -= add
+
             return allocations
 
         facilities_at_node = set()
@@ -1478,6 +1511,20 @@ class simulation():
             else:
                 prod_Q_by_facility[f] = 0.0
 
+        op_order_map = {}
+        qopt_map = {}
+        if hasattr(self, "unit_params") and self.unit_params is not None:
+            if "op_order" in self.unit_params.columns:
+                for unit in unit_nodes:
+                    if unit in self.unit_params.index:
+                        op_val = self.unit_params.at[unit, "op_order"]
+                        if not (isinstance(op_val, float) and np.isnan(op_val)):
+                            op_order_map[unit] = int(op_val)
+            if "Qopt" in self.unit_params.columns:
+                for unit in unit_nodes:
+                    if unit in self.unit_params.index:
+                        qopt_map[unit] = safe_float(self.unit_params.at[unit, "Qopt"])
+
         penstocks_by_facility = {}
         for unit in unit_nodes:
             facility = unit_fac_dict.get(unit)
@@ -1497,21 +1544,34 @@ class simulation():
         for facility, penstocks in penstocks_by_facility.items():
             if not penstocks:
                 continue
-            pen_caps = {}
-            for pen_id, pen_units in penstocks.items():
+            remaining_prod = prod_Q_by_facility.get(facility, 0.0)
+            min_start = safe_float(min_Q_dict.get(facility, 0.0))
+
+            ordered_pen_ids = sorted(penstocks.keys(), key=penstock_sort_key)
+            for pen_id in ordered_pen_ids:
+                if remaining_prod <= 0.0:
+                    break
+                pen_units = penstocks.get(pen_id, [])
+                if not pen_units:
+                    continue
                 cap_val = None
                 if penstock_cap_dict is not None:
                     cap_val = penstock_cap_dict.get(pen_id)
                 if cap_val is None or (isinstance(cap_val, float) and np.isnan(cap_val)):
-                    cap_val = sum(float(cap_dict.get(u, 0.0) or 0.0) for u in pen_units)
-                pen_caps[pen_id] = float(cap_val) if cap_val is not None else 0.0
+                    cap_val = sum(safe_float(cap_dict.get(u, 0.0)) for u in pen_units)
+                pen_cap = safe_float(cap_val)
+                pen_flow = min(remaining_prod, pen_cap) if pen_cap > 0.0 else remaining_prod
+                remaining_prod -= pen_flow
 
-            pen_allocs = allocate_proportional(prod_Q_by_facility.get(facility, 0.0), pen_caps)
-            for pen_id, pen_flow in pen_allocs.items():
-                pen_units = penstocks.get(pen_id, [])
-                unit_caps = {u: float(cap_dict.get(u, 0.0) or 0.0) for u in pen_units}
-                unit_allocs = allocate_proportional(pen_flow, unit_caps)
-                unit_flow_allocations.update(unit_allocs)
+                ordered_units = sorted(pen_units, key=lambda u: (op_order_map.get(u, 999), u))
+                pen_allocs = allocate_units_sequential(
+                    pen_flow,
+                    ordered_units,
+                    qopt_map,
+                    cap_dict,
+                    min_start
+                )
+                unit_flow_allocations.update(pen_allocs)
 
         return unit_flow_allocations, prod_Q_by_facility, total_env_Q, total_bypass_Q
  
