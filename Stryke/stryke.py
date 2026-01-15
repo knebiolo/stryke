@@ -1456,16 +1456,23 @@ class simulation():
             if remaining <= 0.0:
                 return allocations
 
+            min_start_val = safe_float(min_start, 0.0)
             for u in units_in_order:
-                if remaining <= 0.0 or remaining < min_start:
+                if remaining <= 0.0 or (min_start_val > 0.0 and remaining < min_start_val):
                     break
                 qcap = safe_float(cap_map.get(u, 0.0))
                 if qcap <= 0.0:
                     continue
+                if min_start_val > 0.0 and qcap < min_start_val:
+                    continue
                 qopt = safe_float(qopt_map.get(u, 0.0))
                 target = qopt if qopt > 0.0 else qcap
                 target = min(target, qcap)
+                if min_start_val > 0.0 and target < min_start_val:
+                    target = min_start_val
                 alloc = min(remaining, target)
+                if min_start_val > 0.0 and alloc < min_start_val:
+                    break
                 allocations[u] = alloc
                 remaining -= alloc
 
@@ -1477,6 +1484,8 @@ class simulation():
                     if qcap <= 0.0:
                         continue
                     current = allocations.get(u, 0.0)
+                    if current <= 0.0:
+                        continue
                     headroom = max(qcap - current, 0.0)
                     if headroom <= 0.0:
                         continue
@@ -1667,7 +1676,7 @@ class simulation():
                     probs.append(prob)
                     route_flows.append(u_Q)
                 elif 'spill' in i:
-                    spill_Q = max(0.0, curr_Q - total_unit_flow - total_env_Q - total_bypass_Q)
+                    spill_Q = max(0.0, curr_Q - total_unit_flow - total_bypass_Q)
                     prob = spill_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
@@ -1723,12 +1732,25 @@ class simulation():
                 probs.append(edge_weight)
                 route_flows.append(edge_weight * curr_Q if curr_Q > 0 else 0.0)
     
-        # Normalize probabilities
+        # Align probabilities with routed flow volumes.
         locs = np.array(locs, dtype=str).flatten()  # force flat array of strings
         probs = np.array(probs, dtype=float).flatten()
         route_flows = np.array(route_flows, dtype=float).flatten()
-        if probs.sum() > 0:
-            probs /= probs.sum()
+        total_flow = float(route_flows.sum())
+        if curr_Q > 0.0 and total_flow > 0.0:
+            if total_flow < curr_Q:
+                spill_mask = np.char.find(locs, 'spill') >= 0
+                if np.any(spill_mask):
+                    spill_idx = int(np.where(spill_mask)[0][0])
+                    route_flows[spill_idx] += (curr_Q - total_flow)
+                    total_flow = float(route_flows.sum())
+            if total_flow > 0.0:
+                if abs(total_flow - curr_Q) <= 1e-6:
+                    probs = route_flows / curr_Q
+                else:
+                    probs = route_flows / total_flow
+            else:
+                probs = np.ones(len(probs)) / len(probs)
         else:
             probs = np.ones(len(probs)) / len(probs)
         if route_flow_recorder is not None and locs.size == route_flows.size:
