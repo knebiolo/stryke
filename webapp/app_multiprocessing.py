@@ -59,6 +59,53 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../Stry
 from Stryke import stryke
 from Stryke.stryke import epri
 
+
+def _collect_unit_param_warnings(unit_params_file):
+    warnings = []
+    if not unit_params_file or not os.path.exists(unit_params_file):
+        warnings.append("Unit parameters file is missing.")
+        return warnings
+
+    try:
+        df_unit = pd.read_csv(unit_params_file)
+    except Exception as exc:
+        warnings.append(f"Could not read unit parameters file: {exc}")
+        return warnings
+
+    if df_unit.empty:
+        warnings.append("Unit parameters are empty.")
+        return warnings
+
+    missing_cols = [col for col in ("Qopt", "Qcap") if col not in df_unit.columns]
+    if missing_cols:
+        warnings.append(f"Missing required columns: {', '.join(missing_cols)}.")
+        return warnings
+
+    qopt = pd.to_numeric(df_unit["Qopt"], errors="coerce")
+    qcap = pd.to_numeric(df_unit["Qcap"], errors="coerce")
+    labels = df_unit.index.astype(str)
+    if "Facility" in df_unit.columns and "Unit" in df_unit.columns:
+        labels = df_unit["Facility"].astype(str) + " - Unit " + df_unit["Unit"].astype(str)
+    elif "Unit" in df_unit.columns:
+        labels = df_unit["Unit"].astype(str)
+
+    invalid_qopt = qopt.isna() | (qopt <= 0)
+    invalid_qcap = qcap.isna() | (qcap <= 0)
+    if invalid_qopt.any():
+        units = ", ".join(sorted(set(labels[invalid_qopt].tolist())))
+        warnings.append(f"Qopt missing/invalid for units: {units}.")
+    if invalid_qcap.any():
+        units = ", ".join(sorted(set(labels[invalid_qcap].tolist())))
+        warnings.append(f"Qcap missing/invalid for units: {units}.")
+
+    return warnings
+
+
+def _raise_if_unit_params_invalid(unit_params_file):
+    warnings = _collect_unit_param_warnings(unit_params_file)
+    if warnings:
+        raise ValueError("Unit parameters invalid. " + " ".join(warnings))
+
     
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -1260,6 +1307,7 @@ if __name__ == '__main__':
         # --- Unit Parameters ---
         unit_parameters = []
         unit_columns = []
+        unit_param_warnings = []
         if 'unit_params_file' in session:
             unit_params_file = session['unit_params_file']
             if os.path.exists(unit_params_file):
@@ -1273,6 +1321,7 @@ if __name__ == '__main__':
                 logger.debug("Unit parameters file not found on disk:", unit_params_file)
         else:
             logger.debug("No unit_params_file key in session.")
+        unit_param_warnings = _collect_unit_param_warnings(session.get('unit_params_file'))
     
         # --- Operating Scenarios ---
         operating_scenarios = []
@@ -1329,6 +1378,7 @@ if __name__ == '__main__':
             summary_data=summary_data,
             unit_columns=unit_columns,
             unit_parameters=unit_parameters,
+            unit_param_warnings=unit_param_warnings,
             operating_scenarios=operating_scenarios,
             flow_scenarios=flow_scenarios,
             graph_nodes=graph_nodes,
@@ -1345,6 +1395,7 @@ if __name__ == '__main__':
             # Redirect stdout so that print messages are sent to the shared log queue.
             sys.stdout = QueueStream(log_queue)
             logger.debug ("DEBUG: Creating sim object")
+            _raise_if_unit_params_invalid(data_dict.get("unit_parameters_file"))
             sim_instance = stryke.simulation(proj_dir=user_sim_folder, output_name="WebAppModel", wks=None)
             sim_instance.webapp_import(data_dict, output_name="WebAppModel")
             sim_instance.run()

@@ -308,6 +308,53 @@ def _validate_extension(filename: str, allowed: set) -> None:
     if ext not in allowed:
         raise ValueError(f"Invalid file type: {ext}")
 
+
+def _collect_unit_param_warnings(unit_params_file):
+    warnings = []
+    if not unit_params_file or not os.path.exists(unit_params_file):
+        warnings.append("Unit parameters file is missing.")
+        return warnings
+
+    try:
+        df_unit = pd.read_csv(unit_params_file)
+    except Exception as exc:
+        warnings.append(f"Could not read unit parameters file: {exc}")
+        return warnings
+
+    if df_unit.empty:
+        warnings.append("Unit parameters are empty.")
+        return warnings
+
+    missing_cols = [col for col in ("Qopt", "Qcap") if col not in df_unit.columns]
+    if missing_cols:
+        warnings.append(f"Missing required columns: {', '.join(missing_cols)}.")
+        return warnings
+
+    qopt = pd.to_numeric(df_unit["Qopt"], errors="coerce")
+    qcap = pd.to_numeric(df_unit["Qcap"], errors="coerce")
+    labels = df_unit.index.astype(str)
+    if "Facility" in df_unit.columns and "Unit" in df_unit.columns:
+        labels = df_unit["Facility"].astype(str) + " - Unit " + df_unit["Unit"].astype(str)
+    elif "Unit" in df_unit.columns:
+        labels = df_unit["Unit"].astype(str)
+
+    invalid_qopt = qopt.isna() | (qopt <= 0)
+    invalid_qcap = qcap.isna() | (qcap <= 0)
+    if invalid_qopt.any():
+        units = ", ".join(sorted(set(labels[invalid_qopt].tolist())))
+        warnings.append(f"Qopt missing/invalid for units: {units}.")
+    if invalid_qcap.any():
+        units = ", ".join(sorted(set(labels[invalid_qcap].tolist())))
+        warnings.append(f"Qcap missing/invalid for units: {units}.")
+
+    return warnings
+
+
+def _raise_if_unit_params_invalid(unit_params_file):
+    warnings = _collect_unit_param_warnings(unit_params_file)
+    if warnings:
+        raise ValueError("Unit parameters invalid. " + " ".join(warnings))
+
 @app.errorhandler(NotFound)
 def handle_404(e):
     # Simple 404, no scary traceback
@@ -1182,11 +1229,27 @@ def load_project():
             print(f"DEBUG load_project: Stored {len(session['facilities_data'])} facilities and {len(facility_units)} facility_units in session", flush=True)
         
         # Restore unit parameters
-        if project_data.get('unit_parameters', {}).get('csv_content'):
+        unit_params_data = project_data.get('unit_parameters')
+        if isinstance(unit_params_data, dict) and unit_params_data.get('csv_content'):
             unit_params_path = os.path.join(sim_folder, 'unit_params.csv')
             with open(unit_params_path, 'w') as f:
-                f.write(project_data['unit_parameters']['csv_content'])
+                f.write(unit_params_data['csv_content'])
             session['unit_params_file'] = unit_params_path
+        elif isinstance(unit_params_data, list) and unit_params_data:
+            unit_params_path = os.path.join(sim_folder, 'unit_params.csv')
+            pd.DataFrame(unit_params_data).to_csv(unit_params_path, index=False)
+            session['unit_params_file'] = unit_params_path
+        elif isinstance(unit_params_data, dict) and unit_params_data:
+            unit_params_path = os.path.join(sim_folder, 'unit_params.csv')
+            records = unit_params_data.get('records')
+            if isinstance(records, list) and records:
+                pd.DataFrame(records).to_csv(unit_params_path, index=False)
+                session['unit_params_file'] = unit_params_path
+            else:
+                df_unit = pd.DataFrame(unit_params_data)
+                if not df_unit.empty:
+                    df_unit.to_csv(unit_params_path, index=False)
+                    session['unit_params_file'] = unit_params_path
         
         # Restore graph
         if project_data.get('graph'):
@@ -4031,47 +4094,20 @@ def model_setup_summary():
     # --- Unit Parameters ---
     unit_parameters = []
     unit_columns = []
-    unit_param_warnings = []
-    if 'unit_params_file' in session:
-        unit_params_file = session['unit_params_file']
-        #print("Found unit_params_file in session:", unit_params_file)
+    unit_params_file = session.get('unit_params_file')
+    if unit_params_file:
         if os.path.exists(unit_params_file):
             try:
                 df_unit = pd.read_csv(unit_params_file)
                 unit_parameters = df_unit.to_dict(orient='records')
                 unit_columns = list(df_unit.columns)
-                if df_unit.empty:
-                    unit_param_warnings.append("Unit parameters are empty.")
-                else:
-                    missing_cols = [col for col in ("Qopt", "Qcap") if col not in df_unit.columns]
-                    if missing_cols:
-                        unit_param_warnings.append(
-                            f"Missing required columns: {', '.join(missing_cols)}."
-                        )
-                    else:
-                        qopt = pd.to_numeric(df_unit["Qopt"], errors="coerce")
-                        qcap = pd.to_numeric(df_unit["Qcap"], errors="coerce")
-                        labels = df_unit.index.astype(str)
-                        if "Facility" in df_unit.columns and "Unit" in df_unit.columns:
-                            labels = df_unit["Facility"].astype(str) + " - Unit " + df_unit["Unit"].astype(str)
-                        elif "Unit" in df_unit.columns:
-                            labels = df_unit["Unit"].astype(str)
-
-                        invalid_qopt = qopt.isna() | (qopt <= 0)
-                        invalid_qcap = qcap.isna() | (qcap <= 0)
-                        if invalid_qopt.any():
-                            units = ", ".join(sorted(set(labels[invalid_qopt].tolist())))
-                            unit_param_warnings.append(f"Qopt missing/invalid for units: {units}.")
-                        if invalid_qcap.any():
-                            units = ", ".join(sorted(set(labels[invalid_qcap].tolist())))
-                            unit_param_warnings.append(f"Qcap missing/invalid for units: {units}.")
-                #print("Loaded unit parameters:", unit_parameters)
             except Exception as e:
                 print("Error reading unit_params_file:", e)
         else:
             print("Unit parameters file not found on disk:", unit_params_file)
     else:
         print("No unit_params_file key in session.")
+    unit_param_warnings = _collect_unit_param_warnings(unit_params_file)
 
     # --- Operating Scenarios ---
     operating_scenarios = []
@@ -4206,6 +4242,8 @@ def run_simulation_in_background_custom(data_dict, q):
         
         if not proj_dir or not os.path.exists(proj_dir):
             raise ValueError(f"Invalid project directory: {proj_dir}")
+
+        _raise_if_unit_params_invalid(data_dict.get('unit_parameters_file'))
             
         # Create simulation instance
         sim = stryke.simulation(proj_dir, output_name, existing=False)
