@@ -1152,6 +1152,36 @@ class simulation():
         self._fish_width_ratio_cache[cache_key] = ratio
         return ratio
 
+    def _validate_unit_params_required_fields(self):
+        if not hasattr(self, "unit_params") or self.unit_params is None or self.unit_params.empty:
+            raise ValueError("Unit parameters are required but missing or empty.")
+
+        missing_cols = [col for col in ("Qopt", "Qcap") if col not in self.unit_params.columns]
+        if missing_cols:
+            raise ValueError(f"Unit parameters missing required columns: {', '.join(missing_cols)}.")
+
+        df = self.unit_params
+        qopt = pd.to_numeric(df["Qopt"], errors="coerce")
+        qcap = pd.to_numeric(df["Qcap"], errors="coerce")
+
+        labels = df.index.astype(str)
+        if "Facility" in df.columns and "Unit" in df.columns:
+            labels = df["Facility"].astype(str) + " - Unit " + df["Unit"].astype(str)
+        elif "Unit" in df.columns:
+            labels = df["Unit"].astype(str)
+
+        invalid_qopt = qopt.isna() | (qopt <= 0)
+        invalid_qcap = qcap.isna() | (qcap <= 0)
+        if invalid_qopt.any() or invalid_qcap.any():
+            messages = []
+            if invalid_qopt.any():
+                units = ", ".join(sorted(set(labels[invalid_qopt].tolist())))
+                messages.append(f"Qopt missing/invalid for units: {units}")
+            if invalid_qcap.any():
+                units = ", ".join(sorted(set(labels[invalid_qcap].tolist())))
+                messages.append(f"Qcap missing/invalid for units: {units}")
+            raise ValueError("Invalid unit parameters. " + "; ".join(messages))
+
     def node_surv_rate(self,
                        length,
                        u_crit,
@@ -2399,6 +2429,7 @@ class simulation():
         print(f"[DEBUG RUN START] Project: {getattr(self, 'project_name', 'UNKNOWN')}", flush=True)
         print(f"[DEBUG RUN START] Population records: {len(self.pop) if hasattr(self, 'pop') else 'NO POP DATA'}", flush=True)
         print(f"[DEBUG RUN START] Unit params: {len(self.unit_params) if hasattr(self, 'unit_params') else 'NO UNITS'} units", flush=True)
+        self._validate_unit_params_required_fields()
         
         self._route_flow_logged_keys = set()
         
