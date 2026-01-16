@@ -1162,7 +1162,10 @@ class simulation():
                 intake velocity are impinged, and we assume impingement is death'''
                 intake_vel = param_dict['intake_vel']
                 rack_spacing = param_dict['rack_spacing']
-                if length/10. > rack_spacing and u_crit < intake_vel:
+                # Approximate width as 10% of length (both in feet).
+                width = length * 0.10
+                blocked_by_rack = width > rack_spacing
+                if blocked_by_rack and u_crit < intake_vel:
                     imp_surv_prob = 0.
                 else:
                     imp_surv_prob = 1.
@@ -1170,7 +1173,10 @@ class simulation():
                 #logger.debug('calculated impingement survival')
                 
                 # if survival is assessed at a Kaplan turbine:
-                if surv_fun == 'Kaplan':
+                if blocked_by_rack:
+                    # Fish too wide for rack spacing will not be entrained through the turbine.
+                    strike_surv_prob = 1.0
+                elif surv_fun == 'Kaplan':
                     # calculate the probability of strike as a function of the length of the fish and turbine parameters
                     strike_surv_prob = self.Kaplan(length, param_dict)
     
@@ -1190,7 +1196,7 @@ class simulation():
                     strike_surv_prob = self.Pump(length, param_dict)
                     
                 
-                if barotrauma == True:
+                if barotrauma == True and not blocked_by_rack:
                     if route not in self.unit_params.index:
                         raise KeyError(f"Route {route} not found in unit_params for barotrauma.")
                     if 'fb_depth' not in self.unit_params.columns:
@@ -1619,6 +1625,7 @@ class simulation():
         contains_U = np.char.find(nbors, 'U') >= 0
         found_spill = np.char.find(nbors_lower, 'spill') >= 0
         found_env = np.char.find(nbors_lower, 'env') >= 0
+        found_bypass = np.char.find(nbors_lower, 'bypass') >= 0
     
         if np.any(contains_U):
             unit_nodes = [i for i in nbors if 'U' in i]
@@ -1646,13 +1653,17 @@ class simulation():
                     return (0, op_order.get(x, 999))  # Units first, sorted by op_order
                 if 'env' in x_lower:
                     return (1, 0)  # Environmental flow next
+                if 'bypass' in x_lower:
+                    return (2, 0)  # Bypass flow next
                 if 'spill' in x_lower:
-                    return (3, 0)  # Spillway last
-                return (2, 0)  # Other routes in middle
+                    return (4, 0)  # Spillway last
+                return (3, 0)  # Other routes in middle
 
             sorted_nbors = sorted(nbors, key=sort_key)
             env_nodes = [i for i in sorted_nbors if 'env' in str(i).lower()]
             env_count = len(env_nodes)
+            bypass_nodes = [i for i in sorted_nbors if 'bypass' in str(i).lower()]
+            bypass_count = len(bypass_nodes)
 
             # DEBUG: Print sorting results on first day
             if not hasattr(self, '_neighbor_sort_printed'):
@@ -1682,6 +1693,12 @@ class simulation():
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(env_Q)
+                elif 'bypass' in str(i).lower():
+                    bypass_Q = total_bypass_Q / bypass_count if bypass_count > 0 else 0.0
+                    prob = bypass_Q / curr_Q if curr_Q > 0 else 0.0
+                    locs.append(i)
+                    probs.append(prob)
+                    route_flows.append(bypass_Q)
                 elif 'spill' in str(i).lower():
                     spill_Q = max(0.0, curr_Q - total_unit_flow - total_bypass_Q - total_env_Q)
                     prob = spill_Q / curr_Q if curr_Q > 0 else 0.0
@@ -1704,6 +1721,8 @@ class simulation():
             min_Q_ref = 0.0
             env_nodes = [i for i in nbors if 'env' in str(i).lower()]
             env_count = len(env_nodes)
+            bypass_nodes = [i for i in nbors if 'bypass' in str(i).lower()]
+            bypass_count = len(bypass_nodes)
 
             for i in nbors:
                 #logger.debug(f"neighbor: {i}")
@@ -1717,6 +1736,10 @@ class simulation():
                     env_Q = total_env_Q / env_count if env_count > 0 else 0.0
                     prob = env_Q / curr_Q if curr_Q > 0 else 0.0
                     flow_val = env_Q
+                elif 'bypass' in i_lower:
+                    bypass_Q = total_bypass_Q / bypass_count if bypass_count > 0 else 0.0
+                    prob = bypass_Q / curr_Q if curr_Q > 0 else 0.0
+                    flow_val = bypass_Q
                 elif 'spill' in i_lower:
                     # Handle spill logic independently
                     if curr_Q <= min_Q_ref:
