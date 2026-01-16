@@ -1615,8 +1615,10 @@ class simulation():
         probs = []
         route_flows = []
 
+        nbors_lower = np.char.lower(nbors)
         contains_U = np.char.find(nbors, 'U') >= 0
-        found_spill = np.char.find(nbors, 'spill') >= 0
+        found_spill = np.char.find(nbors_lower, 'spill') >= 0
+        found_env = np.char.find(nbors_lower, 'env') >= 0
     
         if np.any(contains_U):
             unit_nodes = [i for i in nbors if 'U' in i]
@@ -1639,14 +1641,18 @@ class simulation():
             # CRITICAL: Process units in operational order, then others, then spillway
             # Sort by: (1) unit type (units=0, other=1, spillway=2), (2) operational order for units
             def sort_key(x):
+                x_lower = str(x).lower()
                 if 'U' in x:
                     return (0, op_order.get(x, 999))  # Units first, sorted by op_order
-                elif 'spill' in x:
-                    return (2, 0)  # Spillway last
-                else:
-                    return (1, 0)  # Other routes in middle
+                if 'env' in x_lower:
+                    return (1, 0)  # Environmental flow next
+                if 'spill' in x_lower:
+                    return (3, 0)  # Spillway last
+                return (2, 0)  # Other routes in middle
 
             sorted_nbors = sorted(nbors, key=sort_key)
+            env_nodes = [i for i in sorted_nbors if 'env' in str(i).lower()]
+            env_count = len(env_nodes)
 
             # DEBUG: Print sorting results on first day
             if not hasattr(self, '_neighbor_sort_printed'):
@@ -1670,8 +1676,14 @@ class simulation():
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(u_Q)
-                elif 'spill' in i:
-                    spill_Q = max(0.0, curr_Q - total_unit_flow - total_bypass_Q)
+                elif 'env' in str(i).lower():
+                    env_Q = total_env_Q / env_count if env_count > 0 else 0.0
+                    prob = env_Q / curr_Q if curr_Q > 0 else 0.0
+                    locs.append(i)
+                    probs.append(prob)
+                    route_flows.append(env_Q)
+                elif 'spill' in str(i).lower():
+                    spill_Q = max(0.0, curr_Q - total_unit_flow - total_bypass_Q - total_env_Q)
                     prob = spill_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
@@ -1690,27 +1702,31 @@ class simulation():
             total_env_Q = sum(env_Q_dict.get(f, 0.0) for f in facilities)
             total_bypass_Q = sum(bypass_Q_dict.get(f, 0.0) for f in facilities)
             min_Q_ref = 0.0
+            env_nodes = [i for i in nbors if 'env' in str(i).lower()]
+            env_count = len(env_nodes)
 
             for i in nbors:
                 #logger.debug(f"neighbor: {i}")
+                i_lower = str(i).lower()
                 if 'U' in i:  # Only unit nodes have min_Q
                     min_Q_ref = min_Q_dict.get(i, 0.0)
                     prob = 0.0
                     flow_val = Q_dict.get(i, 0.0)
 
-                elif 'spill' in i:
+                elif 'env' in i_lower:
+                    env_Q = total_env_Q / env_count if env_count > 0 else 0.0
+                    prob = env_Q / curr_Q if curr_Q > 0 else 0.0
+                    flow_val = env_Q
+                elif 'spill' in i_lower:
                     # Handle spill logic independently
                     if curr_Q <= min_Q_ref:
-                        prob = 1.0
-                        flow_val = curr_Q
+                        spill_Q = curr_Q
                     elif curr_Q >= total_sta_cap + total_env_Q + total_bypass_Q:
                         spill_Q = curr_Q - total_sta_cap - total_env_Q - total_bypass_Q
-                        prob = max(spill_Q / curr_Q, 0.0)
-                        flow_val = max(spill_Q, 0.0)
                     else:
-                        p_env = total_env_Q / curr_Q if curr_Q > 0 else 0.0
-                        prob = p_env
-                        flow_val = total_env_Q
+                        spill_Q = max(0.0, curr_Q - total_env_Q - total_bypass_Q)
+                    prob = max(spill_Q / curr_Q, 0.0) if curr_Q > 0 else 0.0
+                    flow_val = max(spill_Q, 0.0)
                 else:
                     prob = 1.0  # fallback/default for unknown node types?
                     flow_val = prob * curr_Q

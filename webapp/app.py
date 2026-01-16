@@ -4112,6 +4112,26 @@ def model_setup_summary():
     if pop_df and not isinstance(pop_df, list):
         pop_df = [pop_df]
 
+    # --- Passage Routes (targets of bifurcations) ---
+    passage_routes = []
+    if graph_edges:
+        targets_by_source = {}
+        for edge in graph_edges:
+            data = edge.get('data', {}) if isinstance(edge, dict) else {}
+            source = data.get('source')
+            target = data.get('target')
+            if source and target:
+                targets_by_source.setdefault(source, set()).add(target)
+        bifurcation_sources = {src for src, tgts in targets_by_source.items() if len(tgts) > 1}
+        seen_targets = set()
+        for edge in graph_edges:
+            data = edge.get('data', {}) if isinstance(edge, dict) else {}
+            source = data.get('source')
+            target = data.get('target')
+            if source in bifurcation_sources and target and target not in seen_targets:
+                passage_routes.append(target)
+                seen_targets.add(target)
+
     # --- Prepare data for template ---
     proj_dir = session.get('proj_dir', '')
     output_name = session.get('project_name', 'unnamed_project')
@@ -4126,6 +4146,7 @@ def model_setup_summary():
                          graph_summary=graph_summary,
                          graph_nodes=graph_nodes,  # Added
                          graph_edges=graph_edges,  # Added
+                         passage_routes=passage_routes,
                          project_name=session.get('project_name'),
                          project_notes=session.get('project_notes'),
                          model_setup=session.get('model_setup'),

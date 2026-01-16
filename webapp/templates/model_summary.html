@@ -297,6 +297,16 @@
     <button class="accordion">Graph Data <a class="edit-link" href="{{ url_for('graph_editor') }}">Edit</a></button>
     <div class="panel">
       {% if graph_nodes %}
+      {% if passage_routes %}
+      <h4>Passage Routes</h4>
+      <ul>
+        {% for route in passage_routes %}
+          <li>{{ route }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p>No passage routes detected.</p>
+      {% endif %}
       <table class="summary-table">
         <thead>
           <tr>
