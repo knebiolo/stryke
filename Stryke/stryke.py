@@ -1074,6 +1074,84 @@ class simulation():
 
     #     return scalarize(endpoint)
 
+    def _load_fish_class_lookup(self):
+        if getattr(self, "_fish_class_loaded", False):
+            return
+        self._fish_class_loaded = True
+        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Data', 'fish_class.csv')
+        data_dir = os.path.normpath(data_dir)
+        try:
+            fish_class = pd.read_csv(data_dir, encoding='unicode_escape')
+        except Exception as exc:
+            logger.warning(f"Failed to load fish_class.csv for width ratios: {exc}")
+            self._fish_family_by_species = {}
+            self._fish_family_by_common = {}
+            self._fish_family_by_genus = {}
+            return
+        fish_class = fish_class.dropna(subset=["Family"])
+        fish_class["Species_norm"] = fish_class["Species"].astype(str).str.strip().str.lower()
+        fish_class["Common_norm"] = fish_class["Common"].astype(str).str.strip().str.lower()
+        fish_class["Genus"] = fish_class["Species_norm"].str.split().str[0]
+        self._fish_family_by_species = dict(zip(fish_class["Species_norm"], fish_class["Family"]))
+        self._fish_family_by_common = dict(zip(fish_class["Common_norm"], fish_class["Family"]))
+        self._fish_family_by_genus = (
+            fish_class.dropna(subset=["Genus"])
+            .drop_duplicates(subset=["Genus"])
+            .set_index("Genus")["Family"]
+            .to_dict()
+        )
+
+    def _resolve_fish_family(self, species_name=None, common_name=None, family_name=None):
+        if family_name is not None and str(family_name).strip():
+            return str(family_name).strip()
+        self._load_fish_class_lookup()
+        common_norm = str(common_name).strip().lower() if common_name is not None else ""
+        if common_norm and common_norm in getattr(self, "_fish_family_by_common", {}):
+            return self._fish_family_by_common[common_norm]
+        species_norm = str(species_name).strip().lower() if species_name is not None else ""
+        if species_norm and species_norm in getattr(self, "_fish_family_by_species", {}):
+            return self._fish_family_by_species[species_norm]
+        genus = species_norm.split()[0] if species_norm else ""
+        if genus and genus in getattr(self, "_fish_family_by_genus", {}):
+            return self._fish_family_by_genus[genus]
+        return None
+
+    def _resolve_fish_width_ratio(self, species_name=None, common_name=None, family_name=None):
+        if not hasattr(self, "_fish_width_ratio_cache"):
+            self._fish_width_ratio_cache = {}
+        species_key = str(species_name).strip().lower() if species_name is not None else ""
+        common_key = str(common_name).strip().lower() if common_name is not None else ""
+        family_key = str(family_name).strip() if family_name is not None else ""
+        cache_key = (species_key, common_key, family_key)
+        if cache_key in self._fish_width_ratio_cache:
+            return self._fish_width_ratio_cache[cache_key]
+
+        family_ratios = {
+            "Centrarchidae": 0.10,
+            "Ictaluridae": 0.18,
+            "Catostomidae": 0.18,
+            "Acipenseridae": 0.125,
+            "Salmonidae": 0.20,
+            "Percidae": 0.125,
+            "Cyprinidae": 0.10,
+        }
+        ratio = 0.10
+        family = self._resolve_fish_family(species_name=species_name, common_name=common_name, family_name=family_name)
+        if family in family_ratios:
+            ratio = family_ratios[family]
+        name_hint = common_key or species_key
+        if family == "Centrarchidae":
+            if "bass" in name_hint or "micropterus" in name_hint:
+                ratio = 0.135
+            elif "sunfish" in name_hint or "bluegill" in name_hint or "lepomis" in name_hint:
+                ratio = 0.09
+        elif family == "Cyprinidae":
+            if "carp" in name_hint:
+                ratio = 0.11
+
+        self._fish_width_ratio_cache[cache_key] = ratio
+        return ratio
+
     def node_surv_rate(self,
                        length,
                        u_crit,
@@ -1082,7 +1160,8 @@ class simulation():
                        route,
                        surv_dict,
                        u_param_dict,
-                       barotrauma = False):
+                       barotrauma = False,
+                       width_ratio = None):
         """
         Calculates the survival probability of a fish passing through a node in 
         the migratory network, taking into account the type of hydraulic structure 
@@ -1137,6 +1216,10 @@ class simulation():
         status = scalarize(status)
         surv_fun = scalarize(surv_fun)
         route = scalarize(route)
+        width_ratio = scalarize(width_ratio)
+        if width_ratio is None or (isinstance(width_ratio, float) and np.isnan(width_ratio)):
+            width_ratio = 0.10
+        width_ratio = float(width_ratio)
 
     
         if status == 0:
@@ -1162,8 +1245,7 @@ class simulation():
                 intake velocity are impinged, and we assume impingement is death'''
                 intake_vel = param_dict['intake_vel']
                 rack_spacing = param_dict['rack_spacing']
-                # Approximate width as 10% of length (both in feet).
-                width = length * 0.10
+                width = length * width_ratio
                 blocked_by_rack = width > rack_spacing
                 if blocked_by_rack and u_crit < intake_vel:
                     imp_surv_prob = 0.
@@ -2553,6 +2635,17 @@ class simulation():
                 
                 # get other variables
                 species_name = spc_dat.iat[0, spc_dat.columns.get_loc('Species')]
+                common_name = None
+                if 'Common Name' in spc_dat.columns:
+                    common_name = spc_dat.iat[0, spc_dat.columns.get_loc('Common Name')]
+                family_name = None
+                if 'Family' in spc_dat.columns:
+                    family_name = spc_dat.iat[0, spc_dat.columns.get_loc('Family')]
+                width_ratio = self._resolve_fish_width_ratio(
+                    species_name=species_name,
+                    common_name=common_name,
+                    family_name=family_name,
+                )
                 iterations = spc_dat.iat[0, spc_dat.columns.get_loc('Iterations')]
                 u_crit = spc_dat.iat[0, spc_dat.columns.get_loc('U_crit')]
                 occur_prob = spc_dat.iat[0, spc_dat.columns.get_loc('occur_prob')]
@@ -2743,7 +2836,7 @@ class simulation():
                                         return x.item()
                                     return x
                                 
-                                def safe_node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict):
+                                def safe_node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict, width_ratio):
                                     try:
                                         pop = scalarize(pop)
                                         swim = scalarize(swim)
@@ -2751,7 +2844,17 @@ class simulation():
                                         surv_fun = scalarize(surv_fun)
                                         location = scalarize(location)
                                         #logger.debug('scalarized variables')
-                                        return self.node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict, barotrauma = barotrauma)
+                                        return self.node_surv_rate(
+                                            pop,
+                                            swim,
+                                            status,
+                                            surv_fun,
+                                            location,
+                                            surv_dict,
+                                            u_param_dict,
+                                            barotrauma=barotrauma,
+                                            width_ratio=width_ratio,
+                                        )
                                     except Exception as e:
                                         print(f"Failed node_surv_rate at location={location} with error: {e}")
                                         raise
@@ -2787,8 +2890,17 @@ class simulation():
                                     status_arr = np.asarray(status_arr).flatten()
                                     surv_fun = np.asarray(surv_fun).flatten()
                                 
-                                    v_surv_rate = np.vectorize(safe_node_surv_rate, excluded=[5, 6])
-                                    rates = v_surv_rate(population, swim_speed, status_arr, surv_fun, current_location, surv_dict, u_param_dict)
+                                    v_surv_rate = np.vectorize(safe_node_surv_rate, excluded=[5, 6, 7])
+                                    rates = v_surv_rate(
+                                        population,
+                                        swim_speed,
+                                        status_arr,
+                                        surv_fun,
+                                        current_location,
+                                        surv_dict,
+                                        u_param_dict,
+                                        width_ratio,
+                                    )
                                 
                                     #logger.info('applied vectorized survival rate')
                                     survival = np.where(dice <= rates, 1, 0)

@@ -49,3 +49,9 @@ def test_blocked_by_rack_high_swim_speed_survives():
         barotrauma=True,
     )
     assert prob == 1.0
+
+
+def test_family_width_ratio_bass_override():
+    sim = _make_sim()
+    ratio = sim._resolve_fish_width_ratio(species_name="Micropterus", common_name="smallmouth bass")
+    assert ratio == 0.135
