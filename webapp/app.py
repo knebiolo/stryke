@@ -4711,7 +4711,8 @@ def generate_report(sim):
                         for c, factor in [
                             ('intake_vel', 0.3048), ('D', 0.3048), ('H', 0.3048),
                             ('Qopt', 0.0283168), ('Qcap', 0.0283168), ('Penstock_Qcap', 0.0283168), ('B', 0.3048),
-                            ('D1', 0.3048), ('D2', 0.3048)
+                            ('D1', 0.3048), ('D2', 0.3048), ('ps_D', 0.3048), ('ps_length', 0.3048),
+                            ('fb_depth', 0.3048), ('submergence_depth', 0.3048), ('elevation_head', 0.3048)
                         ]:
                             if c in df.columns:
                                 df[c] = df[c] * factor
@@ -4966,7 +4967,8 @@ def generate_report(sim):
                     preferred_cols = [
                         "H", "RPM", "D", "N", "Qopt", "Qcap",
                         "D1", "D2", "B", "ada", "intake_vel",
-                        "ps_D", "ps_length", "fb_depth", "submergence_depth"
+                        "ps_D", "ps_length", "fb_depth", "submergence_depth",
+                        "elevation_head"
                     ]
                     keep_cols = ["route"] + [c for c in preferred_cols if c in tmp_diag.columns]
                     tmp_diag = tmp_diag[keep_cols]
@@ -5062,6 +5064,19 @@ def generate_report(sim):
             if 'route' not in display_df.columns:
                 display_df['route'] = display_df.index.astype(str)
 
+            if units == 'metric':
+                length_cols = [
+                    'H', 'D', 'D1', 'D2', 'B', 'ps_D', 'ps_length',
+                    'fb_depth', 'submergence_depth', 'elevation_head', 'intake_vel'
+                ]
+                flow_cols = ['Qopt', 'Qcap', 'Penstock_Qcap', 'mean_discharge_cfs']
+                for col in length_cols:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col] * 0.3048
+                for col in flow_cols:
+                    if col in display_df.columns:
+                        display_df[col] = display_df[col] * 0.0283168
+
             if 'flow_share' in display_df.columns:
                 display_df['flow_share_pct'] = display_df['flow_share'] * 100.0
 
@@ -5073,10 +5088,14 @@ def generate_report(sim):
             if sort_col:
                 display_df = display_df.sort_values(sort_col, ascending=False)
 
+            discharge_label = 'Mean Discharge (m³/s)' if units == 'metric' else 'Mean Discharge (cfs)'
             col_candidates = [
                 ('route', 'Route'),
                 ('flow_share_pct', 'Flow Share (%)'),
-                ('mean_discharge_cfs', 'Mean Discharge (cfs)'),
+                ('mean_discharge_cfs', discharge_label),
+                ('mean_abs_pct_off_qopt', 'Mean % Off Qopt'),
+                ('pct_hours_outside_qopt_band', 'Hours Outside Qopt Band (%)'),
+                ('total_hours', 'Total Hours'),
                 ('survival_mean', 'Survival Mean'),
                 ('survival_lcl', 'Survival LCL'),
                 ('survival_ucl', 'Survival UCL'),
