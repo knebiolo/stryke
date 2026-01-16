@@ -4031,6 +4031,7 @@ def model_setup_summary():
     # --- Unit Parameters ---
     unit_parameters = []
     unit_columns = []
+    unit_param_warnings = []
     if 'unit_params_file' in session:
         unit_params_file = session['unit_params_file']
         #print("Found unit_params_file in session:", unit_params_file)
@@ -4039,6 +4040,31 @@ def model_setup_summary():
                 df_unit = pd.read_csv(unit_params_file)
                 unit_parameters = df_unit.to_dict(orient='records')
                 unit_columns = list(df_unit.columns)
+                if df_unit.empty:
+                    unit_param_warnings.append("Unit parameters are empty.")
+                else:
+                    missing_cols = [col for col in ("Qopt", "Qcap") if col not in df_unit.columns]
+                    if missing_cols:
+                        unit_param_warnings.append(
+                            f"Missing required columns: {', '.join(missing_cols)}."
+                        )
+                    else:
+                        qopt = pd.to_numeric(df_unit["Qopt"], errors="coerce")
+                        qcap = pd.to_numeric(df_unit["Qcap"], errors="coerce")
+                        labels = df_unit.index.astype(str)
+                        if "Facility" in df_unit.columns and "Unit" in df_unit.columns:
+                            labels = df_unit["Facility"].astype(str) + " - Unit " + df_unit["Unit"].astype(str)
+                        elif "Unit" in df_unit.columns:
+                            labels = df_unit["Unit"].astype(str)
+
+                        invalid_qopt = qopt.isna() | (qopt <= 0)
+                        invalid_qcap = qcap.isna() | (qcap <= 0)
+                        if invalid_qopt.any():
+                            units = ", ".join(sorted(set(labels[invalid_qopt].tolist())))
+                            unit_param_warnings.append(f"Qopt missing/invalid for units: {units}.")
+                        if invalid_qcap.any():
+                            units = ", ".join(sorted(set(labels[invalid_qcap].tolist())))
+                            unit_param_warnings.append(f"Qcap missing/invalid for units: {units}.")
                 #print("Loaded unit parameters:", unit_parameters)
             except Exception as e:
                 print("Error reading unit_params_file:", e)
@@ -4140,6 +4166,7 @@ def model_setup_summary():
     return render_template('model_summary.html',
                          unit_parameters=unit_parameters,
                          unit_columns=unit_columns,
+                         unit_param_warnings=unit_param_warnings,
                          operating_scenarios=operating_scenarios,
                          flow_scenarios=flow_scenarios,
                          population_parameters=pop_df,  # Changed from population_data to match template

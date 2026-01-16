@@ -172,6 +172,17 @@
     <!-- Unit Parameters Summary -->
     <button class="accordion">Unit Parameters <a class="edit-link" href="{{ url_for('unit_parameters') }}">Edit</a></button>
     <div class="panel">
+        {% if unit_param_warnings %}
+        <div style="border: 1px solid #b0413e; background: #fff4f4; color: #7a1f1f; padding: 10px; margin: 10px 0; border-radius: 6px;">
+          <strong>Missing or invalid unit parameters</strong>
+          <ul style="margin: 6px 0 0 18px;">
+            {% for warning in unit_param_warnings %}
+              <li>{{ warning }}</li>
+            {% endfor %}
+          </ul>
+          <p style="margin: 6px 0 0 0;">Update the Unit Parameters page before running the model.</p>
+        </div>
+        {% endif %}
         {% if unit_parameters %}
           <table class="summary-table">
             <thead>
