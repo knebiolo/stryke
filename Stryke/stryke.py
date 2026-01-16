@@ -350,6 +350,8 @@ class simulation():
             self.unit_params['ps_D'] = self.unit_params.ps_D * 3.28084
             self.unit_params['ps_length'] = self.unit_params.ps_length * 3.28084
             self.unit_params['submergence_depth'] = self.unit_params.submergence_depth * 3.28084
+            if 'elevation_head' in self.unit_params.columns:
+                self.unit_params['elevation_head'] = self.unit_params.elevation_head * 3.28084
             # roughness is in mm, no conversion needed
             self.facility_params['Rack Spacing'] = self.facility_params['Rack Spacing']*0.0328084
         else:
@@ -521,7 +523,6 @@ class simulation():
                 ],
                 index_col="Unit_Name"
             )
-            self.unit_params['elevation_head'] = self.unit_params.submergence_depth
             if self.unit_params is not None:
                 self.unit_params['Unit_Name'] = self.unit_params.Facility + ' - Unit ' + self.unit_params.Unit.astype('str')
                 self.unit_params.set_index('Unit_Name', inplace=True)
@@ -1190,78 +1191,72 @@ class simulation():
                     
                 
                 if barotrauma == True:
-                    # Validate required barotrauma parameters are present
-                    try:
-                        if route not in self.unit_params.index:
-                            logger.warning(f'Route {route} not found in unit_params, skipping barotrauma calculation')
-                            if not hasattr(self, '_baro_missing_route_printed'):
-                                self._baro_missing_route_printed = True
-                                print(f"[BARO DEBUG] Route {route} not in unit_params index", flush=True)
-                            baro_surv = 1.0
-                        elif pd.isna(self.unit_params.loc[route, 'fb_depth']) or pd.isna(self.unit_params.loc[route, 'submergence_depth']):
-                            logger.warning(f'Missing barotrauma parameters for {route}: fb_depth or submergence_depth is NaN')
-                            if not hasattr(self, '_baro_missing_params_printed'):
-                                self._baro_missing_params_printed = True
-                                fb_val = self.unit_params.loc[route, 'fb_depth']
-                                sub_val = self.unit_params.loc[route, 'submergence_depth']
-                                print(f"[BARO DEBUG] Missing params for {route}: fb_depth={fb_val}, submergence_depth={sub_val}", flush=True)
-                            baro_surv = 1.0
-                        else:
-                            # get constants
-                            g = constants.g
-                            p_atm = constants.atm
-                            density = 998.2 # kg/m^3 for water @ 20C
-                            
-                            vertical_habitat_value = self.pop['vertical_habitat'].item()
-                            if vertical_habitat_value == 'Pelagic':
-                                d_1 = 0.01
-                                d_2 = 0.33
-                            elif vertical_habitat_value == 'Benthic':
-                                d_1 = 0.8
-                                d_2 = 1
-                            else:
-                                d_1 = 0.01
-                                d_2 = 1
-                                
-                            # get regression slope and intercept (beta 1 and beta 0)
-                            beta_0 = self.pop['beta_0'].item()
-                            beta_1 = self.pop['beta_1'].item()
-                            
-                            # get forebay depth and create depth range for habitat preference
-                            # Note: fb_depth already converted to feet in __init__ if metric
-                            depth_1 = self.unit_params['fb_depth'][route] * d_1
-                            depth_2 = self.unit_params['fb_depth'][route] * d_2
-                            fish_depth = np.random.uniform(depth_1,depth_2,1)[0]
-                            
-                            # get submergence depth (already in feet if metric conversion applied)
-                            h_D = self.unit_params['submergence_depth'][route]
-                            
-                            # Convert depths from feet to meters for pressure calculation
-                            fish_depth_m = fish_depth * 0.3048
-                            h_D_m = h_D * 0.3048
-                            
-                            # calculate pressure ratio using SI units
-                            p_1 = p_atm + density*g*fish_depth_m
-                            p_2 = p_atm + density*g*h_D_m
-                            p_ratio = p_1/p_2
-                            
-                            # calculate injury/mortality probability from barotrauma
-                            # Note: baro_injury_prob returns P(injury), not P(survival)
-                            baro_injury = baro_injury_prob(p_ratio, beta_0, beta_1)
-            
-                            # survival probability considering blade strike and barotrauma
-                            baro_surv = 1.0 - baro_injury
-                            
-                            # DEBUG: Print barotrauma calculation details (first time only)
-                            if not hasattr(self, '_baro_debug_printed'):
-                                self._baro_debug_printed = True
-                                print(f"[BARO DEBUG] route={route}, p_ratio={p_ratio:.3f}, beta_0={beta_0:.3f}, beta_1={beta_1:.3f}, baro_injury={baro_injury:.4f}, baro_surv={baro_surv:.4f}", flush=True)
-                    except Exception as e:
-                        logger.error(f'Error calculating barotrauma for route {route}: {e}')
-                        print(f"[BARO ERROR] Exception for route {route}: {e}", flush=True)
-                        baro_surv = 1.0  
+                    if route not in self.unit_params.index:
+                        raise KeyError(f"Route {route} not found in unit_params for barotrauma.")
+                    if 'fb_depth' not in self.unit_params.columns:
+                        raise ValueError("Barotrauma requires fb_depth in Unit_Parameters.")
+                    fb_depth = self.unit_params.at[route, 'fb_depth']
+                    if pd.isna(fb_depth):
+                        raise ValueError(f"Barotrauma requires fb_depth for route {route}.")
+                    tailrace_depth = None
+                    if 'elevation_head' in self.unit_params.columns:
+                        tailrace_depth = self.unit_params.at[route, 'elevation_head']
+                    if tailrace_depth is None or pd.isna(tailrace_depth):
+                        if 'submergence_depth' in self.unit_params.columns:
+                            tailrace_depth = self.unit_params.at[route, 'submergence_depth']
+                    if tailrace_depth is None or pd.isna(tailrace_depth):
+                        raise ValueError(
+                            f"Barotrauma requires elevation_head or submergence_depth for route {route}."
+                        )
+
+                    # get constants
+                    g = constants.g
+                    p_atm = constants.atm
+                    density = 998.2 # kg/m^3 for water @ 20C
+                    
+                    vertical_habitat_value = self.pop['vertical_habitat'].item()
+                    if vertical_habitat_value == 'Pelagic':
+                        d_1 = 0.01
+                        d_2 = 0.33
+                    elif vertical_habitat_value == 'Benthic':
+                        d_1 = 0.8
+                        d_2 = 1
+                    else:
+                        d_1 = 0.01
+                        d_2 = 1
+                        
+                    # get regression slope and intercept (beta 1 and beta 0)
+                    beta_0 = self.pop['beta_0'].item()
+                    beta_1 = self.pop['beta_1'].item()
+                    
+                    # get forebay depth and create depth range for habitat preference
+                    # Note: fb_depth already converted to feet in __init__ if metric
+                    depth_1 = fb_depth * d_1
+                    depth_2 = fb_depth * d_2
+                    fish_depth = np.random.uniform(depth_1, depth_2, 1)[0]
+                    
+                    # Convert depths from feet to meters for pressure calculation
+                    fish_depth_m = fish_depth * 0.3048
+                    tailrace_depth_m = tailrace_depth * 0.3048
+                    
+                    # calculate pressure ratio using SI units
+                    p_1 = p_atm + density*g*fish_depth_m
+                    p_2 = p_atm + density*g*tailrace_depth_m
+                    p_ratio = p_1/p_2
+                    
+                    # calculate injury/mortality probability from barotrauma
+                    # Note: baro_injury_prob returns P(injury), not P(survival)
+                    baro_injury = baro_injury_prob(p_ratio, beta_0, beta_1)
+    
+                    # survival probability considering blade strike and barotrauma
+                    baro_surv = 1.0 - baro_injury
+                    
+                    # DEBUG: Print barotrauma calculation details (first time only)
+                    if not hasattr(self, '_baro_debug_printed'):
+                        self._baro_debug_printed = True
+                        print(f"[BARO DEBUG] route={route}, p_ratio={p_ratio:.3f}, beta_0={beta_0:.3f}, beta_1={beta_1:.3f}, baro_injury={baro_injury:.4f}, baro_surv={baro_surv:.4f}", flush=True)
                 else:
-                    baro_surv = 1.
+                    baro_surv = 1.0
                 
                 #logger.debug('calculated barotrauma survival')
                 # incoporate latent mortality
@@ -2030,6 +2025,10 @@ class simulation():
         #ops_df.set_index('Unit', inplace = True)
         facilities = ops_df.Facility.unique()
         
+        unit_index_col = None
+        if hasattr(self, "unit_params") and self.unit_params is not None:
+            unit_index_col = self.unit_params.index.name or "index"
+        
         try:
             seasonal_facs = self.facility_params[self.facility_params.Scenario == scenario]
         except (KeyError, AttributeError) as e:
@@ -2074,6 +2073,15 @@ class simulation():
             # if operations are modeled with a distribution 
             for i in fac_units.index:
                 #logger.debug('Facility index is %s',i)
+                row = fac_units.loc[i]
+                unit_key = None
+                if unit_index_col and unit_index_col in fac_units.columns:
+                    unit_key = row.get(unit_index_col, None)
+                if unit_key is None or (isinstance(unit_key, float) and np.isnan(unit_key)):
+                    unit_key = row.get('Unit', None)
+                if unit_key is None or (isinstance(unit_key, float) and np.isnan(unit_key)):
+                    unit_key = i
+                unit_key = str(unit_key)
                 if fac_type != 'run-of-river':
                     order = fac_units.at[i,'op_order']
                     # get log norm shape parameters
@@ -2088,8 +2096,8 @@ class simulation():
                     
                     #if operations == 'independent':
                     if np.random.uniform(0,1,1) <= prob_not_operating:
-                        hours_dict[i] = 0.
-                        flow_dict[i] = 0.
+                        hours_dict[unit_key] = 0.
+                        flow_dict[unit_key] = 0.
 
                     else:
                         # TODO Bad Creek Analysis halved hours - change back
@@ -2099,8 +2107,8 @@ class simulation():
                             hours = 24.
                         elif hours < 0:
                             hours = 0.
-                        hours_dict[i] = hours
-                        flow_dict[i] = fac_units.at[i,'Qcap'] * hours * 3600.    
+                        hours_dict[unit_key] = hours
+                        flow_dict[unit_key] = fac_units.at[i,'Qcap'] * hours * 3600.    
                             
                 else:
                     #logger.debug('start processing run of river facility unit %s',i)
@@ -2117,6 +2125,15 @@ class simulation():
                         if unit_ops.empty:
                             logger.debug("No operations data found for unit %s", idx)
                             continue
+                        
+                        unit_key = None
+                        if unit_index_col and unit_index_col in fac_units.columns:
+                            unit_key = row.get(unit_index_col, None)
+                        if unit_key is None or (isinstance(unit_key, float) and np.isnan(unit_key)):
+                            unit_key = row.get('Unit', None)
+                        if unit_key is None or (isinstance(unit_key, float) and np.isnan(unit_key)):
+                            unit_key = idx
+                        unit_key = str(unit_key)
 
                         hours = unit_ops.iloc[0]['Hours']  # pick the first matching row
                         u_cap = row['Qcap']
@@ -2125,13 +2142,13 @@ class simulation():
                         effective_cap = min(prod_Q, sta_cap)
                         
                         if cum_Q + u_cap <= effective_cap:
-                            hours_dict[idx] = hours
-                            flow_dict[idx] = u_cap * hours * 3600.
+                            hours_dict[unit_key] = hours
+                            flow_dict[unit_key] = u_cap * hours * 3600.
                             cum_Q += u_cap
                         else:
                             excess = cum_Q + u_cap - effective_cap
-                            hours_dict[idx] = hours
-                            flow_dict[idx] = (u_cap - excess) * hours * 3600.
+                            hours_dict[unit_key] = hours
+                            flow_dict[unit_key] = (u_cap - excess) * hours * 3600.
                             at_capacity = True
                     
                         if at_capacity:  # Exit the loop if at capacity
@@ -2296,6 +2313,46 @@ class simulation():
         penstock_units = defaultdict(list)
         penstock_cap_inputs = defaultdict(list)
         penstock_fac_dict = {}
+        barotrauma_required = False
+        if self.unit_params is not None:
+            baro_cols = [
+                'ps_D', 'ps_length', 'fb_depth',
+                'submergence_depth', 'elevation_head'
+            ]
+            present_cols = [c for c in baro_cols if c in self.unit_params.columns]
+            if present_cols and self.unit_params[present_cols].notna().any().any():
+                barotrauma_required = True
+        if barotrauma_required:
+            required_cols = ['fb_depth']
+            missing_cols = [c for c in required_cols if c not in self.unit_params.columns]
+            if missing_cols:
+                raise ValueError(
+                    f"Barotrauma requires columns {missing_cols} in Unit_Parameters."
+                )
+            tailrace_candidates = ['elevation_head', 'submergence_depth']
+            has_tailrace = False
+            for col in tailrace_candidates:
+                if col in self.unit_params.columns and self.unit_params[col].notna().any():
+                    has_tailrace = True
+                    break
+            if not has_tailrace:
+                raise ValueError(
+                    "Barotrauma requires elevation_head or submergence_depth in Unit_Parameters."
+                )
+            missing_units = self.unit_params[self.unit_params[required_cols].isna().any(axis=1)].index.tolist()
+            if missing_units:
+                raise ValueError(
+                    f"Barotrauma requires fb_depth for all units. Missing: {missing_units}"
+                )
+            tailrace_cols = [c for c in tailrace_candidates if c in self.unit_params.columns]
+            if tailrace_cols:
+                missing_tailrace = self.unit_params[self.unit_params[tailrace_cols].isna().all(axis=1)].index.tolist()
+                if missing_tailrace:
+                    raise ValueError(
+                        "Barotrauma requires elevation_head or submergence_depth for all units. "
+                        f"Missing: {missing_tailrace}"
+                    )
+        self.barotrauma_required = barotrauma_required
         #logger.debug('building unit dictionaries')
         #print("Setting up unit parameters...", flush=True)
         for index, row in self.unit_params.iterrows():
@@ -2324,19 +2381,11 @@ class simulation():
                 except (TypeError, ValueError):
                     pass
             rack_spacing = self.facility_params.at[row['Facility'],'Rack Spacing']
-            penstock_D = row['ps_D'] #self.unit_params.at[row['Facility'],'ps_D']
             ada = float(row['ada'])
             if ada > 1.0:
                 raise ValueError(
                     f"Unit {unit} efficiency {ada:.3f} must be a fraction (0-1), not a percent."
                 )
-
-            if np.isnan(penstock_D):
-                barotrauma = False
-                print(f"[DEBUG BARO] Unit {unit}: penstock_D is NaN, barotrauma DISABLED", flush=True)
-            else:
-                barotrauma = True
-                print(f"[DEBUG BARO] Unit {unit}: penstock_D={penstock_D:.3f} ft, barotrauma ENABLED", flush=True)
                 
             # if np.isnan(rack_spacing):
             #     rack_spacing = 2 /12.
@@ -2473,7 +2522,7 @@ class simulation():
         
                 print(f"[INFO] Simulating species: {species_name} with {int(iterations)} iterations", flush=True)
                 print(f"[DEBUG SIM START] Species={species_name}, Iterations={int(iterations)}, Days={total_days}", flush=True)
-                print(f"[DEBUG SIM START] Barotrauma enabled: {barotrauma}, op_order_dict: {op_order_dict}", flush=True)
+                print(f"[DEBUG SIM START] Barotrauma enabled: {barotrauma_required}, op_order_dict: {op_order_dict}", flush=True)
                 
                 spc_length = pd.DataFrame()
                 for i in np.arange(0, iterations, 1):
@@ -2559,7 +2608,40 @@ class simulation():
 
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
                         #logger.info('Q-Dict Built')
-                        
+
+                        unit_flow_allocations_str = {
+                            str(k): float(v) for k, v in unit_flow_allocations.items()
+                        }
+                        missing_alloc_units = [
+                            str(k) for k in hours_dict.keys()
+                            if str(k) not in unit_flow_allocations_str
+                        ]
+                        if missing_alloc_units:
+                            logger.warning(
+                                "Unit flow allocations missing for units: %s",
+                                missing_alloc_units
+                            )
+                            for unit_name in missing_alloc_units:
+                                unit_flow_allocations_str[unit_name] = 0.0
+
+                        self._route_flow_daily = defaultdict(float)
+                        self._route_flow_context = {
+                            'scenario': scenario,
+                            'iteration': int(i),
+                            'day': pd.to_datetime(day),
+                            'curr_Q': float(curr_Q),
+                            'hours_dict': hours_dict,
+                            'unit_flow_allocations': unit_flow_allocations_str
+                        }
+                        route_flow_key = (
+                            self._route_flow_context['scenario'],
+                            self._route_flow_context['iteration'],
+                            self._route_flow_context['day']
+                        )
+                        self._route_flow_context['key'] = route_flow_key
+                        route_flow_recorder = self._route_flow_daily
+                        barotrauma = self.barotrauma_required
+
                         if np.any(tot_hours > 0):
                             presence_seed = np.random.uniform(0, 1)
                             if occur_prob >= presence_seed:
@@ -2613,21 +2695,6 @@ class simulation():
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
                                     
-                                self._route_flow_daily = defaultdict(float)
-                                self._route_flow_context = {
-                                    'scenario': scenario,
-                                    'iteration': int(i),
-                                    'day': pd.to_datetime(day),
-                                    'curr_Q': float(curr_Q)
-                                }
-                                route_flow_key = (
-                                    self._route_flow_context['scenario'],
-                                    self._route_flow_context['iteration'],
-                                    self._route_flow_context['day']
-                                )
-                                self._route_flow_context['key'] = route_flow_key
-                                route_flow_recorder = self._route_flow_daily
-
                                 #logger.info('Starting movement')
                                 
                                 def scalarize(x):
@@ -2892,6 +2959,43 @@ class simulation():
                                                          mode='a',
                                                          format='table',
                                                          append=True)
+                                hours_dict = context.get('hours_dict', {}) if isinstance(context, dict) else {}
+                                unit_flow_allocations = (
+                                    context.get('unit_flow_allocations', {})
+                                    if isinstance(context, dict) else {}
+                                )
+                                if hours_dict:
+                                    hours_records = []
+                                    for route_name, hours_val in hours_dict.items():
+                                        try:
+                                            hours_float = float(hours_val)
+                                        except (TypeError, ValueError):
+                                            continue
+                                        discharge_val = None
+                                        if isinstance(unit_flow_allocations, dict):
+                                            discharge_val = unit_flow_allocations.get(str(route_name))
+                                        discharge_float = np.nan
+                                        if discharge_val is not None:
+                                            try:
+                                                discharge_float = float(discharge_val)
+                                            except (TypeError, ValueError):
+                                                discharge_float = np.nan
+                                        hours_records.append({
+                                            'scenario': context['scenario'],
+                                            'iteration': context['iteration'],
+                                            'day': context['day'],
+                                            'route': str(route_name),
+                                            'hours': hours_float,
+                                            'discharge_cfs': discharge_float
+                                        })
+                                    if hours_records:
+                                        unit_hours_df = pd.DataFrame(hours_records)
+                                        unit_hours_df['day'] = pd.to_datetime(unit_hours_df['day'])
+                                        unit_hours_df.to_hdf(self.hdf,
+                                                             key='Unit_Hours',
+                                                             mode='a',
+                                                             format='table',
+                                                             append=True)
                                 self._route_flow_logged_keys.add(route_flow_key)
                         self._route_flow_daily = defaultdict(float)
 
@@ -3222,6 +3326,7 @@ class simulation():
                 try:
                     unit_params = store['Unit_Parameters'] if '/Unit_Parameters' in store.keys() else None
                     route_flows = store['Route_Flows'] if '/Route_Flows' in store.keys() else None
+                    unit_hours = store['Unit_Hours'] if '/Unit_Hours' in store.keys() else None
 
                     if isinstance(unit_params, pd.DataFrame) and not unit_params.empty:
                         diag = unit_params.copy()
@@ -3230,7 +3335,8 @@ class simulation():
                         preferred_cols = [
                             'H', 'RPM', 'D', 'N', 'Qopt', 'Qcap',
                             'D1', 'D2', 'B', 'ada', 'intake_vel',
-                            'ps_D', 'ps_length', 'fb_depth', 'submergence_depth'
+                            'ps_D', 'ps_length', 'fb_depth', 'submergence_depth',
+                            'elevation_head'
                         ]
                         keep_cols = ['route'] + [c for c in preferred_cols if c in diag.columns]
                         diag = diag[keep_cols]
@@ -3308,9 +3414,82 @@ class simulation():
                                         right_index=True,
                                         how='left'
                                     )
-
                         if 'flow_share' in diag.columns and 'survival_mean' in diag.columns:
                             diag['mortality_weight'] = diag['flow_share'] * (1 - diag['survival_mean'])
+
+                        dispatch_df = None
+                        if isinstance(unit_hours, pd.DataFrame) and not unit_hours.empty and 'Qopt' in diag.columns:
+                            uh = unit_hours.copy()
+                            if 'route' in uh.columns and 'hours' in uh.columns:
+                                uh['route'] = uh['route'].astype(str)
+                                uh['hours'] = pd.to_numeric(uh['hours'], errors='coerce')
+                                if 'discharge_cfs' in uh.columns:
+                                    uh['discharge_cfs'] = pd.to_numeric(
+                                        uh['discharge_cfs'], errors='coerce'
+                                    )
+                                    dispatch_df = uh
+                                elif isinstance(route_flows, pd.DataFrame) and not route_flows.empty:
+                                    rf = route_flows.copy()
+                                    if 'route' in rf.columns and 'discharge_cfs' in rf.columns:
+                                        rf['route'] = rf['route'].astype(str)
+                                        dispatch_df = rf.merge(
+                                            uh,
+                                            on=['scenario', 'iteration', 'day', 'route'],
+                                            how='outer'
+                                        )
+                                        dispatch_df['hours'] = pd.to_numeric(
+                                            dispatch_df['hours'], errors='coerce'
+                                        )
+                                        dispatch_df['discharge_cfs'] = pd.to_numeric(
+                                            dispatch_df['discharge_cfs'], errors='coerce'
+                                        )
+
+                        if isinstance(dispatch_df, pd.DataFrame) and not dispatch_df.empty:
+                            dispatch_df = dispatch_df.merge(
+                                diag[['route', 'Qopt']],
+                                on='route',
+                                how='left'
+                            )
+                            dispatch_df['Qopt'] = pd.to_numeric(dispatch_df['Qopt'], errors='coerce')
+                            dispatch_df = dispatch_df[
+                                (dispatch_df['hours'] > 0.0)
+                                & (dispatch_df['Qopt'] > 0.0)
+                                & dispatch_df['discharge_cfs'].notna()
+                            ]
+                            if not dispatch_df.empty:
+                                lower_band = 0.9
+                                upper_band = 1.1
+                                dispatch_df['abs_pct_off_qopt'] = (
+                                    (dispatch_df['discharge_cfs'] - dispatch_df['Qopt']).abs()
+                                    / dispatch_df['Qopt'] * 100.0
+                                )
+                                dispatch_df['hours_outside_band'] = dispatch_df['hours'] * (
+                                    (dispatch_df['discharge_cfs'] < dispatch_df['Qopt'] * lower_band)
+                                    | (dispatch_df['discharge_cfs'] > dispatch_df['Qopt'] * upper_band)
+                                ).astype(float)
+                                dispatch_df['abs_pct_off_hours'] = (
+                                    dispatch_df['abs_pct_off_qopt'] * dispatch_df['hours']
+                                )
+                                hours_summary = dispatch_df.groupby('route').agg(
+                                    total_hours=('hours', 'sum'),
+                                    hours_outside_band=('hours_outside_band', 'sum'),
+                                    abs_pct_off_hours=('abs_pct_off_hours', 'sum')
+                                )
+                                hours_summary['mean_abs_pct_off_qopt'] = (
+                                    hours_summary['abs_pct_off_hours'] / hours_summary['total_hours']
+                                )
+                                hours_summary['pct_hours_outside_qopt_band'] = (
+                                    hours_summary['hours_outside_band'] / hours_summary['total_hours'] * 100.0
+                                )
+                                hours_summary = hours_summary[
+                                    ['total_hours', 'mean_abs_pct_off_qopt', 'pct_hours_outside_qopt_band']
+                                ]
+                                diag = diag.merge(
+                                    hours_summary,
+                                    left_on='route',
+                                    right_index=True,
+                                    how='left'
+                                )
 
                         self.driver_diagnostics = diag
                         if DIAGNOSTICS_ENABLED and isinstance(diag, pd.DataFrame):
