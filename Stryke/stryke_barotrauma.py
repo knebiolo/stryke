@@ -653,10 +653,14 @@ class simulation():
             return 0.0
         else:
             if surv_fun == 'a priori':
-                try:
-                    prob = surv_dict[route]
-                except:
-                    print ('Problem with a priori survival function')
+                if route not in surv_dict:
+                    raise KeyError(
+                        f"A priori survival missing for route '{route}'. "
+                        f"Available routes: {list(surv_dict.keys())}"
+                    )
+                prob = surv_dict[route]
+                if prob is None or (isinstance(prob, float) and np.isnan(prob)):
+                    raise ValueError(f"A priori survival for route '{route}' is empty or NaN.")
     
             else:
                                 
@@ -845,15 +849,21 @@ class simulation():
                 if np.any(starts_with_U):
                     for i in nbors:
                         # it's a unit
-                        try:
+                        if i in unit_fac_dict:
                             facility = unit_fac_dict[i]
-
-                        # nope it's a bypass
-                        except:
+                        else:
+                            facility = None
                             for j in nbors:
-                                if 'U' in j:
-                                    facility = self.unit_params.at[j,'Facility']
-                                    continue
+                                if j in unit_fac_dict:
+                                    facility = unit_fac_dict[j]
+                                    break
+                                if 'U' in j and hasattr(self, "unit_params") and j in self.unit_params.index:
+                                    facility = self.unit_params.at[j, 'Facility']
+                                    break
+                            if facility is None:
+                                raise KeyError(
+                                    f"Facility not found for unit '{i}' with neighbors {nbors}."
+                                )
                         sta_cap = sta_cap_dict[facility]
                         min_Q =  min_Q_dict[facility]
                         env_Q = env_Q_dict[facility]
@@ -1001,10 +1011,21 @@ class simulation():
     
             # generate a new location
             #probs = np.array(probs) / np.sum(np.array(probs))
+            if len(locs) == 0:
+                raise ValueError(f"No routing locations available at location '{location}'.")
+            if len(locs) != len(probs):
+                raise ValueError(
+                    f"Routing probability length mismatch at location '{location}': "
+                    f"{len(locs)} locs vs {len(probs)} probs."
+                )
+            probs = np.asarray(probs, dtype=float)
             try:
-                new_loc = np.random.choice(locs,1,p = probs)[0]
-            except:
-                print ('fuck')
+                new_loc = np.random.choice(locs, 1, p=probs)[0]
+            except ValueError as exc:
+                raise ValueError(
+                    f"Routing choice failed at location '{location}': "
+                    f"probs sum {float(np.sum(probs))}, probs={probs}, locs={locs}"
+                ) from exc
 
             del nbors, locs, probs
             
@@ -1017,11 +1038,7 @@ class simulation():
         # if the fish is dead, it can't move
         else:
             new_loc = location
-        try:
-            
-            return new_loc
-        except:
-            print ('fuck')
+        return new_loc
     
     def speed (L,A,M):
         """
@@ -1717,10 +1734,15 @@ class simulation():
                                         return fun_typ
     
                                     v_surv_fun = np.vectorize(surv_fun_att,excluded = [1])
-                                    try:
-                                        surv_fun = v_surv_fun(location,self.surv_fun_dict)
-                                    except:
-                                        print ('fuck')
+                                    missing_states = [
+                                        state for state in np.unique(location)
+                                        if state not in self.surv_fun_dict
+                                    ]
+                                    if missing_states:
+                                        raise KeyError(
+                                            f"Missing survival functions for states: {missing_states}"
+                                        )
+                                    surv_fun = v_surv_fun(location, self.surv_fun_dict)
     
                                     # simulate survival draws
                                     dice = np.random.uniform(0.,1.,np.int32(n))
@@ -1936,10 +1958,10 @@ class simulation():
 
             for j in scens:
                 # get daily data for this species/scenario
-                try:
-                    dat = self.hdf['simulations/%s/%s'%(j,i)]
-                except:
-                    continue
+                sim_key = f"simulations/{j}/{i}"
+                if f"/{sim_key}" not in self.hdf.keys():
+                    raise KeyError(f"Missing simulation data for key '{sim_key}'.")
+                dat = self.hdf[sim_key]
 
                 # summarize species-scenario - whole project
                 whole_proj_succ = dat.groupby(by = ['iteration','day'])['survival_%s'%(max(self.moves))]\
@@ -1958,17 +1980,16 @@ class simulation():
 
                 # calculate probabilities, fit to beta, write to dictionary summarizing results
                 whole_summ['prob'] = whole_summ['successes']/whole_summ['count']
-                try:
-                    whole_params = beta.fit(whole_summ.prob.values)
-                    whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                    whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
-                    
-                    #whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
-                    lcl = beta.ppf(0.025,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
-                    ucl = beta.ppf(0.975,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])  
-                    self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,lcl,ucl]
-                except:
-                    continue
+                if whole_summ['prob'].empty:
+                    raise ValueError(f"No survival probability data for scenario '{j}' species '{i}'.")
+                whole_params = beta.fit(whole_summ.prob.values)
+                whole_median = beta.median(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
+                whole_std = beta.std(whole_params[0],whole_params[1],whole_params[2],whole_params[3])
+                
+                #whole_95ci = beta.interval(alpha = 0.95,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
+                lcl = beta.ppf(0.025,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])
+                ucl = beta.ppf(0.975,a = whole_params[0],b = whole_params[1],loc = whole_params[2],scale = whole_params[3])  
+                self.beta_dict['%s_%s_%s'%(j,i,'whole')] = [j,i,'whole',whole_median,whole_std,lcl,ucl]
                 #print ("whole project survival for %s in scenario %s iteraton %s expected to be %s (%s,%s)"%(i,j,k,np.round(whole_median,2),np.round(whole_95ci[0],2),np.round(whole_95ci[1],2)))
                 for l in self.moves:
                     # we need to remove the fish that died at the previous state
@@ -1993,18 +2014,14 @@ class simulation():
                     states = route_summ['state_%s'%(l)].unique()
                     for m in states:
                         st_df = route_summ[route_summ['state_%s'%(l)] == m]
-                        try:
-                            st_params = beta.fit(st_df.prob.values)
-                            st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
-                            st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
-    
-                            lcl = beta.ppf(0.025,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
-                            ucl = beta.ppf(0.975,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])                                    
-                        except:
-                            st_median = 0.5
-                            st_std = 1.0
-                            lcl = 0.
-                            ucl = 1.
+                        if st_df['prob'].empty:
+                            raise ValueError(f"No survival probability data for state '{m}' in scenario '{j}' species '{i}'.")
+                        st_params = beta.fit(st_df.prob.values)
+                        st_median = beta.median(st_params[0],st_params[1],st_params[2],st_params[3])
+                        st_std = beta.std(st_params[0],st_params[1],st_params[2],st_params[3])
+
+                        lcl = beta.ppf(0.025,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])
+                        ucl = beta.ppf(0.975,a = st_params[0],b = st_params[1],loc = st_params[2],scale = st_params[3])                                    
 
                         # add results to beta dictionary
                         self.beta_dict['%s_%s_%s'%(j,i,m)] = [j,i,m,st_median,st_std,lcl,ucl]
@@ -2016,10 +2033,9 @@ class simulation():
         self.hdf.flush()
         self.hdf.close()
         
-        try:
-            self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
-        except:
-            pass
+        if 'day' in self.daily_summary.columns and hasattr(self.daily_summary['day'], "dt"):
+            if getattr(self.daily_summary['day'].dt, "tz", None) is not None:
+                self.daily_summary['day'] = self.daily_summary['day'].dt.tz_localize(None)
         
         # create yearly summary by summing on species, flow scenario, and iteration
         
@@ -2183,8 +2199,8 @@ class hydrologic():
                     self.DAvgFlow = self.DAvgFlow.append(df)
     
                     print ("stream gage %s with a drainage area of %s square kilometers added to flow data."%(i,drain_sqkm))
-                except:
-                    continue
+                except (KeyError, ValueError, IndexError, FileNotFoundError, OSError) as e:
+                    raise RuntimeError(f"Failed to load stream gage {i}: {e}") from e
 
     def seasonal_exceedance(self, seasonal_dict, exceedence, HUC = None):
         """

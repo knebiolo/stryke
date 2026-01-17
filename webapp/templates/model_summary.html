@@ -134,6 +134,30 @@
         make changes. Once everything looks good, click “Run Simulation” to let
         the model do its work.
     </p>    
+    <!-- Project Summary -->
+    <button class="accordion">Project Info <a class="edit-link" href="{{ url_for('create_project') }}">Edit</a></button>
+    <div class="panel">
+      <table class="summary-table">
+        <tbody>
+          <tr>
+            <th>Project Name</th>
+            <td>{{ project_name or 'N/A' }}</td>
+          </tr>
+          <tr>
+            <th>Units</th>
+            <td>{{ units or 'N/A' }}</td>
+          </tr>
+          <tr>
+            <th>Model Setup</th>
+            <td>{{ model_setup or 'N/A' }}</td>
+          </tr>
+          <tr>
+            <th>Project Notes</th>
+            <td style="white-space: normal;">{{ project_notes or 'N/A' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <!-- Facilities Summary -->
     <button class="accordion">Facilities <a class="edit-link" href="{{ url_for('facilities') }}">Edit</a></button>
     <div class="panel">
@@ -307,7 +331,6 @@
     <!-- Graph Data Summary -->
     <button class="accordion">Graph Data <a class="edit-link" href="{{ url_for('graph_editor') }}">Edit</a></button>
     <div class="panel">
-      {% if graph_nodes %}
       {% if passage_routes %}
       <h4>Passage Routes</h4>
       <ul>
@@ -315,9 +338,50 @@
           <li>{{ route }}</li>
         {% endfor %}
       </ul>
-      {% else %}
-      <p>No passage routes detected.</p>
       {% endif %}
+      {% if graph_summary and graph_summary.Nodes %}
+      <h4>Nodes</h4>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            {% for col in graph_summary.Nodes[0].keys() %}
+              <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in graph_summary.Nodes %}
+            <tr>
+              {% for value in row.values() %}
+                <td>{{ value }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      {% if graph_summary and graph_summary.Edges %}
+      <h4>Edges</h4>
+      <table class="summary-table">
+        <thead>
+          <tr>
+            {% for col in graph_summary.Edges[0].keys() %}
+              <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in graph_summary.Edges %}
+            <tr>
+              {% for value in row.values() %}
+                <td>{{ value }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      {% if not graph_summary and graph_nodes %}
       <table class="summary-table">
         <thead>
           <tr>
@@ -332,7 +396,8 @@
           </tr>
         </tbody>
       </table>
-      {% else %}
+      {% endif %}
+      {% if not graph_summary and not graph_nodes %}
       <p>No graph data available.</p>
       {% endif %}
     </div>

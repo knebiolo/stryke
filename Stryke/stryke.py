@@ -433,17 +433,19 @@ class simulation():
             print(f"[DIAG] Nodes DataFrame shape: {self.nodes.shape}")
             print(f"[DIAG] Nodes DataFrame columns: {self.nodes.columns.tolist()}")
             print(f"[DIAG] Nodes DataFrame head:\n{self.nodes.head()}")
-        try:
-            self.edges = to_dataframe(graph_summary.get('Edges', []))
+        edges_data = graph_summary.get('Edges')
+        if edges_data:
+            self.edges = to_dataframe(edges_data)
             # Verbose diagnostics commented out
             # if DIAGNOSTICS_ENABLED:
             #     print(f"[DIAG] Edges DataFrame shape: {self.edges.shape}")
             #     print(f"[DIAG] Edges DataFrame columns: {self.edges.columns.tolist()}")
             #     print(f"[DIAG] Edges DataFrame head:\n{self.edges.head()}")
-        except Exception as e:
+        else:
+            self.edges = to_dataframe([])
             logger.info("Single Unit Scenario Identified, No Movement")
             if DIAGNOSTICS_ENABLED:
-                print(f"[DIAG] Edges DataFrame construction failed: {e}")
+                print("[DIAG] No edges provided; treating as single-unit scenario.")
         self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
         self.surv_fun_dict = self.surv_fun_df.to_dict('index')
     
@@ -1077,17 +1079,14 @@ class simulation():
     def _load_fish_class_lookup(self):
         if getattr(self, "_fish_class_loaded", False):
             return
-        self._fish_class_loaded = True
         data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Data', 'fish_class.csv')
         data_dir = os.path.normpath(data_dir)
         try:
             fish_class = pd.read_csv(data_dir, encoding='unicode_escape')
-        except Exception as exc:
-            logger.warning(f"Failed to load fish_class.csv for width ratios: {exc}")
-            self._fish_family_by_species = {}
-            self._fish_family_by_common = {}
-            self._fish_family_by_genus = {}
-            return
+        except (FileNotFoundError, OSError, UnicodeDecodeError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
+            raise RuntimeError(
+                f"Failed to load fish_class.csv for width ratios from {data_dir}: {exc}"
+            ) from exc
         fish_class = fish_class.dropna(subset=["Family"])
         fish_class["Species_norm"] = fish_class["Species"].astype(str).str.strip().str.lower()
         fish_class["Common_norm"] = fish_class["Common"].astype(str).str.strip().str.lower()
@@ -1100,6 +1099,7 @@ class simulation():
             .set_index("Genus")["Family"]
             .to_dict()
         )
+        self._fish_class_loaded = True
 
     def _resolve_fish_family(self, species_name=None, common_name=None, family_name=None):
         if family_name is not None and str(family_name).strip():
@@ -1256,15 +1256,14 @@ class simulation():
             return 0.0
         else:
             if surv_fun == 'a priori':
-                try:
-                    prob = surv_dict[route]
-                except KeyError as e:
-                    logger.debug(f'Problem with a priori survival function for {route}: {e}')
-                    logger.debug(f'Available routes in surv_dict: {list(surv_dict.keys())}')
-                    prob = 1.
-                except Exception as e:
-                    logger.error(f'Unexpected error in a priori survival for {route}: {e}')
-                    prob = 1.
+                if route not in surv_dict:
+                    raise KeyError(
+                        f"A priori survival missing for route '{route}'. "
+                        f"Available routes: {list(surv_dict.keys())}"
+                    )
+                prob = surv_dict[route]
+                if prob is None or (isinstance(prob, float) and np.isnan(prob)):
+                    raise ValueError(f"A priori survival for route '{route}' is empty or NaN.")
     
             else:
                 param_dict = u_param_dict[route]
@@ -1914,11 +1913,21 @@ class simulation():
                 debug_info = " | ".join([f"{loc}: {prob:.3f} ({flow:.1f} cfs)" for loc, prob, flow in zip(locs, probs, route_flows)])
                 print(f"[ROUTING DEBUG] Locations: {debug_info}", flush=True)
 
+        if len(locs) == 0:
+            raise ValueError(f"No routing locations available at location '{location}'.")
+        if len(locs) != len(probs):
+            raise ValueError(
+                f"Routing probability length mismatch at location '{location}': "
+                f"{len(locs)} locs vs {len(probs)} probs."
+            )
+        probs = np.asarray(probs, dtype=float)
         try:
             new_loc = np.random.choice(locs, p=probs).item()
-        except Exception as e:
-            print("Choice failed:", e)
-            new_loc = location
+        except ValueError as exc:
+            raise ValueError(
+                f"Routing choice failed at location '{location}': "
+                f"probs sum {float(np.sum(probs))}, probs={probs}, locs={locs}"
+            ) from exc
 
         return str(new_loc)
 
@@ -2180,13 +2189,17 @@ class simulation():
         if hasattr(self, "unit_params") and self.unit_params is not None:
             unit_index_col = self.unit_params.index.name or "index"
         
-        try:
+        if not hasattr(self, "facility_params") or self.facility_params is None:
+            raise ValueError(f"facility_params is missing; cannot compute daily_hours for scenario '{scenario}'.")
+        if not isinstance(self.facility_params, pd.DataFrame):
+            raise TypeError(
+                f"facility_params must be a DataFrame, got {type(self.facility_params).__name__}."
+            )
+        if "Scenario" in self.facility_params.columns:
             seasonal_facs = self.facility_params[self.facility_params.Scenario == scenario]
-        except (KeyError, AttributeError) as e:
-            logger.debug(f'No Scenario column in facility_params or scenario {scenario} not found: {e}')
-            seasonal_facs = self.facility_params
-        except Exception as e:
-            logger.warning(f'Unexpected error filtering facility_params by scenario: {e}')
+            if seasonal_facs.empty:
+                raise ValueError(f"Scenario '{scenario}' not found in facility_params.")
+        else:
             seasonal_facs = self.facility_params
         #seasonal_facs.set_index('Facility', inplace = True)
         # loop over units, build some dictionaries
@@ -2446,12 +2459,10 @@ class simulation():
         #logger.debug('starting simulation')
         # Setup string size dictionary for formatting.
         str_size = {'species': 30}
-        try:
-            for i in self.moves:
-                str_size['state_%s' % i] = 30
-        except Exception as e:
-            logger.debug("Error setting up string sizes:", e)
-            str_size['state_0'] = 30
+        if not hasattr(self, "moves") or self.moves is None:
+            raise RuntimeError("moves not initialized; create_route() must set moves before run.")
+        for i in self.moves:
+            str_size['state_%s' % i] = 30
     
         # Initialize dictionaries for unit parameters.
         u_param_dict = {}
@@ -2603,10 +2614,11 @@ class simulation():
             scenario_counter += 1
             print(f"[INFO] Processing scenario {scenario_counter} of {total_scenarios}: {scen}", flush=True)
             #logger.debug('start assessing scenario')
-            try:
-                scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
-            except Exception:
-                logger.warning('Scenario not in flow scenarios dataframe')
+            if not hasattr(self, "flow_scenarios_df") or self.flow_scenarios_df is None:
+                raise ValueError("flow_scenarios_df is missing; cannot process scenarios.")
+            scen_df = self.flow_scenarios_df[self.flow_scenarios_df['Scenario'] == scen]
+            if scen_df.empty:
+                raise ValueError(f"Scenario '{scen}' not found in flow_scenarios_df.")
             scen_num = scen_df.iat[0, scen_df.columns.get_loc('Scenario Number')]
             season = scen_df.iat[0, scen_df.columns.get_loc('Season')]
             scenario = scen_df.iat[0, scen_df.columns.get_loc('Scenario')]
@@ -2622,10 +2634,11 @@ class simulation():
                 scen_months = list(map(int, month_list))
             else:
                 scen_months = [scen_months]
-            try:
-                ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario'] == scenario]
-            except Exception:
-                logger.warning('Scenario not in operating scenarios')
+            if not hasattr(self, "operating_scenarios_df") or self.operating_scenarios_df is None:
+                raise ValueError("operating_scenarios_df is missing; cannot process operating scenarios.")
+            ops = self.operating_scenarios_df[self.operating_scenarios_df['Scenario'] == scenario]
+            if ops.empty:
+                raise ValueError(f"Scenario '{scenario}' not found in operating_scenarios_df.")
             
             species = self.pop.Species.unique() #[self.pop['Scenario'] == scenario].Species.unique()
             
@@ -2815,22 +2828,45 @@ class simulation():
                                 if int(n) == 0:
                                     n = 1
     
-                                try:
-                                    if not math.isnan(s):
+                                if int(n) <= 0:
+                                    raise ValueError(
+                                        f"Population size resolved to {n} for species '{species_name}' "
+                                        f"scenario '{scenario}' on day {day}."
+                                    )
+                                if not math.isnan(s):
+                                    try:
                                         population = np.abs(lognorm.rvs(s, len_loc, len_scale, int(n), random_state=rng))
-                                        population = np.where(population > 150, 150, population)
-                                        population = population * 0.0328084  # convert cm to feet
-                                    else:
-                                        print("Generating population using normal distribution", flush=True)
-                                        population = np.abs(np.random.normal(mean_len, sd_len, int(n))) / 12.0                                    # print(f"Population of {len(population)} created for species {species_name} on day {day}", flush=True)
-                                except Exception as e:
+                                    except ValueError as exc:
+                                        raise ValueError(
+                                            f"Lognormal population draw failed for species '{species_name}' "
+                                            f"scenario '{scenario}' on day {day}: {exc}"
+                                        ) from exc
+                                    population = np.where(population > 150, 150, population)
+                                    population = population * 0.0328084  # convert cm to feet
+                                else:
+                                    if math.isnan(mean_len) or math.isnan(sd_len):
+                                        raise ValueError(
+                                            f"Normal population draw requires mean_len/sd_len for "
+                                            f"species '{species_name}' scenario '{scenario}' on day {day}."
+                                        )
+                                    if sd_len < 0:
+                                        raise ValueError(
+                                            f"Normal population draw has negative sd_len={sd_len} for "
+                                            f"species '{species_name}' scenario '{scenario}' on day {day}."
+                                        )
+                                    print("Generating population using normal distribution", flush=True)
+                                    population = np.abs(np.random.normal(mean_len, sd_len, int(n))) / 12.0
 
-                                    continue
-    
-                                try:
-                                    U_crit_val = spc_dat.iat[0, spc_dat.columns.get_loc('U_crit')]
-                                except Exception as e:
-                                    U_crit_val = 0
+                                if 'U_crit' not in spc_dat.columns:
+                                    raise KeyError(
+                                        f"U_crit missing in population data for species '{species_name}' "
+                                        f"scenario '{scenario}' on day {day}."
+                                    )
+                                U_crit_val = spc_dat.iat[0, spc_dat.columns.get_loc('U_crit')]
+                                if pd.isna(U_crit_val):
+                                    raise ValueError(
+                                        f"U_crit is NaN for species '{species_name}' scenario '{scenario}' on day {day}."
+                                    )
                                 swim_speed = np.repeat(U_crit_val, len(population))
                                 #logger.info('Population estimated')
                                 if len(self.nodes) > 1:
@@ -2868,13 +2904,12 @@ class simulation():
                                     return x
                                 
                                 def safe_node_surv_rate(pop, swim, status, surv_fun, location, surv_dict, u_param_dict, width_ratio):
+                                    pop = scalarize(pop)
+                                    swim = scalarize(swim)
+                                    status = scalarize(status)
+                                    surv_fun = scalarize(surv_fun)
+                                    location = scalarize(location)
                                     try:
-                                        pop = scalarize(pop)
-                                        swim = scalarize(swim)
-                                        status = scalarize(status)
-                                        surv_fun = scalarize(surv_fun)
-                                        location = scalarize(location)
-                                        #logger.debug('scalarized variables')
                                         return self.node_surv_rate(
                                             pop,
                                             swim,
@@ -2886,9 +2921,11 @@ class simulation():
                                             barotrauma=barotrauma,
                                             width_ratio=width_ratio,
                                         )
-                                    except Exception as e:
-                                        print(f"Failed node_surv_rate at location={location} with error: {e}")
-                                        raise
+                                    except (KeyError, ValueError, TypeError) as exc:
+                                        raise RuntimeError(
+                                            f"node_surv_rate failed at location '{location}' "
+                                            f"for species '{species_name}' scenario '{scenario}': {exc}"
+                                        ) from exc
                                 
                                 for k in self.moves:
                                     #logger.info(f'start movement for node {k}')  
@@ -2906,12 +2943,16 @@ class simulation():
                                     def surv_fun_att(state, surv_fun_dict):
                                         return surv_fun_dict[state]['Surv_Fun']
                                 
+                                    missing_states = [
+                                        state for state in np.unique(current_location)
+                                        if state not in self.surv_fun_dict
+                                    ]
+                                    if missing_states:
+                                        raise KeyError(
+                                            f"Missing survival functions for states: {missing_states}"
+                                        )
                                     v_surv_fun = np.vectorize(surv_fun_att, excluded=[1])
-                                    try:
-                                        surv_fun = v_surv_fun(current_location, self.surv_fun_dict)
-                                    except Exception as e:
-                                        logger.warning(f"Survival function fallback triggered: {e}")
-                                        surv_fun = np.repeat("a priori", len(current_location))
+                                    surv_fun = v_surv_fun(current_location, self.surv_fun_dict)
                                 
                                     dice = np.random.uniform(0.0, 1.0, int(n))
                                 
@@ -3066,10 +3107,7 @@ class simulation():
                                 self.hdf.flush()
 
                                 if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
-                                    try:
-                                        print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
-                                    except Exception as e:
-                                        print(f"[DIAG] Could not retrieve HDF5 keys: {e}", flush=True)
+                                    print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
                                 
                             else:
                                 if self.output_units == 'metric':
@@ -3109,10 +3147,7 @@ class simulation():
                                     print(f"[DIAG] Wrote 'Daily' to HDF5 (no fish). Flushing...", flush=True)
                                 #self.hdf.flush()
                                 if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
-                                    try:
-                                        print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
-                                    except Exception as e:
-                                        print(f"[DIAG] Could not retrieve HDF5 keys: {e}", flush=True)
+                                    print(f"[DIAG] Current HDF5 keys after write: {self.hdf.keys()}", flush=True)
                         
                         route_flow_key = None
                         if hasattr(self, "_route_flow_context"):
@@ -3189,10 +3224,7 @@ class simulation():
             print(f"[INFO] ✅ All scenarios complete! Finalizing results...", flush=True)
             logger.info("Completed Simulations - view results")
             if DIAGNOSTICS_ENABLED:
-                try:
-                    print(f"[DIAG] Final HDF5 keys before close: {self.hdf.keys()}", flush=True)
-                except Exception as e:
-                    print(f"[DIAG] Could not retrieve HDF5 keys (file may be closed): {e}", flush=True)
+                print(f"[DIAG] Final HDF5 keys before close: {self.hdf.keys()}", flush=True)
             self.hdf.flush()
             self.hdf.close()
             print(f"[INFO] 💾 Simulation data saved successfully", flush=True)
@@ -3246,10 +3278,11 @@ class simulation():
             logger.info("iterate through species and scenarios and summarize")
             for i in species:
                 for j in scens:
-                        try:
-                            dat = store['simulations/%s/%s' % (j, i)]
-                        except:
+                        sim_key = f"simulations/{j}/{i}"
+                        if f"/{sim_key}" not in store.keys():
+                            logger.warning("Missing simulation data for key '%s'", sim_key)
                             continue
+                        dat = store[sim_key]
     
                         # summarize species-scenario - whole project
                         whole_proj_succ = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
@@ -3281,30 +3314,36 @@ class simulation():
                         #     logger.info("  Day %s | Mean = %.4f, Min = %.4f, Max = %.4f, Std Dev = %.4f",
                         #                 row['day'], row['mean'], row['min'], row['max'], row['std'])
 
-                        try:
-                            # Empirically summarize whole-project daily survival probabilities.
-                            # Using beta.fit can be unstable when the sample contains 0s or 1s.
-                            # Instead compute empirical mean and bootstrap CI for robustness.
-                            logger.info("==== Whole Project Survival Summary (empirical + bootstrap CI) ====")
-                            mean_emp = whole_summ['prob'].mean()
-                            std_emp = whole_summ['prob'].std()
-                            # Use bootstrap to get a robust CI for the mean
-                            _, lcl_emp, ucl_emp = bootstrap_mean_ci(whole_summ['prob'].values, n_bootstrap=2000, ci=95)
-
-                            logger.info("Empirical Mean survival probability = %.4f", mean_emp)
-                            logger.info("Empirical Std deviation (spread)     = %.4f", std_emp)
-                            logger.info("95%% CI from bootstrap              = [%.4f, %.4f]", lcl_emp, ucl_emp)
-
-                            # Store an explanatory caption to help downstream reporting (webapp can read this attr)
-                            self.beta_caption = (
-                                "Means shown are empirical averages of per-iteration, per-day survival probabilities. "
-                                "95% intervals are bootstrap estimates. Direct beta distribution fits are sensitive to values exactly 0 or 1 and are not used for the reported mean."
+                        # Empirically summarize whole-project daily survival probabilities.
+                        # Using beta.fit can be unstable when the sample contains 0s or 1s.
+                        # Instead compute empirical mean and bootstrap CI for robustness.
+                        logger.info("==== Whole Project Survival Summary (empirical + bootstrap CI) ====")
+                        prob_values = whole_summ['prob'].values
+                        if prob_values.size == 0:
+                            raise ValueError(f"No survival probability data for scenario '{j}' species '{i}'.")
+                        mean_emp = whole_summ['prob'].mean()
+                        std_emp = whole_summ['prob'].std()
+                        if prob_values.size < 2:
+                            lcl_emp = mean_emp
+                            ucl_emp = mean_emp
+                            logger.info(
+                                "Only one sample for scenario '%s' species '%s'; CI collapsed to mean.",
+                                j, i
                             )
+                        else:
+                            _, lcl_emp, ucl_emp = bootstrap_mean_ci(prob_values, n_bootstrap=2000, ci=95)
 
-                            self.beta_dict['%s_%s_%s' % (j, i, 'whole')] = [j, i, 'whole', mean_emp, std_emp, lcl_emp, ucl_emp]
-                        except Exception as e:
-                            logger.warning(f'Failed to summarize whole project survival for {j},{i}: {e}')
-                            continue
+                        logger.info("Empirical Mean survival probability = %.4f", mean_emp)
+                        logger.info("Empirical Std deviation (spread)     = %.4f", std_emp)
+                        logger.info("95%% CI from bootstrap              = [%.4f, %.4f]", lcl_emp, ucl_emp)
+
+                        # Store an explanatory caption to help downstream reporting (webapp can read this attr)
+                        self.beta_caption = (
+                            "Means shown are empirical averages of per-iteration, per-day survival probabilities. "
+                            "95% intervals are bootstrap estimates. Direct beta distribution fits are sensitive to values exactly 0 or 1 and are not used for the reported mean."
+                        )
+
+                        self.beta_dict['%s_%s_%s' % (j, i, 'whole')] = [j, i, 'whole', mean_emp, std_emp, lcl_emp, ucl_emp]
                         for l in self.moves:
                             if l > 0:
                                 sub_dat = dat[dat['survival_%s' % (l-1)] == 1]
@@ -3321,24 +3360,30 @@ class simulation():
                             states = route_summ['state_%s' % (l)].unique()
                             for m in states:
                                 st_df = route_summ[route_summ['state_%s' % (l)] == m]
-                                try:
-                                    # Empirical mean and bootstrap CI for each state/route
-                                    st_mean = st_df['prob'].mean()
-                                    st_std = st_df['prob'].std()
-                                    # bootstrap CI for mean (fall back to simple percentiles if short sample)
-                                    try:
-                                        _, st_lcl, st_ucl = bootstrap_mean_ci(st_df['prob'].values, n_bootstrap=2000, ci=95)
-                                    except Exception:
-                                        st_lcl = st_df['prob'].quantile(0.025)
-                                        st_ucl = st_df['prob'].quantile(0.975)
-                                    # Log summary
-                                    logger.debug(f"State {m}: mean={st_mean:.4f}, std={st_std:.4f}, 95CI=[{st_lcl:.4f},{st_ucl:.4f}]")
-                                except Exception as e:
-                                    logger.warning(f'Failed to compute empirical summary for state {m}: {e}. Using defaults.')
-                                    st_mean = 0.
-                                    st_std = 0.
-                                    st_lcl = 0.
-                                    st_ucl = 0.
+                                prob_values = st_df['prob'].values
+                                if prob_values.size == 0:
+                                    logger.warning(
+                                        "No survival probability data for state '%s' in scenario '%s' species '%s'.",
+                                        m, j, i
+                                    )
+                                    continue
+                                # Empirical mean and bootstrap CI for each state/route
+                                st_mean = st_df['prob'].mean()
+                                st_std = st_df['prob'].std()
+                                if prob_values.size < 2:
+                                    st_lcl = st_mean
+                                    st_ucl = st_mean
+                                    logger.info(
+                                        "Only one sample for state '%s' in scenario '%s' species '%s'; CI collapsed to mean.",
+                                        m, j, i
+                                    )
+                                else:
+                                    _, st_lcl, st_ucl = bootstrap_mean_ci(prob_values, n_bootstrap=2000, ci=95)
+                                # Log summary
+                                logger.debug(
+                                    "State %s: mean=%.4f, std=%.4f, 95CI=[%.4f,%.4f]",
+                                    m, st_mean, st_std, st_lcl, st_ucl
+                                )
                                 self.beta_dict['%s_%s_%s' % (j, i, m)] = [j,
                                                                           i,
                                                                           m,
@@ -3490,195 +3535,198 @@ class simulation():
                     
                 # Optionally, write these DataFrames to Excel (if needed)
                 # Only try if wks_dir is an Excel file (not HDF5)
-                try:
-                    if self.wks_dir and self.wks_dir.endswith(('.xlsx', '.xls')):
+                if self.wks_dir and self.wks_dir.endswith(('.xlsx', '.xls')):
+                    try:
                         with pd.ExcelWriter(self.wks_dir, engine='openpyxl', mode='a') as writer:
                             self.beta_df.to_excel(writer, sheet_name='beta fit')
                             self.daily_summary.to_excel(writer, sheet_name='daily summary')
                             self.cum_sum.to_excel(writer, sheet_name='yearly summary')
-                    else:
-                        logger.info('Web app mode detected - Excel export skipped (results in HDF5 only)')
-                except (PermissionError, FileNotFoundError) as e:
-                    logger.info(f'Cannot write to Excel file (likely web app run): {e}')
-                except Exception as e:
-                    logger.warning(f'Unexpected error writing to Excel: {e}')
+                    except ImportError as exc:
+                        raise RuntimeError(
+                            "openpyxl is required to write Excel outputs. "
+                            "Install it or set wks_dir to an HDF5 path."
+                        ) from exc
+                    except (PermissionError, FileNotFoundError, OSError, ValueError) as exc:
+                        raise RuntimeError(
+                            f"Failed to write Excel summaries to {self.wks_dir}: {exc}"
+                        ) from exc
+                else:
+                    logger.info('Web app mode detected - Excel export skipped (results in HDF5 only)')
 
                 # Build driver diagnostics (unit-level) for downstream reporting.
                 self.driver_diagnostics = None
-                try:
-                    unit_params = store['Unit_Parameters'] if '/Unit_Parameters' in store.keys() else None
-                    route_flows = store['Route_Flows'] if '/Route_Flows' in store.keys() else None
-                    unit_hours = store['Unit_Hours'] if '/Unit_Hours' in store.keys() else None
+                unit_params = store['Unit_Parameters'] if '/Unit_Parameters' in store.keys() else None
+                route_flows = store['Route_Flows'] if '/Route_Flows' in store.keys() else None
+                unit_hours = store['Unit_Hours'] if '/Unit_Hours' in store.keys() else None
 
-                    if isinstance(unit_params, pd.DataFrame) and not unit_params.empty:
-                        diag = unit_params.copy()
-                        diag['route'] = diag.index.astype(str)
+                if not isinstance(unit_params, pd.DataFrame) or unit_params.empty:
+                    logger.info("Driver diagnostics skipped: Unit_Parameters missing or empty.")
+                else:
+                    diag = unit_params.copy()
+                    diag['route'] = diag.index.astype(str)
 
-                        preferred_cols = [
-                            'H', 'RPM', 'D', 'N', 'Qopt', 'Qcap',
-                            'D1', 'D2', 'B', 'ada', 'intake_vel',
-                            'ps_D', 'ps_length', 'fb_depth', 'submergence_depth',
-                            'elevation_head'
-                        ]
-                        keep_cols = ['route'] + [c for c in preferred_cols if c in diag.columns]
-                        diag = diag[keep_cols]
+                    preferred_cols = [
+                        'H', 'RPM', 'D', 'N', 'Qopt', 'Qcap',
+                        'D1', 'D2', 'B', 'ada', 'intake_vel',
+                        'ps_D', 'ps_length', 'fb_depth', 'submergence_depth',
+                        'elevation_head'
+                    ]
+                    keep_cols = ['route'] + [c for c in preferred_cols if c in diag.columns]
+                    diag = diag[keep_cols]
 
-                        if isinstance(self.beta_df_units_only, pd.DataFrame) and not self.beta_df_units_only.empty:
-                            beta_units = self.beta_df_units_only.copy()
-                            rename_map = {}
-                            if 'Passage Route' in beta_units.columns:
-                                rename_map['Passage Route'] = 'route'
-                            if 'state' in beta_units.columns:
-                                rename_map['state'] = 'route'
-                            if 'Mean' in beta_units.columns:
-                                rename_map['Mean'] = 'survival_mean'
-                            if 'survival rate' in beta_units.columns:
-                                rename_map['survival rate'] = 'survival_mean'
-                            if 'Variance' in beta_units.columns:
-                                rename_map['Variance'] = 'survival_variance'
-                            if 'variance' in beta_units.columns:
-                                rename_map['variance'] = 'survival_variance'
-                            if 'Lower 95% CI' in beta_units.columns:
-                                rename_map['Lower 95% CI'] = 'survival_lcl'
-                            if 'll' in beta_units.columns:
-                                rename_map['ll'] = 'survival_lcl'
-                            if 'Upper 95% CI' in beta_units.columns:
-                                rename_map['Upper 95% CI'] = 'survival_ucl'
-                            if 'ul' in beta_units.columns:
-                                rename_map['ul'] = 'survival_ucl'
-                            beta_units.rename(columns=rename_map, inplace=True)
+                    if isinstance(self.beta_df_units_only, pd.DataFrame) and not self.beta_df_units_only.empty:
+                        beta_units = self.beta_df_units_only.copy()
+                        rename_map = {}
+                        if 'Passage Route' in beta_units.columns:
+                            rename_map['Passage Route'] = 'route'
+                        if 'state' in beta_units.columns:
+                            rename_map['state'] = 'route'
+                        if 'Mean' in beta_units.columns:
+                            rename_map['Mean'] = 'survival_mean'
+                        if 'survival rate' in beta_units.columns:
+                            rename_map['survival rate'] = 'survival_mean'
+                        if 'Variance' in beta_units.columns:
+                            rename_map['Variance'] = 'survival_variance'
+                        if 'variance' in beta_units.columns:
+                            rename_map['variance'] = 'survival_variance'
+                        if 'Lower 95% CI' in beta_units.columns:
+                            rename_map['Lower 95% CI'] = 'survival_lcl'
+                        if 'll' in beta_units.columns:
+                            rename_map['ll'] = 'survival_lcl'
+                        if 'Upper 95% CI' in beta_units.columns:
+                            rename_map['Upper 95% CI'] = 'survival_ucl'
+                        if 'ul' in beta_units.columns:
+                            rename_map['ul'] = 'survival_ucl'
+                        beta_units.rename(columns=rename_map, inplace=True)
 
-                            if 'route' in beta_units.columns:
-                                beta_keep = [
-                                    c for c in [
-                                        'route',
-                                        'survival_mean',
-                                        'survival_variance',
-                                        'survival_lcl',
-                                        'survival_ucl'
-                                    ] if c in beta_units.columns
-                                ]
-                                if beta_keep:
-                                    beta_units = beta_units[beta_keep]
-                                    numeric_cols = [c for c in beta_keep if c != 'route']
-                                    if numeric_cols:
-                                        beta_units = beta_units.groupby('route', as_index=False)[numeric_cols].mean()
-                                    diag = diag.merge(beta_units, on='route', how='left')
+                        if 'route' in beta_units.columns:
+                            beta_keep = [
+                                c for c in [
+                                    'route',
+                                    'survival_mean',
+                                    'survival_variance',
+                                    'survival_lcl',
+                                    'survival_ucl'
+                                ] if c in beta_units.columns
+                            ]
+                            if beta_keep:
+                                beta_units = beta_units[beta_keep]
+                                numeric_cols = [c for c in beta_keep if c != 'route']
+                                if numeric_cols:
+                                    beta_units = beta_units.groupby('route', as_index=False)[numeric_cols].mean()
+                                diag = diag.merge(beta_units, on='route', how='left')
 
-                        if isinstance(route_flows, pd.DataFrame) and not route_flows.empty:
-                            rf = route_flows.copy()
-                            if 'route' in rf.columns and 'discharge_cfs' in rf.columns:
-                                rf['route'] = rf['route'].astype(str)
-                                route_mean = rf.groupby('route')['discharge_cfs'].mean()
-                                diag = diag.merge(
-                                    route_mean.rename('mean_discharge_cfs'),
-                                    left_on='route',
-                                    right_index=True,
-                                    how='left'
-                                )
-
-                                unit_routes = set(diag['route'].dropna().astype(str).tolist())
-                                unit_mean = route_mean[route_mean.index.isin(unit_routes)]
-                                unit_total = float(unit_mean.sum())
-
-                                share_series = None
-                                if unit_total > 0:
-                                    share_series = unit_mean / unit_total
-                                else:
-                                    total_all = float(route_mean.sum())
-                                    if total_all > 0:
-                                        share_series = route_mean / total_all
-
-                                if share_series is not None:
-                                    diag = diag.merge(
-                                        share_series.rename('flow_share'),
-                                        left_on='route',
-                                        right_index=True,
-                                        how='left'
-                                    )
-                        if 'flow_share' in diag.columns and 'survival_mean' in diag.columns:
-                            diag['mortality_weight'] = diag['flow_share'] * (1 - diag['survival_mean'])
-
-                        dispatch_df = None
-                        if isinstance(unit_hours, pd.DataFrame) and not unit_hours.empty and 'Qopt' in diag.columns:
-                            uh = unit_hours.copy()
-                            if 'route' in uh.columns and 'hours' in uh.columns:
-                                uh['route'] = uh['route'].astype(str)
-                                uh['hours'] = pd.to_numeric(uh['hours'], errors='coerce')
-                                if 'discharge_cfs' in uh.columns:
-                                    uh['discharge_cfs'] = pd.to_numeric(
-                                        uh['discharge_cfs'], errors='coerce'
-                                    )
-                                    dispatch_df = uh
-                                elif isinstance(route_flows, pd.DataFrame) and not route_flows.empty:
-                                    rf = route_flows.copy()
-                                    if 'route' in rf.columns and 'discharge_cfs' in rf.columns:
-                                        rf['route'] = rf['route'].astype(str)
-                                        dispatch_df = rf.merge(
-                                            uh,
-                                            on=['scenario', 'iteration', 'day', 'route'],
-                                            how='outer'
-                                        )
-                                        dispatch_df['hours'] = pd.to_numeric(
-                                            dispatch_df['hours'], errors='coerce'
-                                        )
-                                        dispatch_df['discharge_cfs'] = pd.to_numeric(
-                                            dispatch_df['discharge_cfs'], errors='coerce'
-                                        )
-
-                        if isinstance(dispatch_df, pd.DataFrame) and not dispatch_df.empty:
-                            dispatch_df = dispatch_df.merge(
-                                diag[['route', 'Qopt']],
-                                on='route',
+                    if isinstance(route_flows, pd.DataFrame) and not route_flows.empty:
+                        rf = route_flows.copy()
+                        if 'route' in rf.columns and 'discharge_cfs' in rf.columns:
+                            rf['route'] = rf['route'].astype(str)
+                            route_mean = rf.groupby('route')['discharge_cfs'].mean()
+                            diag = diag.merge(
+                                route_mean.rename('mean_discharge_cfs'),
+                                left_on='route',
+                                right_index=True,
                                 how='left'
                             )
-                            dispatch_df['Qopt'] = pd.to_numeric(dispatch_df['Qopt'], errors='coerce')
-                            dispatch_df = dispatch_df[
-                                (dispatch_df['hours'] > 0.0)
-                                & (dispatch_df['Qopt'] > 0.0)
-                                & dispatch_df['discharge_cfs'].notna()
-                            ]
-                            if not dispatch_df.empty:
-                                lower_band = 0.9
-                                upper_band = 1.1
-                                dispatch_df['abs_pct_off_qopt'] = (
-                                    (dispatch_df['discharge_cfs'] - dispatch_df['Qopt']).abs()
-                                    / dispatch_df['Qopt'] * 100.0
-                                )
-                                dispatch_df['hours_outside_band'] = dispatch_df['hours'] * (
-                                    (dispatch_df['discharge_cfs'] < dispatch_df['Qopt'] * lower_band)
-                                    | (dispatch_df['discharge_cfs'] > dispatch_df['Qopt'] * upper_band)
-                                ).astype(float)
-                                dispatch_df['abs_pct_off_hours'] = (
-                                    dispatch_df['abs_pct_off_qopt'] * dispatch_df['hours']
-                                )
-                                hours_summary = dispatch_df.groupby('route').agg(
-                                    total_hours=('hours', 'sum'),
-                                    hours_outside_band=('hours_outside_band', 'sum'),
-                                    abs_pct_off_hours=('abs_pct_off_hours', 'sum')
-                                )
-                                hours_summary['mean_abs_pct_off_qopt'] = (
-                                    hours_summary['abs_pct_off_hours'] / hours_summary['total_hours']
-                                )
-                                hours_summary['pct_hours_outside_qopt_band'] = (
-                                    hours_summary['hours_outside_band'] / hours_summary['total_hours'] * 100.0
-                                )
-                                hours_summary = hours_summary[
-                                    ['total_hours', 'mean_abs_pct_off_qopt', 'pct_hours_outside_qopt_band']
-                                ]
+
+                            unit_routes = set(diag['route'].dropna().astype(str).tolist())
+                            unit_mean = route_mean[route_mean.index.isin(unit_routes)]
+                            unit_total = float(unit_mean.sum())
+
+                            share_series = None
+                            if unit_total > 0:
+                                share_series = unit_mean / unit_total
+                            else:
+                                total_all = float(route_mean.sum())
+                                if total_all > 0:
+                                    share_series = route_mean / total_all
+
+                            if share_series is not None:
                                 diag = diag.merge(
-                                    hours_summary,
+                                    share_series.rename('flow_share'),
                                     left_on='route',
                                     right_index=True,
                                     how='left'
                                 )
+                    if 'flow_share' in diag.columns and 'survival_mean' in diag.columns:
+                        diag['mortality_weight'] = diag['flow_share'] * (1 - diag['survival_mean'])
 
-                        self.driver_diagnostics = diag
-                        if DIAGNOSTICS_ENABLED and isinstance(diag, pd.DataFrame):
-                            print(f"[DIAG] Driver diagnostics rows: {len(diag)}", flush=True)
-                except Exception as e:
-                    logger.warning(f'Failed to build driver diagnostics: {e}')
-                    self.driver_diagnostics = None
+                    dispatch_df = None
+                    if isinstance(unit_hours, pd.DataFrame) and not unit_hours.empty and 'Qopt' in diag.columns:
+                        uh = unit_hours.copy()
+                        if 'route' in uh.columns and 'hours' in uh.columns:
+                            uh['route'] = uh['route'].astype(str)
+                            uh['hours'] = pd.to_numeric(uh['hours'], errors='coerce')
+                            if 'discharge_cfs' in uh.columns:
+                                uh['discharge_cfs'] = pd.to_numeric(
+                                    uh['discharge_cfs'], errors='coerce'
+                                )
+                                dispatch_df = uh
+                            elif isinstance(route_flows, pd.DataFrame) and not route_flows.empty:
+                                rf = route_flows.copy()
+                                if 'route' in rf.columns and 'discharge_cfs' in rf.columns:
+                                    rf['route'] = rf['route'].astype(str)
+                                    dispatch_df = rf.merge(
+                                        uh,
+                                        on=['scenario', 'iteration', 'day', 'route'],
+                                        how='outer'
+                                    )
+                                    dispatch_df['hours'] = pd.to_numeric(
+                                        dispatch_df['hours'], errors='coerce'
+                                    )
+                                    dispatch_df['discharge_cfs'] = pd.to_numeric(
+                                        dispatch_df['discharge_cfs'], errors='coerce'
+                                    )
+
+                    if isinstance(dispatch_df, pd.DataFrame) and not dispatch_df.empty:
+                        dispatch_df = dispatch_df.merge(
+                            diag[['route', 'Qopt']],
+                            on='route',
+                            how='left'
+                        )
+                        dispatch_df['Qopt'] = pd.to_numeric(dispatch_df['Qopt'], errors='coerce')
+                        dispatch_df = dispatch_df[
+                            (dispatch_df['hours'] > 0.0)
+                            & (dispatch_df['Qopt'] > 0.0)
+                            & dispatch_df['discharge_cfs'].notna()
+                        ]
+                        if not dispatch_df.empty:
+                            lower_band = 0.9
+                            upper_band = 1.1
+                            dispatch_df['abs_pct_off_qopt'] = (
+                                (dispatch_df['discharge_cfs'] - dispatch_df['Qopt']).abs()
+                                / dispatch_df['Qopt'] * 100.0
+                            )
+                            dispatch_df['hours_outside_band'] = dispatch_df['hours'] * (
+                                (dispatch_df['discharge_cfs'] < dispatch_df['Qopt'] * lower_band)
+                                | (dispatch_df['discharge_cfs'] > dispatch_df['Qopt'] * upper_band)
+                            ).astype(float)
+                            dispatch_df['abs_pct_off_hours'] = (
+                                dispatch_df['abs_pct_off_qopt'] * dispatch_df['hours']
+                            )
+                            hours_summary = dispatch_df.groupby('route').agg(
+                                total_hours=('hours', 'sum'),
+                                hours_outside_band=('hours_outside_band', 'sum'),
+                                abs_pct_off_hours=('abs_pct_off_hours', 'sum')
+                            )
+                            hours_summary['mean_abs_pct_off_qopt'] = (
+                                hours_summary['abs_pct_off_hours'] / hours_summary['total_hours']
+                            )
+                            hours_summary['pct_hours_outside_qopt_band'] = (
+                                hours_summary['hours_outside_band'] / hours_summary['total_hours'] * 100.0
+                            )
+                            hours_summary = hours_summary[
+                                ['total_hours', 'mean_abs_pct_off_qopt', 'pct_hours_outside_qopt_band']
+                            ]
+                            diag = diag.merge(
+                                hours_summary,
+                                left_on='route',
+                                right_index=True,
+                                how='left'
+                            )
+
+                    self.driver_diagnostics = diag
+                    if DIAGNOSTICS_ENABLED and isinstance(diag, pd.DataFrame):
+                        print(f"[DIAG] Driver diagnostics rows: {len(diag)}", flush=True)
     
             # Close summary statistics section
             print("="*60 + "\n", flush=True)
@@ -3784,12 +3832,8 @@ class hydrologic():
                     self.DAvgFlow = self.DAvgFlow.append(df)
     
                     print ("stream gage %s with a drainage area of %s square kilometers added to flow data."%(i,drain_sqkm))
-                except (KeyError, ValueError, IndexError) as e:
-                    logger.warning(f'Failed to load stream gage {i}: {e}')
-                    continue
-                except Exception as e:
-                    logger.error(f'Unexpected error loading stream gage {i}: {e}')
-                    continue
+                except (KeyError, ValueError, IndexError, FileNotFoundError, OSError) as e:
+                    raise RuntimeError(f"Failed to load stream gage {i}: {e}") from e
 
     def seasonal_exceedance(self, seasonal_dict, exceedence, HUC = None):
         """
@@ -4146,86 +4190,68 @@ class epri():
             """
             print("Starting GammaFit...", flush=True)
             from scipy.stats import gamma
-            try:
-                data = np.asarray(self.epri.FishPerMft3.values)
-                self.dist_gamma = None
-                self.dist_gamma_free = None
-                self.dist_gamma_choice = None
-                # Only fit if data present
-                if data.size > 0:
-                    # fixed-loc fit
-                    try:
-                        self.dist_gamma = gamma.fit(data, floc=0)
-                    except Exception:
-                        self.dist_gamma = None
-                    # free-loc fit
-                    try:
-                        self.dist_gamma_free = gamma.fit(data)
-                    except Exception:
-                        self.dist_gamma_free = None
+            data = np.asarray(self.epri.FishPerMft3.values)
+            if data.size == 0:
+                raise ValueError("GammaFit requires non-empty entrainment data.")
+            self.dist_gamma = gamma.fit(data, floc=0)
+            self.dist_gamma_free = gamma.fit(data)
 
-                    if self.dist_gamma is not None:
-                        print("Gamma fixed-loc params (k, loc, scale):", round(self.dist_gamma[0],4), round(self.dist_gamma[1],4), round(self.dist_gamma[2],4))
-                    if self.dist_gamma_free is not None:
-                        print("Gamma free-loc params (k, loc, scale):", round(self.dist_gamma_free[0],4), round(self.dist_gamma_free[1],4), round(self.dist_gamma_free[2],4))
-
-                else:
-                    print("GammaFit: no data to fit", flush=True)
-            except Exception as e:
-                print(f"GammaFit failed: {e}", flush=True)
-                self.dist_gamma = None
-                self.dist_gamma_free = None
+            print(
+                "Gamma fixed-loc params (k, loc, scale):",
+                round(self.dist_gamma[0], 4),
+                round(self.dist_gamma[1], 4),
+                round(self.dist_gamma[2], 4),
+            )
+            print(
+                "Gamma free-loc params (k, loc, scale):",
+                round(self.dist_gamma_free[0], 4),
+                round(self.dist_gamma_free[1], 4),
+                round(self.dist_gamma_free[2], 4),
+            )
 
             # Compute simple model selection stats for gamma fits and pick a preferred variant
-            try:
-                def _compute_stats(params, arr, floc_fixed=True):
-                    if params is None or arr.size == 0:
-                        return (None, None, None, None, None)
-                    try:
-                        sh, loc, sc = params[0], params[1], params[2]
-                        pdf = gamma.pdf(arr, sh, loc=loc, scale=sc)
-                        pdf = np.clip(pdf, 1e-300, None)
-                        loglik = float(np.sum(np.log(pdf)))
-                        k = 2 if floc_fixed else 3
-                        aic = 2 * k - 2 * loglik
-                        n = arr.size
-                        if n - k - 1 > 0:
-                            aicc = aic + (2 * k * (k + 1)) / float(n - k - 1)
-                        else:
-                            aicc = aic
-                        bic = math.log(n) * k - 2 * loglik
-                        # AD stat
-                        x = np.sort(arr)
-                        n = x.size
-                        eps = 1e-12
-                        F = np.clip(gamma.cdf(x, sh, loc=loc, scale=sc), eps, 1.0 - eps)
-                        i = np.arange(1, n + 1)
-                        S = np.sum((2 * i - 1) * (np.log(F) + np.log(1.0 - F[::-1])))
-                        A2 = -n - S / n
-                        return (loglik, aic, aicc, bic, float(A2))
-                    except Exception:
-                        return (None, None, None, None, None)
-
-                arr = np.asarray(self.epri.FishPerMft3.values)
-                self.gamma_fixed_stats = _compute_stats(self.dist_gamma, arr, floc_fixed=True)
-                self.gamma_free_stats = _compute_stats(self.dist_gamma_free, arr, floc_fixed=False)
-
-                # Choose which to prefer: free only if AICc improves by >=2
-                self.gamma_choice = 'fixed'
-                if self.gamma_free_stats[2] is not None and self.gamma_fixed_stats[2] is not None:
-                    if self.gamma_free_stats[2] + 2.0 <= self.gamma_fixed_stats[2]:
-                        self.gamma_choice = 'free'
-                elif self.gamma_free_stats[2] is not None and self.gamma_fixed_stats[2] is None:
-                    self.gamma_choice = 'free'
-
-                if self.gamma_choice == 'free':
-                    self.dist_gamma_choice = self.dist_gamma_free
+            def _compute_stats(params, arr, floc_fixed=True):
+                if params is None:
+                    raise ValueError("Gamma parameters are missing; cannot compute stats.")
+                if arr.size == 0:
+                    raise ValueError("Gamma data array is empty; cannot compute stats.")
+                sh, loc, sc = params[0], params[1], params[2]
+                pdf = gamma.pdf(arr, sh, loc=loc, scale=sc)
+                pdf = np.clip(pdf, 1e-300, None)
+                loglik = float(np.sum(np.log(pdf)))
+                k = 2 if floc_fixed else 3
+                aic = 2 * k - 2 * loglik
+                n = arr.size
+                if n - k - 1 > 0:
+                    aicc = aic + (2 * k * (k + 1)) / float(n - k - 1)
                 else:
-                    self.dist_gamma_choice = self.dist_gamma
-            except Exception:
-                self.gamma_fixed_stats = (None, None, None, None, None)
-                self.gamma_free_stats = (None, None, None, None, None)
-                self.gamma_choice = 'fixed'
+                    aicc = aic
+                bic = math.log(n) * k - 2 * loglik
+                # AD stat
+                x = np.sort(arr)
+                n = x.size
+                eps = 1e-12
+                F = np.clip(gamma.cdf(x, sh, loc=loc, scale=sc), eps, 1.0 - eps)
+                i = np.arange(1, n + 1)
+                S = np.sum((2 * i - 1) * (np.log(F) + np.log(1.0 - F[::-1])))
+                A2 = -n - S / n
+                return (loglik, aic, aicc, bic, float(A2))
+
+            arr = np.asarray(self.epri.FishPerMft3.values)
+            self.gamma_fixed_stats = _compute_stats(self.dist_gamma, arr, floc_fixed=True)
+            self.gamma_free_stats = _compute_stats(self.dist_gamma_free, arr, floc_fixed=False)
+
+            # Choose which to prefer: free only if AICc improves by >=2
+            self.gamma_choice = 'fixed'
+            if self.gamma_free_stats[2] is not None and self.gamma_fixed_stats[2] is not None:
+                if self.gamma_free_stats[2] + 2.0 <= self.gamma_fixed_stats[2]:
+                    self.gamma_choice = 'free'
+            elif self.gamma_free_stats[2] is not None and self.gamma_fixed_stats[2] is None:
+                self.gamma_choice = 'free'
+
+            if self.gamma_choice == 'free':
+                self.dist_gamma_choice = self.dist_gamma_free
+            else:
                 self.dist_gamma_choice = self.dist_gamma
 
             print("Finished GammaFit.", flush=True)
@@ -4292,10 +4318,7 @@ class epri():
             total_counts = (cm_0_5 + cm_5_10 + cm_10_15 + cm_15_20 + cm_20_25 +
                             cm_25_38 + cm_38_51 + cm_51_64 + cm_64_76 + cm_GT76)
             if total_counts == 0:
-                print("Warning: No fish length data available.")
-                self.lengths = np.array([])
-                self.len_dist = (np.nan, np.nan, np.nan)
-                return
+                raise ValueError("No fish length data available to fit length distribution.")
         
             # Generate arrays of lengths by sampling uniformly within each cohort.
             cm_0_5_arr = np.random.uniform(low=0, high=5.0, size=cm_0_5)
@@ -4310,28 +4333,20 @@ class epri():
             cm_GT76_arr = np.random.uniform(low=76.0, high=100.0, size=cm_GT76)
         
             # Concatenate all arrays.
-            try:
-                self.lengths = np.concatenate((cm_0_5_arr,
-                                                cm_5_10_arr,
-                                                cm_10_15_arr,
-                                                cm_15_20_arr,
-                                                cm_20_25_arr,
-                                                cm_25_38_arr,
-                                                cm_38_51_arr,
-                                                cm_51_64_arr,
-                                                cm_64_76_arr,
-                                                cm_GT76_arr), axis=0)
-            except Exception as e:
-                print("Error concatenating length arrays:", e)
-                self.lengths = np.array([])
-                self.len_dist = (np.nan, np.nan, np.nan)
-                return
+            self.lengths = np.concatenate((cm_0_5_arr,
+                                            cm_5_10_arr,
+                                            cm_10_15_arr,
+                                            cm_15_20_arr,
+                                            cm_20_25_arr,
+                                            cm_25_38_arr,
+                                            cm_38_51_arr,
+                                            cm_51_64_arr,
+                                            cm_64_76_arr,
+                                            cm_GT76_arr), axis=0)
         
             # If the resulting array is empty, skip fitting.
             if self.lengths.size == 0:
-                print("Warning: Concatenated lengths array is empty.")
-                self.len_dist = (np.nan, np.nan, np.nan)
-                return
+                raise ValueError("Concatenated lengths array is empty; cannot fit distribution.")
         
             # Fit the concatenated array to a lognormal distribution.
             self.len_dist = lognorm.fit(self.lengths)
@@ -4339,14 +4354,9 @@ class epri():
             print("The log normal distribution has a shape parameter s: %s, location: %s and scale: %s" %
                   (round(self.len_dist[0], 4), round(self.len_dist[1], 4), round(self.len_dist[2], 4)))
             # Also compute empirical mean and standard deviation (in cm)
-            try:
-                self.length_mean_cm = float(np.mean(self.lengths))
-                self.length_sd_cm = float(np.std(self.lengths, ddof=1)) if self.lengths.size > 1 else 0.0
-                logger.info("Empirical fish length mean (cm) = %.4f, sd (cm) = %.4f", self.length_mean_cm, self.length_sd_cm)
-            except Exception as e:
-                logger.warning(f'Failed to compute empirical length mean/sd: {e}')
-                self.length_mean_cm = np.nan
-                self.length_sd_cm = np.nan
+            self.length_mean_cm = float(np.mean(self.lengths))
+            self.length_sd_cm = float(np.std(self.lengths, ddof=1)) if self.lengths.size > 1 else 0.0
+            logger.info("Empirical fish length mean (cm) = %.4f, sd (cm) = %.4f", self.length_mean_cm, self.length_sd_cm)
 
             
 
@@ -4466,25 +4476,18 @@ class epri():
                 weibull_sample = np.array([])
 
             # GEV / Extreme sample (if available)
-            try:
-                from scipy.stats import genextreme
-                if hasattr(self, 'dist_extreme') and self.dist_extreme is not None:
-                    extreme_sample = genextreme.rvs(self.dist_extreme[0], loc=self.dist_extreme[1],
-                                                     scale=self.dist_extreme[2], size=1000)
-                else:
-                    extreme_sample = np.array([])
-            except Exception:
+            from scipy.stats import genextreme, gamma
+            if hasattr(self, 'dist_extreme') and self.dist_extreme is not None:
+                extreme_sample = genextreme.rvs(self.dist_extreme[0], loc=self.dist_extreme[1],
+                                                 scale=self.dist_extreme[2], size=1000)
+            else:
                 extreme_sample = np.array([])
 
             # Gamma sample (if available)
-            try:
-                from scipy.stats import gamma
-                if hasattr(self, 'dist_gamma') and self.dist_gamma is not None:
-                    gamma_sample = gamma.rvs(self.dist_gamma[0], loc=self.dist_gamma[1],
-                                              scale=self.dist_gamma[2], size=1000)
-                else:
-                    gamma_sample = np.array([])
-            except Exception:
+            if hasattr(self, 'dist_gamma') and self.dist_gamma is not None:
+                gamma_sample = gamma.rvs(self.dist_gamma[0], loc=self.dist_gamma[1],
+                                          scale=self.dist_gamma[2], size=1000)
+            else:
                 gamma_sample = np.array([])
         
             # Get the observed entrainment data.
@@ -4498,16 +4501,16 @@ class epri():
             self.log_normal_t = round(t2[1], 4)
             self.weibull_t = round(t3[1], 4)
             # Gamma KS test
-            try:
+            if gamma_sample.size > 0:
                 t4 = ks_2samp(observations, gamma_sample, alternative='two-sided')
                 self.gamma_t = round(t4[1], 4)
-            except Exception:
+            else:
                 self.gamma_t = "N/A"
             # Extreme (GEV) KS test
-            try:
+            if extreme_sample.size > 0:
                 t5 = ks_2samp(observations, extreme_sample, alternative='two-sided')
                 self.extreme_t = round(t5[1], 4)
-            except Exception:
+            else:
                 self.extreme_t = "N/A"
         
             # Set matplotlib style parameters and create a 2x3 grid for plots.
@@ -4694,27 +4697,23 @@ class epri():
             lines.append(f"   Scale: {gamma_scale}")
             lines.append(f"   KS p-value: {gamma_ks}")
             # Include Gamma fit statistics (fixed vs free) if available
-            try:
-                g_fixed = getattr(self, 'gamma_fixed_stats', None)
-                g_free = getattr(self, 'gamma_free_stats', None)
-                g_choice = getattr(self, 'gamma_choice', None)
-                if g_fixed is not None:
-                    gf_loglik, gf_aic, gf_aicc, gf_bic, gf_ad = g_fixed
-                    lines.append("   Gamma (fixed-loc) stats:")
-                    lines.append(f"      LogLik: {gf_loglik}")
-                    lines.append(f"      AICc: {gf_aicc}")
-                    lines.append(f"      AD stat: {gf_ad}")
-                if g_free is not None:
-                    gr_loglik, gr_aic, gr_aicc, gr_bic, gr_ad = g_free
-                    lines.append("   Gamma (free-loc) stats:")
-                    lines.append(f"      LogLik: {gr_loglik}")
-                    lines.append(f"      AICc: {gr_aicc}")
-                    lines.append(f"      AD stat: {gr_ad}")
-                if g_choice is not None:
-                    lines.append(f"   Preferred Gamma variant: {g_choice}")
-            except Exception:
-                # best effort - do not fail report generation
-                pass
+            g_fixed = getattr(self, 'gamma_fixed_stats', None)
+            g_free = getattr(self, 'gamma_free_stats', None)
+            g_choice = getattr(self, 'gamma_choice', None)
+            if g_fixed is not None:
+                gf_loglik, gf_aic, gf_aicc, gf_bic, gf_ad = g_fixed
+                lines.append("   Gamma (fixed-loc) stats:")
+                lines.append(f"      LogLik: {gf_loglik}")
+                lines.append(f"      AICc: {gf_aicc}")
+                lines.append(f"      AD stat: {gf_ad}")
+            if g_free is not None:
+                gr_loglik, gr_aic, gr_aicc, gr_bic, gr_ad = g_free
+                lines.append("   Gamma (free-loc) stats:")
+                lines.append(f"      LogLik: {gr_loglik}")
+                lines.append(f"      AICc: {gr_aicc}")
+                lines.append(f"      AD stat: {gr_ad}")
+            if g_choice is not None:
+                lines.append(f"   Preferred Gamma variant: {g_choice}")
             lines.append("--------------------------------------------------")
             
             final_report = "\n".join(lines)
