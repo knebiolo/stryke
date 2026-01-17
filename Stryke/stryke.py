@@ -1722,6 +1722,8 @@ class simulation():
     
         if status != 1:
             return location  # Fish is dead
+        if curr_Q <= 0.0:
+            return location
     
         nbors = np.array(list(graph.neighbors(location)), dtype=str)
         #logger.debug(f'neighbors: {nbors}')
@@ -1775,6 +1777,8 @@ class simulation():
             env_count = len(env_nodes)
             bypass_nodes = [i for i in sorted_nbors if 'bypass' in str(i).lower()]
             bypass_count = len(bypass_nodes)
+            effective_env_total = total_env_Q if env_count > 0 else 0.0
+            effective_bypass_total = total_bypass_Q if bypass_count > 0 else 0.0
 
             # DEBUG: Print sorting results on first day
             if not hasattr(self, '_neighbor_sort_printed'):
@@ -1799,19 +1803,19 @@ class simulation():
                     probs.append(prob)
                     route_flows.append(u_Q)
                 elif 'env' in str(i).lower():
-                    env_Q = total_env_Q / env_count if env_count > 0 else 0.0
+                    env_Q = effective_env_total / env_count if env_count > 0 else 0.0
                     prob = env_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(env_Q)
                 elif 'bypass' in str(i).lower():
-                    bypass_Q = total_bypass_Q / bypass_count if bypass_count > 0 else 0.0
+                    bypass_Q = effective_bypass_total / bypass_count if bypass_count > 0 else 0.0
                     prob = bypass_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
                     route_flows.append(bypass_Q)
                 elif 'spill' in str(i).lower():
-                    spill_Q = max(0.0, curr_Q - total_unit_flow - total_bypass_Q - total_env_Q)
+                    spill_Q = max(0.0, curr_Q - total_unit_flow - effective_bypass_total - effective_env_total)
                     prob = spill_Q / curr_Q if curr_Q > 0 else 0.0
                     locs.append(i)
                     probs.append(prob)
@@ -1834,6 +1838,8 @@ class simulation():
             env_count = len(env_nodes)
             bypass_nodes = [i for i in nbors if 'bypass' in str(i).lower()]
             bypass_count = len(bypass_nodes)
+            effective_env_total = total_env_Q if env_count > 0 else 0.0
+            effective_bypass_total = total_bypass_Q if bypass_count > 0 else 0.0
 
             for i in nbors:
                 #logger.debug(f"neighbor: {i}")
@@ -1844,21 +1850,21 @@ class simulation():
                     flow_val = Q_dict.get(i, 0.0)
 
                 elif 'env' in i_lower:
-                    env_Q = total_env_Q / env_count if env_count > 0 else 0.0
+                    env_Q = effective_env_total / env_count if env_count > 0 else 0.0
                     prob = env_Q / curr_Q if curr_Q > 0 else 0.0
                     flow_val = env_Q
                 elif 'bypass' in i_lower:
-                    bypass_Q = total_bypass_Q / bypass_count if bypass_count > 0 else 0.0
+                    bypass_Q = effective_bypass_total / bypass_count if bypass_count > 0 else 0.0
                     prob = bypass_Q / curr_Q if curr_Q > 0 else 0.0
                     flow_val = bypass_Q
                 elif 'spill' in i_lower:
                     # Handle spill logic independently
                     if curr_Q <= min_Q_ref:
                         spill_Q = curr_Q
-                    elif curr_Q >= total_sta_cap + total_env_Q + total_bypass_Q:
-                        spill_Q = curr_Q - total_sta_cap - total_env_Q - total_bypass_Q
+                    elif curr_Q >= total_sta_cap + effective_env_total + effective_bypass_total:
+                        spill_Q = curr_Q - total_sta_cap - effective_env_total - effective_bypass_total
                     else:
-                        spill_Q = max(0.0, curr_Q - total_env_Q - total_bypass_Q)
+                        spill_Q = max(0.0, curr_Q - effective_env_total - effective_bypass_total)
                     prob = max(spill_Q / curr_Q, 0.0) if curr_Q > 0 else 0.0
                     flow_val = max(spill_Q, 0.0)
                 else:
@@ -1877,11 +1883,16 @@ class simulation():
                 probs.append(edge_weight)
                 route_flows.append(edge_weight * curr_Q if curr_Q > 0 else 0.0)
     
+        if len(locs) == 0:
+            raise ValueError(f"No routing locations available at location '{location}'.")
+
         # Align probabilities with routed flow volumes.
         locs = np.array(locs, dtype=str).flatten()  # force flat array of strings
         probs = np.array(probs, dtype=float).flatten()
         route_flows = np.array(route_flows, dtype=float).flatten()
         total_flow = float(route_flows.sum())
+        if total_flow <= 0.0:
+            return location
         if curr_Q > 0.0 and total_flow > 0.0:
             if total_flow < curr_Q:
                 spill_mask = np.char.find(locs, 'spill') >= 0
@@ -1913,8 +1924,6 @@ class simulation():
                 debug_info = " | ".join([f"{loc}: {prob:.3f} ({flow:.1f} cfs)" for loc, prob, flow in zip(locs, probs, route_flows)])
                 print(f"[ROUTING DEBUG] Locations: {debug_info}", flush=True)
 
-        if len(locs) == 0:
-            raise ValueError(f"No routing locations available at location '{location}'.")
         if len(locs) != len(probs):
             raise ValueError(
                 f"Routing probability length mismatch at location '{location}': "
