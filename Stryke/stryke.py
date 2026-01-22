@@ -2427,8 +2427,23 @@ class simulation():
         scale = spc_df.iat[0,scale_col_num]
         dist = spc_df.iat[0,dist_col_num]
 
+        # Retrieve max_ent_rate early to allow truncated sampling for heavy-tailed dists
+        max_ent_rate = None
+        try:
+            max_ent_rate = float(spc_df.max_ent_rate.values[0])
+        except Exception:
+            max_ent_rate = None
+
         if dist == 'Pareto':
-            ent_rate = pareto.rvs(shape, loc, scale, 1, random_state=rng)
+            # Use a truncated Pareto sampler capped at a reasonable upper bound to avoid runaway draws.
+            # Upper bound: 10x the largest observed entrainment rate (matches prior one-order-of-magnitude policy).
+            upper = None
+            if max_ent_rate is not None and np.isfinite(max_ent_rate) and max_ent_rate > 0:
+                upper = max_ent_rate * 10.0
+            else:
+                # If max_ent_rate unknown or invalid, set a conservative upper based on scale
+                upper = loc + max(1.0, float(scale) * 1000.0)
+            ent_rate = truncated_rvs(pareto, args=(shape,), loc=loc, scale=scale, upper=upper, size=1, random_state=rng)
         elif dist == 'Extreme':
             ent_rate = genextreme.rvs(shape, loc, scale, 1, random_state=rng)
         elif dist == 'Log Normal':
@@ -2438,35 +2453,19 @@ class simulation():
 
         ent_rate = np.abs(ent_rate)
 
-        # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
-        max_ent_rate = spc_df.max_ent_rate.values[0]
-
-        # Guard against missing/zero/invalid max_ent_rate which can cause divide-by-zero or infinite reductions
-        if not np.isfinite(max_ent_rate) or max_ent_rate <= 0:
-            logger.warning("Invalid max_ent_rate=%s for species; using fallback of max(1.0, scale)", max_ent_rate)
-            fallback = 1.0
+        # If distribution wasn't Pareto, max_ent_rate may not have been retrieved earlier — get it now if needed
+        if max_ent_rate is None:
             try:
-                fallback = max(fallback, float(scale))
+                max_ent_rate = float(spc_df.max_ent_rate.values[0])
             except Exception:
-                fallback = 1.0
-            max_ent_rate = fallback
+                max_ent_rate = None
 
-        # If the simulated rate is excessively large relative to observations, reduce it.
-        if ent_rate[0] > 10 * max_ent_rate:
-            magnitude_diff = np.log10(ent_rate[0] / max_ent_rate)
-            magnitudes = int(np.ceil(magnitude_diff))
-            # Cap the number of orders we will reduce by to avoid overflow and extreme adjustments
-            max_magnitude_cap = 6
-            if magnitudes > max_magnitude_cap:
-                magnitudes = max_magnitude_cap
-            ent_rate = np.abs(ent_rate / (10 ** magnitudes))
-            logger.info("Entrained rate reduced by %d orders for species; new rate=%s", magnitudes, ent_rate[0])
-
-        # Final safety cap: never allow simulated entrainment to exceed max_ent_rate by more than 1e6
-        final_cap = max_ent_rate * (10 ** 6)
-        if ent_rate[0] > final_cap:
-            ent_rate = np.array([final_cap])
-            logger.warning("Entrained rate hit final cap=%s", final_cap)
+        # Final safety cap: never allow simulated entrainment to exceed max_ent_rate by an extreme factor
+        if max_ent_rate is not None and np.isfinite(max_ent_rate) and max_ent_rate > 0:
+            final_cap = max_ent_rate * (10 ** 6)
+            if ent_rate[0] > final_cap:
+                ent_rate = np.array([final_cap])
+                logger.warning("Entrained rate hit final cap=%s", final_cap)
 
         # flow per day in relation to million cubic FEET
         Mft3 = (60 * 60 * 24 * curr_Q)/1000000
@@ -2845,20 +2844,30 @@ class simulation():
                         tot_hours, tot_flow, hours_dict, flow_dict = self.daily_hours(Q_dict, scenario)
                         #logger.info('Q-Dict Built')
 
-                        unit_flow_allocations_str = {
-                            str(k): float(v) for k, v in unit_flow_allocations.items()
-                        }
-                        missing_alloc_units = [
-                            str(k) for k in hours_dict.keys()
-                            if str(k) not in unit_flow_allocations_str
-                        ]
+                        unit_flow_allocations_str = {str(k): float(v) for k, v in unit_flow_allocations.items()}
+                        hours_keys = [str(k) for k in hours_dict.keys()]
+                        missing_alloc_units = [k for k in hours_keys if k not in unit_flow_allocations_str]
                         if missing_alloc_units:
                             logger.warning(
-                                "Unit flow allocations missing for units: %s",
-                                missing_alloc_units
+                                "Unit flow allocations missing for units: %s; curr_Q=%s; unit_flow_keys=%s; hours_keys=%s",
+                                missing_alloc_units,
+                                float(curr_Q),
+                                list(unit_flow_allocations_str.keys()),
+                                hours_keys,
                             )
+                            # Attempt a simple normalization-based mapping to recover common key mismatches
+                            def _norm_key(s):
+                                return ''.join(ch.lower() for ch in str(s) if ch.isalnum())
+
+                            normalized_map = { _norm_key(k): k for k in unit_flow_allocations_str.keys() }
                             for unit_name in missing_alloc_units:
-                                unit_flow_allocations_str[unit_name] = 0.0
+                                nk = _norm_key(unit_name)
+                                if nk in normalized_map:
+                                    matched = normalized_map[nk]
+                                    logger.info("Mapped missing unit '%s' to allocation key '%s' via normalization", unit_name, matched)
+                                    unit_flow_allocations_str[unit_name] = unit_flow_allocations_str[matched]
+                                else:
+                                    unit_flow_allocations_str[unit_name] = 0.0
 
                         self._route_flow_daily = defaultdict(float)
                         self._route_flow_context = {
