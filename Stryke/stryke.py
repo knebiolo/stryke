@@ -71,6 +71,40 @@ rng = default_rng()
 import logging
 logger = logging.getLogger(__name__)
 
+
+def truncated_rvs(dist, args=(), loc=0.0, scale=1.0, upper=None, size=1, random_state=rng):
+    """Sample from a scipy.stats distribution truncated above at `upper`.
+
+    Parameters:
+    - dist: scipy.stats distribution object (e.g., pareto)
+    - args: positional shape args tuple
+    - loc, scale: distribution loc and scale
+    - upper: upper truncation bound (None => no truncation)
+    - size: number of draws
+    - random_state: numpy.random.Generator-like (has .uniform)
+
+    Returns: numpy array of samples (shape `(size,)`)
+    """
+    if upper is None:
+        return np.atleast_1d(dist.rvs(*args, loc=loc, scale=scale, size=size, random_state=random_state))
+
+    # Compute CDF range
+    try:
+        f_low = dist.cdf(loc, *args, loc=loc, scale=scale)
+        f_high = dist.cdf(upper, *args, loc=loc, scale=scale)
+    except Exception:
+        # Fallback to raw rvs if CDF/PPF not available
+        return np.atleast_1d(dist.rvs(*args, loc=loc, scale=scale, size=size, random_state=random_state))
+
+    # If the truncation window is degenerate, return the upper bound
+    eps = 1e-12
+    if not np.isfinite(f_high) or f_high - f_low < eps:
+        return np.full(size, upper)
+
+    u = random_state.uniform(f_low, f_high, size=size)
+    samples = dist.ppf(u, *args, loc=loc, scale=scale)
+    return np.atleast_1d(samples)
+
 # Diagnostic Control Flags
 DIAGNOSTICS_ENABLED = True   # Set to False to disable ALL diagnostics
 VERBOSE_DIAGNOSTICS = False  # Set to True for per-iteration/per-day details (SLOW!)
@@ -2407,15 +2441,32 @@ class simulation():
         # apply order of magnitude filter, if entrainment rate is 1 order of magnitude larger than largest observed entrainment rate, reduce
         max_ent_rate = spc_df.max_ent_rate.values[0]
 
-        # Check if the simulated rate is at least 10 times the maximum observed rate.
+        # Guard against missing/zero/invalid max_ent_rate which can cause divide-by-zero or infinite reductions
+        if not np.isfinite(max_ent_rate) or max_ent_rate <= 0:
+            logger.warning("Invalid max_ent_rate=%s for species; using fallback of max(1.0, scale)", max_ent_rate)
+            fallback = 1.0
+            try:
+                fallback = max(fallback, float(scale))
+            except Exception:
+                fallback = 1.0
+            max_ent_rate = fallback
+
+        # If the simulated rate is excessively large relative to observations, reduce it.
         if ent_rate[0] > 10 * max_ent_rate:
-            # Compute the exact orders-of-magnitude difference.
             magnitude_diff = np.log10(ent_rate[0] / max_ent_rate)
-            # Optionally, round up to the next whole number if you want to reduce more aggressively.
-            magnitudes = np.ceil(magnitude_diff)
-            # Reduce by the factor computed.
-            ent_rate = np.abs(ent_rate / 10**magnitudes)
-            # print("New entrainment rate of %s" % (round(ent_rate[0], 4)))
+            magnitudes = int(np.ceil(magnitude_diff))
+            # Cap the number of orders we will reduce by to avoid overflow and extreme adjustments
+            max_magnitude_cap = 6
+            if magnitudes > max_magnitude_cap:
+                magnitudes = max_magnitude_cap
+            ent_rate = np.abs(ent_rate / (10 ** magnitudes))
+            logger.info("Entrained rate reduced by %d orders for species; new rate=%s", magnitudes, ent_rate[0])
+
+        # Final safety cap: never allow simulated entrainment to exceed max_ent_rate by more than 1e6
+        final_cap = max_ent_rate * (10 ** 6)
+        if ent_rate[0] > final_cap:
+            ent_rate = np.array([final_cap])
+            logger.warning("Entrained rate hit final cap=%s", final_cap)
 
         # flow per day in relation to million cubic FEET
         Mft3 = (60 * 60 * 24 * curr_Q)/1000000
@@ -3250,6 +3301,12 @@ class simulation():
         import io
         from contextlib import redirect_stdout
         from scipy.stats import beta
+
+        # Ensure wks_dir exists for code paths that optionally write Excel summaries.
+        # Some call-sites construct `simulation` via __new__ (tests) and do not set wks_dir.
+        # Use getattr to avoid AttributeError when not present.
+        if not hasattr(self, 'wks_dir'):
+            self.wks_dir = None
     
         hdf_path = os.path.join(self.proj_dir, '%s.h5' % (self.output_name))
         

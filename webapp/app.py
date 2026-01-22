@@ -2401,7 +2401,12 @@ def operating_scenarios():
                 for op_scen in op_scen_list:
                     facility = op_scen.get('Facility', '')
                     unit = op_scen.get('Unit', '')
-                    key = f"{facility}|{str(unit)}"
+                    # Normalize unit to integer string so keys match template indexing (which uses ints)
+                    try:
+                        unit_key = str(int(float(unit)))
+                    except Exception:
+                        unit_key = str(unit)
+                    key = f"{facility}|{unit_key}"
                     op_scen_lookup[key] = op_scen
                 print(f"DEBUG op_scenarios GET: created lookup with {len(op_scen_lookup)} entries", flush=True)
                 

@@ -179,9 +179,9 @@
           <tr>
             <td>{{ fac.Facility }}</td>
             <td>{{ fac.Units }}</td>
-            <td>{{ fac["Min Op Flow"] }}</td>
-            <td>{{ fac["Env Flow"] }}</td>
-            <td>{{ fac["Bypass Flow"] }}</td>
+            <td>{{ fac.get('Min Op Flow') or fac.get('Min_Op_Flow') }}</td>
+            <td>{{ fac.get('Env Flow') or fac.get('Env_Flow') }}</td>
+            <td>{{ fac.get('Bypass Flow') or fac.get('Bypass_Flow') }}</td>
             <td>{{ fac.Spillway }}</td>
             <td>{{ fac.Operations }}</td>
           </tr>
