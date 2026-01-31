@@ -3216,9 +3216,10 @@ class simulation():
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 
-                                # Print daily summary for user tracking
+                                # Print daily summary for user tracking (UI log filter expects this format)
                                 if DIAGNOSTICS_ENABLED:
-                                    print(f"Day {day} | Flow: {curr_Q_report:.1f} | Entrained: {total_entrained} | Survived: {total_survived_entrained}", flush=True)
+                                    day_val = pd.to_datetime(day).date()
+                                    print(f"Date {day_val} | Flow {curr_Q_report:.1f} | {len(fishes)} Fish Present", flush=True)
                                 
                                 if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     print(f"[DIAG] About to write 'Daily' DataFrame: shape={daily.shape}, columns={list(daily.columns)}", flush=True)
@@ -3261,7 +3262,8 @@ class simulation():
                                 
                                 # Print daily summary for user tracking
                                 if DIAGNOSTICS_ENABLED:
-                                    print(f"Day {day} | Flow: {curr_Q_report:.1f} | No fish present", flush=True)
+                                    day_val = pd.to_datetime(day).date()
+                                    print(f"Date {day_val} | Flow {curr_Q_report:.1f} | 0 Fish Present", flush=True)
                                 
                                 if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
                                     print(f"[DIAG] About to write 'Daily' DataFrame (no fish): shape={daily.shape}, columns={list(daily.columns)}", flush=True)

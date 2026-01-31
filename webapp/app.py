@@ -151,6 +151,23 @@ for name in ("Stryke.stryke", "stryke"):
         setattr(mod, "read_csv_if_exists", _read_csv_if_exists_compat)
 
 print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=True)
+
+LOG_STREAM_MODE = os.environ.get("STRYKE_LOG_STREAM_MODE", "minimal").strip().lower()
+LOG_STREAM_ALLOW_ERRORS = os.environ.get("STRYKE_LOG_STREAM_ERRORS", "1").strip().lower() not in ("0", "false", "no")
+LOG_STREAM_DATE_RE = re.compile(r"^Date\s+.+\|\s*Flow\s+.+\|\s*\d+\s+Fish\s+Present\b")
+
+def _should_emit_stream_line(line: str) -> bool:
+    if LOG_STREAM_MODE != "minimal":
+        return True
+    if not line:
+        return False
+    stripped = str(line).strip()
+    if LOG_STREAM_DATE_RE.match(stripped):
+        return True
+    if LOG_STREAM_ALLOW_ERRORS:
+        if stripped.startswith("[ERROR]") or stripped.startswith("ERROR") or "Traceback" in stripped:
+            return True
+    return False
  
 class QueueStream:
     """File-like object that writes text lines into a queue.Queue for SSE."""
@@ -191,13 +208,15 @@ class QueueStream:
                     try:
                         # Use put_nowait to avoid blocking if queue is full
                         # This prevents simulation from stalling if EventSource disconnects
-                        self.q.put_nowait(self.prefix + line_out)
+                        if _should_emit_stream_line(line_out):
+                            self.q.put_nowait(self.prefix + line_out)
                     except queue.Full:
                         # Queue full - drop oldest messages to make room
                         # This happens when EventSource disconnects but simulation continues
                         try:
                             self.q.get_nowait()  # Remove oldest message
-                            self.q.put_nowait(self.prefix + line_out)
+                            if _should_emit_stream_line(line_out):
+                                self.q.put_nowait(self.prefix + line_out)
                         except Exception:
                             pass  # If still failing, just drop this message
                     except Exception:
@@ -213,7 +232,9 @@ class QueueStream:
             if self._buf:
                 try:
                     joined = "".join(self._buf)
-                    self.q.put(self.prefix + self._truncate_line(joined))
+                    line_out = self._truncate_line(joined)
+                    if _should_emit_stream_line(line_out):
+                        self.q.put(self.prefix + line_out)
                 except Exception:
                     pass
                 self._buf.clear()
@@ -836,7 +857,8 @@ def stream():
         import queue as _q
         file_pos = 0
         try:
-            yield "data: [INFO] Log stream connected.\n\n"
+            if _should_emit_stream_line("[INFO] Log stream connected."):
+                yield "data: [INFO] Log stream connected.\n\n"
             while True:
                 try:
                     msg = q.get(timeout=30)  # Increased timeout to 30 seconds
@@ -853,18 +875,24 @@ def stream():
                                     file_pos = f.tell()
                                 text = chunk.decode("utf-8", errors="replace")
                                 for line in text.splitlines():
-                                    yield f"data: {line}\n\n"
+                                    if _should_emit_stream_line(line):
+                                        yield f"data: {line}\n\n"
                                 continue
                         except Exception as exc:
                             yield f"data: [ERROR] Log tail failed: {exc}\n\n"
                             break
-                    yield "data: [keepalive]\n\n"
+                    if LOG_STREAM_MODE == "minimal":
+                        yield ": keepalive\n\n"
+                    else:
+                        yield "data: [keepalive]\n\n"
                     continue
                 except Exception as e:
                     yield f"data: [ERROR] {str(e)}\n\n"
                     break
-                yield f"data: {msg}\n\n"
-                if msg == "[Simulation Complete]":
+                is_complete = (msg == "[Simulation Complete]")
+                if _should_emit_stream_line(msg):
+                    yield f"data: {msg}\n\n"
+                if is_complete:
                     break
         finally:
             RUN_QUEUES.pop(run_id, None)
@@ -920,6 +948,10 @@ def log_tail():
         text = chunk.decode("utf-8", errors="replace")
     except Exception as exc:
         return jsonify({"error": str(exc), "text": "", "offset": offset}), 500
+    
+    if LOG_STREAM_MODE == "minimal" and text:
+        filtered_lines = [line for line in text.splitlines() if _should_emit_stream_line(line)]
+        text = "\n".join(filtered_lines)
 
     completed = False
     if run_dir:
