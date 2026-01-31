@@ -879,6 +879,56 @@ def stream():
         },
     )
 
+@app.get("/log_tail")
+def log_tail():
+    run_id = request.args.get("run", "")
+    if not run_id:
+        return jsonify({"error": "Missing run id"}), 400
+    try:
+        offset = int(request.args.get("offset", "0"))
+    except ValueError:
+        offset = 0
+
+    user_root = session.get("user_sim_folder")
+    run_dir = None
+    if run_id and user_root:
+        run_dir = os.path.join(user_root, run_id)
+    if not run_dir:
+        run_dir = session.get("run_dir") or session.get("proj_dir")
+    if not run_dir or not os.path.exists(run_dir):
+        try:
+            for user_dir in os.listdir(SIM_PROJECT_FOLDER):
+                candidate = os.path.join(SIM_PROJECT_FOLDER, user_dir, run_id)
+                if os.path.isdir(candidate):
+                    run_dir = candidate
+                    break
+        except Exception:
+            run_dir = None
+
+    log_file = os.path.join(run_dir, "simulation_debug.log") if run_dir else None
+    if not log_file or not os.path.exists(log_file):
+        return jsonify({"text": "", "offset": offset})
+
+    try:
+        size = os.path.getsize(log_file)
+        if offset < 0 or offset > size:
+            offset = 0
+        with open(log_file, "rb") as f:
+            f.seek(offset)
+            chunk = f.read()
+            new_offset = f.tell()
+        text = chunk.decode("utf-8", errors="replace")
+    except Exception as exc:
+        return jsonify({"error": str(exc), "text": "", "offset": offset}), 500
+
+    completed = False
+    if run_dir:
+        if os.path.exists(os.path.join(run_dir, "simulation_complete.flag")):
+            completed = True
+        elif os.path.exists(os.path.join(run_dir, "simulation_report.html")):
+            completed = True
+    return jsonify({"text": text, "offset": new_offset, "completed": completed})
+
 def _safe_path(base_dir: str, *parts: str) -> str:
     """Join parts to base_dir and ensure the result stays inside base_dir."""
     base_abs = os.path.abspath(base_dir)

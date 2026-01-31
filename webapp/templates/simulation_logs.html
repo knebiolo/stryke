@@ -330,6 +330,44 @@
             const runId = params.get('run') || "";
             
             const eventSource = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
+
+            // Polling fallback for environments that block/close SSE
+            let logOffset = 0;
+            const pollIntervalMs = 2000;
+            async function pollLogTail() {
+                try {
+                    const resp = await fetch(`/log_tail?run=${encodeURIComponent(runId)}&offset=${logOffset}`);
+                    if (!resp.ok) {
+                        return;
+                    }
+                    const data = await resp.json();
+                    if (typeof data.offset === "number") {
+                        logOffset = data.offset;
+                    }
+                    if (data.text) {
+                        const lines = data.text.split(/\r?\n/);
+                        for (const line of lines) {
+                            if (line === "") {
+                                continue;
+                            }
+                            parseLogLine(line);
+                            addLogLine(line);
+                        }
+                    }
+                    if (data.completed) {
+                        progressBar.style.width = '100%';
+                        progressPercentage.textContent = '100%';
+                        statusText.textContent = '✅ Simulation Complete!';
+                        statusIcon.className = 'status-icon status-complete';
+                        currentActivity.textContent = 'Finished!';
+                        timeRemaining.textContent = 'Done!';
+                        resultsButton.style.display = "inline-block";
+                    }
+                } catch (err) {
+                    // Ignore polling errors; SSE may still be active
+                }
+            }
+            const pollTimer = setInterval(pollLogTail, pollIntervalMs);
             
             // Fallback: Poll for completion every 30 seconds in case EventSource fails
             const completionCheckInterval = setInterval(() => {
