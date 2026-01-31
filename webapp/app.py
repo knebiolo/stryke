@@ -4776,7 +4776,7 @@ def generate_report(sim):
     Generate the comprehensive HTML report for the simulation.
     Robust HDF5 open with retry/backoff; guaranteed close; headless plotting.
     """
-    import os, time, io, base64, logging
+    import os, time, io, base64, logging, gc
     from datetime import datetime
     import pandas as pd
 
@@ -4786,6 +4786,25 @@ def generate_report(sim):
     import matplotlib.pyplot as plt
 
     log = logging.getLogger(__name__)
+
+    def _report_print(msg):
+        print(msg, flush=True)
+        log.info(msg)
+
+    def _mem_rss_mb():
+        # Try resource (Linux) then psutil if available
+        try:
+            import resource
+            rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            if rss_kb is not None:
+                return float(rss_kb) / 1024.0
+        except Exception:
+            pass
+        try:
+            import psutil
+            return psutil.Process(os.getpid()).memory_info().rss / (1024.0 ** 2)
+        except Exception:
+            return None
 
     # Allow concurrent reads if configured
     if os.getenv("HDF5_ALLOW_CONCURRENT_READS") == "1":
@@ -4817,7 +4836,7 @@ def generate_report(sim):
                     continue
                 raise
 
-        log.info("Report: HDF opened: %s", hdf_path)
+        _report_print(f"[REPORT] HDF opened: {hdf_path}")
 
         def _storer_nrows(hdf_store, key):
             try:
@@ -4829,7 +4848,7 @@ def generate_report(sim):
             return None
 
         # --- Executive Summary Metrics ---
-        log.info("Report: loading summary tables")
+        _report_print("[REPORT] Loading summary tables")
         yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
         daily_df = store["/Daily"] if "/Daily" in store.keys() else None
         pop_df = store["/Population"] if "/Population" in store.keys() else None
@@ -4864,7 +4883,7 @@ def generate_report(sim):
         simulation_keys = [k for k in store.keys() if k.startswith('/simulations/')]
         total_fish_from_sims = 0
         if simulation_keys:
-            log.info("Report: counting fish from %d simulation tables", len(simulation_keys))
+            _report_print(f"[REPORT] Counting fish from {len(simulation_keys)} simulation tables")
         for key in simulation_keys:
             nrows = _storer_nrows(store, key)
             if nrows is not None:
@@ -4968,7 +4987,7 @@ def generate_report(sim):
         </details>
         """
         
-        log.info("Report: assembling HTML sections")
+        _report_print("[REPORT] Assembling HTML sections")
         report_sections = [
             "<div style='margin: 10px;'>"
             "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
@@ -5034,7 +5053,7 @@ def generate_report(sim):
                 report_sections.append(f"<p>No {title} data available.</p>")
 
         # Hydrograph plots
-        log.info("Report: hydrograph plots")
+        _report_print("[REPORT] Hydrograph plots")
         report_sections.append("<h2>Hydrograph Plots</h2>")
         if "/Hydrograph" in store.keys():
             hydrograph_df = store["/Hydrograph"]
@@ -5456,7 +5475,7 @@ def generate_report(sim):
             add_section("Beta Distributions (All Routes)", "/Beta_Distributions", units)
 
         # Flow vs Entrainment Analysis  
-        log.info("Report: flow vs entrainment analysis")
+        _report_print("[REPORT] Flow vs entrainment analysis")
         report_sections.append("<h2>Flow vs Entrainment Relationship</h2>")
         if daily_df is not None and not daily_df.empty and 'flow' in daily_df.columns:
             df_flow = daily_df.copy()
@@ -5492,7 +5511,7 @@ def generate_report(sim):
             report_sections.append("<p>Flow relationship data not available.</p>")
 
         # Passage Route Usage Analysis  
-        log.info("Report: passage route usage aggregation starting")
+        _report_print("[REPORT] Passage route usage aggregation starting")
         report_sections.append("<h2>Passage Route Usage</h2>")
         simulation_keys = [k for k in store.keys() if k.startswith('/simulations/')]
         combined_route_counts = pd.Series(dtype=float)
@@ -5545,7 +5564,7 @@ def generate_report(sim):
 
         for idx_key, key in enumerate(simulation_keys):
             if idx_key == 0 or (idx_key + 1) % 5 == 0:
-                log.info("Report: processing simulation table %d/%d", idx_key + 1, len(simulation_keys))
+                _report_print(f"[REPORT] Processing simulation table {idx_key + 1}/{len(simulation_keys)}")
             sim_data = store[key]
             if not isinstance(sim_data, pd.DataFrame):
                 continue
@@ -5711,6 +5730,11 @@ def generate_report(sim):
                 del sim_data
             except Exception:
                 pass
+            if (idx_key + 1) % 5 == 0:
+                gc.collect()
+                rss_mb = _mem_rss_mb()
+                if rss_mb is not None:
+                    _report_print(f"[REPORT] Memory RSS ~ {rss_mb:.1f} MB")
 
         if not combined_route_counts.empty:
             # Debug: log combined counts BEFORE computing summaries
@@ -6153,7 +6177,7 @@ def generate_report(sim):
                 pass
 
         # Time Series Plots - Daily Entrainment with Error Bars
-        log.info("Report: daily average entrainment time series")
+        _report_print("[REPORT] Daily average entrainment time series")
         report_sections.append("<h2>Daily Average Entrainment Over Time</h2>")
         if daily_df is not None and not daily_df.empty and 'day' in daily_df.columns:
             df_ts = daily_df.copy()
@@ -6218,7 +6242,7 @@ def generate_report(sim):
             report_sections.append("<p>Time series data not available.</p>")
 
         # Finalize HTML
-        log.info("Report: final HTML assembly")
+        _report_print("[REPORT] Final HTML assembly")
         final_html = "\n".join(report_sections)
         full_report = f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><title>Simulation Report</title>
