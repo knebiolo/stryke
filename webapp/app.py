@@ -818,6 +818,7 @@ def stream():
     def event_stream():
         import queue as _q
         try:
+            yield "data: [INFO] Log stream connected.\n\n"
             while True:
                 try:
                     msg = q.get(timeout=30)  # Increased timeout to 30 seconds
@@ -4284,6 +4285,7 @@ def run_simulation_in_background_custom(data_dict, q):
     """Background worker for UI-driven simulations."""
     import os, sys, logging
     log = logging.getLogger(__name__)
+    log.setLevel(logging.INFO)
     success = False
     
     # Also write to a file so we can see everything
@@ -4301,6 +4303,10 @@ def run_simulation_in_background_custom(data_dict, q):
     h, targets = _attach_queue_log_handler(q)
 
     try:
+        try:
+            q.put_nowait("[INFO] Simulation thread started.")
+        except Exception:
+            pass
         log.info("Starting UI-driven simulation...")
         proj_dir = data_dict.get('proj_dir')
         output_name = data_dict.get('output_name', 'simulation_output')
@@ -4314,9 +4320,17 @@ def run_simulation_in_background_custom(data_dict, q):
         sim = stryke.simulation(proj_dir, output_name, existing=False)
         
         # Import webapp data
+        try:
+            q.put_nowait("[INFO] Importing webapp data...")
+        except Exception:
+            pass
         sim.webapp_import(data_dict, output_name)
         
         # Run simulation
+        try:
+            q.put_nowait("[INFO] Running simulation...")
+        except Exception:
+            pass
         sim.run()
         sim.summary()
         success = True
@@ -4368,6 +4382,10 @@ def run_simulation():
     # Generate unique run ID
     run_id = uuid.uuid4().hex
     q = get_queue(run_id)
+    try:
+        q.put_nowait("[INFO] Run queued. Waiting for worker thread...")
+    except Exception:
+        pass
     
     # Get project directory and output name
     proj_dir = session.get('proj_dir')
