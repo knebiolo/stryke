@@ -814,15 +814,40 @@ def stream():
         return "Missing ?run=<run_id>", 400
 
     q = get_queue(run_id)
+    user_root = session.get('user_sim_folder')
+    run_dir = None
+    if run_id and user_root:
+        run_dir = os.path.join(user_root, run_id)
+    if not run_dir:
+        run_dir = session.get('run_dir') or session.get('proj_dir')
+    log_file = os.path.join(run_dir, "simulation_debug.log") if run_dir else None
 
     def event_stream():
         import queue as _q
+        file_pos = 0
         try:
             yield "data: [INFO] Log stream connected.\n\n"
             while True:
                 try:
                     msg = q.get(timeout=30)  # Increased timeout to 30 seconds
                 except _q.Empty:
+                    if log_file and os.path.exists(log_file):
+                        try:
+                            size = os.path.getsize(log_file)
+                            if size < file_pos:
+                                file_pos = 0
+                            if size > file_pos:
+                                with open(log_file, "rb") as f:
+                                    f.seek(file_pos)
+                                    chunk = f.read()
+                                    file_pos = f.tell()
+                                text = chunk.decode("utf-8", errors="replace")
+                                for line in text.splitlines():
+                                    yield f"data: {line}\n\n"
+                                continue
+                        except Exception as exc:
+                            yield f"data: [ERROR] Log tail failed: {exc}\n\n"
+                            break
                     yield "data: [keepalive]\n\n"
                     continue
                 except Exception as e:
