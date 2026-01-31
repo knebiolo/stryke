@@ -4372,6 +4372,7 @@ def run_simulation_in_background_custom(data_dict, q):
     log = logging.getLogger(__name__)
     log.setLevel(logging.INFO)
     success = False
+    stop_event = threading.Event()
     
     # Also write to a file so we can see everything
     proj_dir = data_dict.get('proj_dir')
@@ -4386,6 +4387,24 @@ def run_simulation_in_background_custom(data_dict, q):
     sys.stdout = QueueStream(q, log_file=log_file)
     sys.stderr = QueueStream(q, log_file=log_file)
     h, targets = _attach_queue_log_handler(q)
+    def _heartbeat():
+        start_ts = time.time()
+        while not stop_event.wait(30):
+            elapsed = int(time.time() - start_ts)
+            msg = f"[INFO] Simulation running... {elapsed // 60}m{elapsed % 60:02d}s elapsed"
+            try:
+                q.put_nowait(msg)
+            except Exception:
+                pass
+            if log_file:
+                try:
+                    with open(log_file, "a", encoding="utf-8") as f:
+                        f.write(msg + "\n")
+                except Exception:
+                    pass
+
+    hb_thread = threading.Thread(target=_heartbeat, daemon=True)
+    hb_thread.start()
 
     try:
         try:
@@ -4446,6 +4465,7 @@ def run_simulation_in_background_custom(data_dict, q):
         except Exception:
             pass
     finally:
+        stop_event.set()
         # restore stdio
         sys.stdout, sys.stderr = old_stdout, old_stderr
         # detach handler so it doesn't leak to future runs
