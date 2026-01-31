@@ -112,6 +112,7 @@ def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
       - accepts optional numeric_cols kw and coerces those columns if present
     """
     numeric_cols = kwargs.pop("numeric_cols", None)
+    index_col = kwargs.pop("index_col", None)
 
     if not file_path or (isinstance(file_path, str) and not file_path.strip()):
         return None
@@ -128,6 +129,14 @@ def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
+    if index_col:
+        if index_col in df.columns:
+            df.set_index(index_col, inplace=True, drop=False)
+        elif index_col == "Unit_Name" and {"Facility", "Unit"} <= set(df.columns):
+            df["Unit_Name"] = df["Facility"].astype(str) + " - Unit " + df["Unit"].astype(str)
+            df.set_index("Unit_Name", inplace=True, drop=False)
+        else:
+            print(f"[WARN] read_csv_if_exists: index_col '{index_col}' not found in {file_path}", flush=True)
     return df
 
 from collections import defaultdict
