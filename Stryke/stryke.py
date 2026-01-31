@@ -106,9 +106,13 @@ def truncated_rvs(dist, args=(), loc=0.0, scale=1.0, upper=None, size=1, random_
     return np.atleast_1d(samples)
 
 # Diagnostic Control Flags
-DIAGNOSTICS_ENABLED = True   # Set to False to disable ALL diagnostics
-VERBOSE_DIAGNOSTICS = False  # Set to True for per-iteration/per-day details (SLOW!)
-                             # When False: Only shows summaries and important events
+def _env_flag(name, default="0"):
+    val = os.environ.get(name, default)
+    return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+DIAGNOSTICS_ENABLED = _env_flag("STRYKE_DIAGNOSTICS", "0")
+VERBOSE_DIAGNOSTICS = _env_flag("STRYKE_VERBOSE_DIAGNOSTICS", "0")
+# When False: Only shows summaries and important events
 
 # Get the directory of the current script
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -163,6 +167,42 @@ def to_dataframe(data, numeric_cols=None, index_col=None):
         df.set_index(index_col, inplace=True, drop=False)
     return df
 
+def _read_csv_with_encoding_fallback(file_path, *args, **kwargs):
+    """Read CSV with a small, explicit encoding fallback chain."""
+    encoding = kwargs.pop("encoding", None)
+    if encoding:
+        return pd.read_csv(file_path, *args, encoding=encoding, **kwargs)
+
+    encodings = ("utf-8", "utf-8-sig", "utf-16", "utf-16le", "utf-16be", "latin-1")
+    last_error = None
+    for enc in encodings:
+        try:
+            df = pd.read_csv(file_path, *args, encoding=enc, **kwargs)
+            if enc != "utf-8":
+                logger.warning("read_csv_if_exists: used encoding=%s for %s", enc, file_path)
+            return df
+        except UnicodeDecodeError as exc:
+            last_error = exc
+            continue
+    msg = f"Failed to decode CSV as UTF-8/UTF-16/Latin-1: {file_path}"
+    if last_error is not None:
+        raise ValueError(msg) from last_error
+    raise ValueError(msg)
+
+def _normalize_facility_flow_columns(df):
+    """Normalize facility flow column names to underscore form."""
+    if df is None or df.empty:
+        return df
+    rename_map = {
+        "Min Op Flow": "Min_Op_Flow",
+        "Env Flow": "Env_Flow",
+        "Bypass Flow": "Bypass_Flow",
+    }
+    updates = {src: dst for src, dst in rename_map.items() if src in df.columns and dst not in df.columns}
+    if updates:
+        df = df.rename(columns=updates)
+    return df
+
 def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
     """
     Backward-compatible wrapper:
@@ -181,7 +221,7 @@ def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
         # If you prefer hard-fail, change to: raise FileNotFoundError(...)
         return None
 
-    df = pd.read_csv(file_path)
+    df = _read_csv_with_encoding_fallback(file_path, *args, **kwargs)
     if numeric_cols:
         for col in numeric_cols:
             if col in df.columns:
@@ -340,6 +380,7 @@ class simulation():
                                          index_col = None,
                                          usecols = "B:I",
                                          skiprows = 3)
+        self.facility_params = _normalize_facility_flow_columns(self.facility_params)
         self.facility_params.set_index('Facility', inplace = True)
 
         # get hydraulic capacity of facility
@@ -432,15 +473,15 @@ class simulation():
         self.hdf.flush()
     
     def webapp_import(self, data_dict, output_name):
-        DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostics
-        if DIAGNOSTICS_ENABLED:
+        diagnostics_enabled = DIAGNOSTICS_ENABLED
+        if diagnostics_enabled:
             print(f"[DIAG] webapp_import called with output_name: {output_name}")
             print(f"[DIAG] proj_dir: {data_dict.get('proj_dir', os.getcwd())}")
             print(f"[DIAG] data_dict keys: {list(data_dict.keys())}")
             for k, v in data_dict.items():
                 print(f"  {k}: type={type(v)}")
         hdf_path = os.path.join(data_dict.get('proj_dir', os.getcwd()), f"{output_name}.h5")
-        if DIAGNOSTICS_ENABLED:
+        if diagnostics_enabled:
             print(f"[DIAG] HDF5 output path: {hdf_path}")
             print(f"[DIAG] HDF5 path exists before write: {os.path.exists(hdf_path)}")
         """
@@ -463,7 +504,7 @@ class simulation():
         # Convert graph summary data to DataFrames.
         graph_summary = data_dict.get('graph_summary', {})
         self.nodes = to_dataframe(graph_summary.get('Nodes', []))
-        if DIAGNOSTICS_ENABLED:
+        if diagnostics_enabled:
             print(f"[DIAG] Nodes DataFrame shape: {self.nodes.shape}")
             print(f"[DIAG] Nodes DataFrame columns: {self.nodes.columns.tolist()}")
             print(f"[DIAG] Nodes DataFrame head:\n{self.nodes.head()}")
@@ -478,7 +519,7 @@ class simulation():
         else:
             self.edges = to_dataframe([])
             logger.info("Single Unit Scenario Identified, No Movement")
-            if DIAGNOSTICS_ENABLED:
+            if diagnostics_enabled:
                 print("[DIAG] No edges provided; treating as single-unit scenario.")
         self.surv_fun_df = self.nodes[['Location','Surv_Fun']].set_index('Location')
         self.surv_fun_dict = self.surv_fun_df.to_dict('index')
@@ -486,7 +527,7 @@ class simulation():
         
         # Build the simulation graph.
         sim_graph_data = data_dict.get('simulation_graph')
-        if DIAGNOSTICS_ENABLED:
+        if diagnostics_enabled:
             print(f"[DIAG] simulation_graph in data_dict: {sim_graph_data is not None}")
         if sim_graph_data is not None:
             G = json_graph.node_link_graph(sim_graph_data)
@@ -503,26 +544,26 @@ class simulation():
                 except (ValueError, TypeError):
                     weight = 1.0
                 G.add_edge(source, target, Weight=weight)
-        if DIAGNOSTICS_ENABLED:
+        if diagnostics_enabled:
             print(f"[DIAG] Graph nodes: {G.number_of_nodes()}")
             print(f"[DIAG] Graph edges: {G.number_of_edges()}")
         
         if "graph_data" in data_dict:
             G = json_graph.node_link_graph(data_dict["graph_data"])
-            if DIAGNOSTICS_ENABLED:
+            if diagnostics_enabled:
                 print(f"[DIAG] graph_data loaded. Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
         
         try:
             path_list = list(nx.all_shortest_paths(G, 'river_node_0', 'river_node_1'))
-            if DIAGNOSTICS_ENABLED:
+            if diagnostics_enabled:
                 print(f"[DIAG] Shortest path list: {path_list}")
         except nx.NetworkXNoPath:
             logger.info("No path found between river_node_0 and river_node_1")
-            if DIAGNOSTICS_ENABLED:
+            if diagnostics_enabled:
                 print("[DIAG] No path found between river_node_0 and river_node_1")
         except nx.NodeNotFound as e:
             logger.info("NodeNotFound:")
-            if DIAGNOSTICS_ENABLED:
+            if diagnostics_enabled:
                 print(f"[DIAG] NodeNotFound: {e}")
         
         if len(self.nodes) > 1:
@@ -530,16 +571,16 @@ class simulation():
                 paths = list(nx.all_shortest_paths(G, 'river_node_0', 'river_node_1'))
                 max_len = max(len(path) for path in paths)
                 self.moves = np.arange(0, max_len + 1, 1)
-                if DIAGNOSTICS_ENABLED:
+                if diagnostics_enabled:
                     print(f"[DIAG] Moves array: {self.moves}")
             except nx.NetworkXNoPath:
                 logger.warning("No path found between river_node_0 and river_node_1.")
                 self.moves = np.zeros(1, dtype=np.int32)
-                if DIAGNOSTICS_ENABLED:
+                if diagnostics_enabled:
                     print("[DIAG] Moves array set to zeros due to no path.")
         else:
             self.moves = np.zeros(1, dtype=np.int32)
-            if DIAGNOSTICS_ENABLED:
+            if diagnostics_enabled:
                 print("[DIAG] Moves array set to zeros due to single node.")
         self.graph = G
         
@@ -577,7 +618,16 @@ class simulation():
 
         # 4. Facilities.
         if "facilities" in data_dict:
-            self.facility_params = to_dataframe(data_dict["facilities"], numeric_cols=['Bypass Flow', 'Env Flow', 'Min Op Flow', 'Rack Spacing', 'Units'], index_col="Facility")
+            self.facility_params = to_dataframe(
+                data_dict["facilities"],
+                numeric_cols=[
+                    'Bypass Flow', 'Env Flow', 'Min Op Flow',
+                    'Bypass_Flow', 'Env_Flow', 'Min_Op_Flow',
+                    'Rack Spacing', 'Units'
+                ],
+                index_col="Facility"
+            )
+            self.facility_params = _normalize_facility_flow_columns(self.facility_params)
             # Verbose diagnostics commented out
             # if DIAGNOSTICS_ENABLED:
             #     print(f"[DIAG] Facility params DataFrame shape: {self.facility_params.shape}")
@@ -611,7 +661,7 @@ class simulation():
         
         if self.operating_scenarios_df is not None and "Scenario" in self.operating_scenarios_df.columns:
             self.op_scenarios = self.operating_scenarios_df["Scenario"].unique()
-            if DIAGNOSTICS_ENABLED:
+            if diagnostics_enabled:
                 print(f"[DIAG] op_scenarios: {self.op_scenarios}")
         else:
             self.op_scenarios = []

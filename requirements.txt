@@ -15,6 +15,7 @@ networkx==2.8.2
 hydrofunctions    # You can leave this unpinned if needed, or pin a specific version if available
 openpyxl==3.0.9
 tables==3.7.0
+chardet==5.2.0
 
 # Flask Web App
 Flask==2.2.2
