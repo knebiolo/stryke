@@ -820,6 +820,16 @@ def stream():
         run_dir = os.path.join(user_root, run_id)
     if not run_dir:
         run_dir = session.get('run_dir') or session.get('proj_dir')
+    if not run_dir or not os.path.exists(run_dir):
+        # Fallback: locate run_dir by scanning SIM_PROJECT_FOLDER/<user_dir>/<run_id>
+        try:
+            for user_dir in os.listdir(SIM_PROJECT_FOLDER):
+                candidate = os.path.join(SIM_PROJECT_FOLDER, user_dir, run_id)
+                if os.path.isdir(candidate):
+                    run_dir = candidate
+                    break
+        except Exception:
+            run_dir = None
     log_file = os.path.join(run_dir, "simulation_debug.log") if run_dir else None
 
     def event_stream():
@@ -4431,6 +4441,14 @@ def run_simulation():
         return redirect(url_for('login'))
     run_dir = os.path.join(user_root, run_id)
     os.makedirs(run_dir, exist_ok=True)
+    # Create the log file immediately so the SSE tailer can show progress even
+    # if the worker thread runs in a different process.
+    try:
+        log_path = os.path.join(run_dir, "simulation_debug.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[INFO] Run created at {datetime.now().isoformat()}\n")
+    except Exception:
+        pass
     session['run_dir'] = run_dir
     
     # Prepare data dictionary
