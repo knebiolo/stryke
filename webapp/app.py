@@ -4387,6 +4387,17 @@ def run_simulation_in_background_custom(data_dict, q):
     sys.stdout = QueueStream(q, log_file=log_file)
     sys.stderr = QueueStream(q, log_file=log_file)
     h, targets = _attach_queue_log_handler(q)
+    # Force verbose diagnostics for this run (user-requested)
+    try:
+        stryke.DIAGNOSTICS_ENABLED = True
+        stryke.VERBOSE_DIAGNOSTICS = True
+        log.info("Verbose diagnostics enabled for this run.")
+        try:
+            q.put_nowait("[INFO] Verbose diagnostics enabled for this run.")
+        except Exception:
+            pass
+    except Exception as exc:
+        log.warning("Failed to enable verbose diagnostics: %s", exc)
     def _heartbeat():
         start_ts = time.time()
         while not stop_event.wait(30):
@@ -5572,6 +5583,19 @@ def generate_report(sim):
             if not state_cols:
                 continue
 
+            def _col_index(col):
+                try:
+                    return int(col.split('_', 1)[1])
+                except Exception:
+                    return None
+
+            def _col_sort_key(col):
+                idx = _col_index(col)
+                return idx if idx is not None else 1_000_000
+
+            # Ensure state/survival columns are ordered by numeric suffix (state_0, state_1, ...)
+            state_cols = sorted(state_cols, key=_col_sort_key)
+
             # For each fish, identify ALL passage routes they took (for multi-facility scenarios)
             # Each fish may pass through multiple bifurcations (e.g., facility1 then facility2)
             # We need to count each passage event separately
@@ -5579,6 +5603,27 @@ def generate_report(sim):
             
             # Identify survival columns for mapping to state columns (if present)
             survival_cols = [c for c in sim_data.columns if c.startswith('survival_')]
+            survival_cols = sorted(survival_cols, key=_col_sort_key)
+            overall_survival_col = survival_cols[-1] if survival_cols else None
+
+            def _extract_survival(row, pos):
+                # Prefer overall survival (end-of-path) when available to align with summary metrics.
+                if overall_survival_col is not None:
+                    val = row.get(overall_survival_col)
+                    if pd.notna(val):
+                        try:
+                            return int(val)
+                        except Exception:
+                            return val
+                # Fallback to survival at the state position.
+                if survival_cols and len(survival_cols) > pos:
+                    val = row.get(survival_cols[pos])
+                    if pd.notna(val):
+                        try:
+                            return int(val)
+                        except Exception:
+                            return val
+                return None
 
             for idx, row in sim_data.iterrows():
                 # Prefer the persistent fish identifier stored in the row (if present).
@@ -5594,22 +5639,7 @@ def generate_report(sim):
                     # Each one represents a separate passage event
                     for pos, state in enumerate(fish_path):
                         if state in all_targets:
-                            # Map state position -> survival column (survival_{pos-1}) when possible
-                            survived = None
-                            try:
-                                # Map the state position to the same-index survival column
-                                # (simulation writes survival_k for state_k)
-                                if pos >= 0 and survival_cols and len(survival_cols) > pos:
-                                    surv_col = survival_cols[pos]
-                                    survived = row.get(surv_col)
-                                    # Ensure we check the extracted value
-                                    if pd.notna(survived):
-                                        try:
-                                            survived = int(survived)
-                                        except Exception:
-                                            pass
-                            except Exception:
-                                survived = None
+                            survived = _extract_survival(row, pos)
                             # This is a passage route (target of a bifurcation decision)
                             all_passage_events.append({
                                 'fish_id': fish_identifier,
@@ -5624,13 +5654,7 @@ def generate_report(sim):
                     # This works for simple cases but may include intermediate nodes
                     for pos, state in enumerate(fish_path):
                         if 'river_node' not in state.lower():
-                            survived = None
-                            try:
-                                if pos > 0 and survival_cols and len(survival_cols) >= pos:
-                                    surv_col = survival_cols[pos-1]
-                                    survived = row.get(surv_col)
-                            except Exception:
-                                survived = None
+                            survived = _extract_survival(row, pos)
                             all_passage_events.append({
                                 'fish_id': fish_identifier,
                                 'passage_route': state,
