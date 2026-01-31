@@ -1,4 +1,3 @@
-DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostic prints
 # -*- coding: utf-8 -*-
 """
 Created on Tue Feb  4 19:48:03 2025
@@ -42,7 +41,18 @@ import filelock
 from werkzeug.exceptions import HTTPException, NotFound, RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
-DIAGNOSTICS_ENABLED = True  # Set to False to disable diagnostic prints
+def _env_flag(name, default="0"):
+    val = os.environ.get(name, default)
+    return str(val).strip().lower() in ("1", "true", "yes", "on")
+
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return int(default)
+
+DIAGNOSTICS_ENABLED = _env_flag("STRYKE_WEBAPP_DIAGNOSTICS", "0")
+LOG_LINE_MAX_CHARS = _env_int("STRYKE_LOG_LINE_MAX_CHARS", 2000)
 
 # Manually tell pyproj where PROJ is installed
 os.environ["PROJ_DIR"] = "/usr"
@@ -73,6 +83,28 @@ RUN_QUEUES = defaultdict(lambda: queue.Queue(maxsize=1000))
 def get_queue(run_id):
     return RUN_QUEUES[run_id]
 
+def _read_csv_with_encoding_fallback(file_path, *args, **kwargs):
+    """Read CSV with a small, explicit encoding fallback chain."""
+    encoding = kwargs.pop("encoding", None)
+    if encoding:
+        return pd.read_csv(file_path, *args, encoding=encoding, **kwargs)
+
+    encodings = ("utf-8", "utf-8-sig", "utf-16", "utf-16le", "utf-16be", "latin-1")
+    last_error = None
+    for enc in encodings:
+        try:
+            df = pd.read_csv(file_path, *args, encoding=enc, **kwargs)
+            if enc != "utf-8":
+                print(f"[WARN] read_csv_if_exists: used encoding={enc} for {file_path}", flush=True)
+            return df
+        except UnicodeDecodeError as exc:
+            last_error = exc
+            continue
+    msg = f"Failed to decode CSV as UTF-8/UTF-16/Latin-1: {file_path}"
+    if last_error is not None:
+        raise ValueError(msg) from last_error
+    raise ValueError(msg)
+
 def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
     """
     Backward-compatible wrapper:
@@ -91,7 +123,7 @@ def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
         # If you prefer hard-fail, change to: raise FileNotFoundError(...)
         return None
 
-    df = pd.read_csv(file_path)
+    df = _read_csv_with_encoding_fallback(file_path, *args, **kwargs)
     if numeric_cols:
         for col in numeric_cols:
             if col in df.columns:
@@ -113,12 +145,18 @@ print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=Tru
  
 class QueueStream:
     """File-like object that writes text lines into a queue.Queue for SSE."""
-    def __init__(self, q, prefix: str = "", log_file=None):
+    def __init__(self, q, prefix: str = "", log_file=None, max_line_length=None):
         self.q = q
         self.prefix = prefix or ""
         self.log_file = log_file
+        self.max_line_length = max_line_length if max_line_length is not None else LOG_LINE_MAX_CHARS
         self._buf = []
         self._lock = threading.Lock()
+
+    def _truncate_line(self, line: str) -> str:
+        if self.max_line_length and len(line) > self.max_line_length:
+            return line[: self.max_line_length] + " ...[truncated]"
+        return line
 
     def write(self, s):
         if not s:
@@ -140,16 +178,17 @@ class QueueStream:
             for line in lines:
                 if line.endswith("\n"):
                     # strip trailing newline and emit
+                    line_out = self._truncate_line(line.rstrip("\n"))
                     try:
                         # Use put_nowait to avoid blocking if queue is full
                         # This prevents simulation from stalling if EventSource disconnects
-                        self.q.put_nowait(self.prefix + line.rstrip("\n"))
+                        self.q.put_nowait(self.prefix + line_out)
                     except queue.Full:
                         # Queue full - drop oldest messages to make room
                         # This happens when EventSource disconnects but simulation continues
                         try:
                             self.q.get_nowait()  # Remove oldest message
-                            self.q.put_nowait(self.prefix + line.rstrip("\n"))
+                            self.q.put_nowait(self.prefix + line_out)
                         except Exception:
                             pass  # If still failing, just drop this message
                     except Exception:
@@ -164,7 +203,8 @@ class QueueStream:
         with self._lock:
             if self._buf:
                 try:
-                    self.q.put(self.prefix + "".join(self._buf))
+                    joined = "".join(self._buf)
+                    self.q.put(self.prefix + self._truncate_line(joined))
                 except Exception:
                     pass
                 self._buf.clear()
@@ -178,9 +218,17 @@ class QueueLogHandler(logging.Handler):
     def __init__(self, q): super().__init__(); self.q = q
     def emit(self, record):
         try:
-            msg = self.format(record)
+            msg = self.format(record).replace("\n", " | ")
+            if LOG_LINE_MAX_CHARS and len(msg) > LOG_LINE_MAX_CHARS:
+                msg = msg[:LOG_LINE_MAX_CHARS] + " ...[truncated]"
             # keep it simple: one line per log event
-            self.q.put(msg.replace("\n", " | "))
+            self.q.put_nowait(msg)
+        except queue.Full:
+            try:
+                self.q.get_nowait()
+                self.q.put_nowait(msg)
+            except Exception:
+                pass
         except Exception:
             pass
         
@@ -760,18 +808,21 @@ def stream():
 
     def event_stream():
         import queue as _q
-        while True:
-            try:
-                msg = q.get(timeout=30)  # Increased timeout to 30 seconds
-            except _q.Empty:
-                yield "data: [keepalive]\n\n"
-                continue
-            except Exception as e:
-                yield f"data: [ERROR] {str(e)}\n\n"
-                break
-            yield f"data: {msg}\n\n"
-            if msg == "[Simulation Complete]":
-                break
+        try:
+            while True:
+                try:
+                    msg = q.get(timeout=30)  # Increased timeout to 30 seconds
+                except _q.Empty:
+                    yield "data: [keepalive]\n\n"
+                    continue
+                except Exception as e:
+                    yield f"data: [ERROR] {str(e)}\n\n"
+                    break
+                yield f"data: {msg}\n\n"
+                if msg == "[Simulation Complete]":
+                    break
+        finally:
+            RUN_QUEUES.pop(run_id, None)
 
     return Response(
         event_stream(),
