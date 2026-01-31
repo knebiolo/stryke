@@ -4817,9 +4817,19 @@ def generate_report(sim):
                     continue
                 raise
 
-        log.debug("HDF opened: %s", hdf_path)
+        log.info("Report: HDF opened: %s", hdf_path)
+
+        def _storer_nrows(hdf_store, key):
+            try:
+                st = hdf_store.get_storer(key)
+                if st is not None and getattr(st, "nrows", None) is not None:
+                    return int(st.nrows)
+            except Exception:
+                return None
+            return None
 
         # --- Executive Summary Metrics ---
+        log.info("Report: loading summary tables")
         yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
         daily_df = store["/Daily"] if "/Daily" in store.keys() else None
         pop_df = store["/Population"] if "/Population" in store.keys() else None
@@ -4853,7 +4863,13 @@ def generate_report(sim):
         # Get actual fish counts from simulation data for validation
         simulation_keys = [k for k in store.keys() if k.startswith('/simulations/')]
         total_fish_from_sims = 0
+        if simulation_keys:
+            log.info("Report: counting fish from %d simulation tables", len(simulation_keys))
         for key in simulation_keys:
+            nrows = _storer_nrows(store, key)
+            if nrows is not None:
+                total_fish_from_sims += nrows
+                continue
             try:
                 sim_data = store[key]
                 if isinstance(sim_data, pd.DataFrame):
@@ -4952,6 +4968,7 @@ def generate_report(sim):
         </details>
         """
         
+        log.info("Report: assembling HTML sections")
         report_sections = [
             "<div style='margin: 10px;'>"
             "  <button onclick=\"window.location.href='/'\" style='padding:10px;'>Home and Logout</button>"
@@ -5017,6 +5034,7 @@ def generate_report(sim):
                 report_sections.append(f"<p>No {title} data available.</p>")
 
         # Hydrograph plots
+        log.info("Report: hydrograph plots")
         report_sections.append("<h2>Hydrograph Plots</h2>")
         if "/Hydrograph" in store.keys():
             hydrograph_df = store["/Hydrograph"]
@@ -5438,6 +5456,7 @@ def generate_report(sim):
             add_section("Beta Distributions (All Routes)", "/Beta_Distributions", units)
 
         # Flow vs Entrainment Analysis  
+        log.info("Report: flow vs entrainment analysis")
         report_sections.append("<h2>Flow vs Entrainment Relationship</h2>")
         if daily_df is not None and not daily_df.empty and 'flow' in daily_df.columns:
             df_flow = daily_df.copy()
@@ -5473,9 +5492,12 @@ def generate_report(sim):
             report_sections.append("<p>Flow relationship data not available.</p>")
 
         # Passage Route Usage Analysis  
+        log.info("Report: passage route usage aggregation starting")
         report_sections.append("<h2>Passage Route Usage</h2>")
         simulation_keys = [k for k in store.keys() if k.startswith('/simulations/')]
         combined_route_counts = pd.Series(dtype=float)
+        route_surv_sum = defaultdict(float)
+        route_surv_count = defaultdict(float)
         units_label = "m³/s" if units == 'metric' else "cfs"
         route_flow_df = store["/Route_Flows"] if "/Route_Flows" in store.keys() else None
         if isinstance(route_flow_df, pd.DataFrame) and not route_flow_df.empty:
@@ -5521,7 +5543,9 @@ def generate_report(sim):
             bifurcation_map = {}
             all_targets = set()
 
-        for key in simulation_keys:
+        for idx_key, key in enumerate(simulation_keys):
+            if idx_key == 0 or (idx_key + 1) % 5 == 0:
+                log.info("Report: processing simulation table %d/%d", idx_key + 1, len(simulation_keys))
             sim_data = store[key]
             if not isinstance(sim_data, pd.DataFrame):
                 continue
@@ -5630,6 +5654,16 @@ def generate_report(sim):
                 route_counts = route_counts[~route_counts.index.str.contains('river_node', case=False, na=False)]
                 combined_route_counts = combined_route_counts.add(route_counts, fill_value=0)
 
+                # Accumulate survival stats by route (avoid second pass)
+                if 'survived' in passage_df_unique_iter.columns:
+                    try:
+                        surv_grp = passage_df_unique_iter.groupby('passage_route')['survived'].agg(['count', 'sum'])
+                        for route, row in surv_grp.iterrows():
+                            route_surv_sum[route] += float(row.get('sum', 0.0) or 0.0)
+                            route_surv_count[route] += float(row.get('count', 0.0) or 0.0)
+                    except Exception:
+                        pass
+
                 # Store passage_df_unique_day for discharge calculations if needed
                 if need_estimated_flow and 'flow' in passage_df_unique_day.columns:
                     sim_data_for_discharge = passage_df_unique_day
@@ -5673,6 +5707,10 @@ def generate_report(sim):
                     ) * route_day_counts['flow_converted']
                     route_day_counts.rename(columns={'passage_route': 'Passage Route'}, inplace=True)
                     discharge_records.append(route_day_counts[['Passage Route', 'route_count', 'total_fish', 'estimated_discharge']])
+            try:
+                del sim_data
+            except Exception:
+                pass
 
         if not combined_route_counts.empty:
             # Debug: log combined counts BEFORE computing summaries
@@ -5752,54 +5790,17 @@ def generate_report(sim):
                 'Percentage': (combined_route_counts.values / combined_route_counts.sum() * 100).round(1)
             })
 
-            # Compute survival by route using explicit survival_* columns in the simulations
-            # Do a safe second pass over simulation keys to build deduped events with survival
+            # Build survival by route table from accumulated counters
             try:
-                events_all = []
-                for key in simulation_keys:
-                    sim_data = store[key]
-                    if not isinstance(sim_data, pd.DataFrame):
-                        continue
-                    state_cols = [c for c in sim_data.columns if c.startswith('state_')]
-                    survival_cols = [c for c in sim_data.columns if c.startswith('survival_')]
-                    if not state_cols:
-                        continue
-                    for idx, row in sim_data.iterrows():
-                        fish_identifier = row.get('index') if 'index' in sim_data.columns else idx
-                        fish_path = [row[col] for col in state_cols if pd.notna(row[col])]
-                        for pos, state in enumerate(fish_path):
-                            if 'river_node' not in str(state).lower():
-                                survived = None
-                                try:
-                                    # Map the state position to the corresponding survival column
-                                    if pos >= 0 and survival_cols and len(survival_cols) > pos:
-                                        surv_col = survival_cols[pos]
-                                        survived = row.get(surv_col)
-                                        # Normalize to numeric 0/1 when possible
-                                        if pd.notna(survived):
-                                            try:
-                                                survived = int(survived)
-                                            except Exception:
-                                                pass
-                                except Exception:
-                                    survived = None
-                                events_all.append({'fish_id': fish_identifier,
-                                                   'iteration': row.get('iteration'),
-                                                   'day': row.get('day'),
-                                                   'passage_route': state,
-                                                   'survived': survived})
-                                break
-
-                if events_all:
-                    evdf = pd.DataFrame(events_all)
-                    # Deduplicate per Policy B (fish_id, iteration, day)
-                    ev_dedup = evdf.drop_duplicates(subset=['fish_id', 'iteration', 'day'])
-                    surv_tbl = ev_dedup.groupby('passage_route')['survived'].agg(['count', 'sum', 'mean']).reset_index()
-                    if not surv_tbl.empty:
-                        surv_tbl.rename(columns={'count': 'Total Fish', 'sum': 'Survived', 'mean': 'Survival Rate'}, inplace=True)
-                        surv_tbl['Survival %'] = (surv_tbl['Survival Rate'] * 100).round(1)
-                    else:
-                        surv_tbl = None
+                if route_surv_count:
+                    surv_tbl = pd.DataFrame({
+                        'passage_route': list(route_surv_count.keys()),
+                        'Total Fish': [int(route_surv_count[r]) for r in route_surv_count.keys()],
+                        'Survived': [int(route_surv_sum.get(r, 0.0)) for r in route_surv_count.keys()],
+                    })
+                    surv_tbl['Survival %'] = (
+                        (surv_tbl['Survived'] / surv_tbl['Total Fish']).replace([np.inf, -np.inf], np.nan).fillna(0.0) * 100
+                    ).round(1)
                 else:
                     surv_tbl = None
             except Exception as e:
@@ -5943,8 +5944,8 @@ def generate_report(sim):
             report_sections.append("<p>Insufficient data to report discharge by passage route.</p>")
 
         # Yearly summary panel (iteration-based)
-        yearly_df = store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None
-        daily_df  = store["/Daily"] if "/Daily" in store.keys() else None
+        yearly_df = yearly_df if yearly_df is not None else (store["/Yearly_Summary"] if "/Yearly_Summary" in store.keys() else None)
+        daily_df  = daily_df if daily_df is not None else (store["/Daily"] if "/Daily" in store.keys() else None)
 
         if daily_df is not None and not daily_df.empty:
             df = daily_df.copy()
@@ -6152,6 +6153,7 @@ def generate_report(sim):
                 pass
 
         # Time Series Plots - Daily Entrainment with Error Bars
+        log.info("Report: daily average entrainment time series")
         report_sections.append("<h2>Daily Average Entrainment Over Time</h2>")
         if daily_df is not None and not daily_df.empty and 'day' in daily_df.columns:
             df_ts = daily_df.copy()
@@ -6216,6 +6218,7 @@ def generate_report(sim):
             report_sections.append("<p>Time series data not available.</p>")
 
         # Finalize HTML
+        log.info("Report: final HTML assembly")
         final_html = "\n".join(report_sections)
         full_report = f"""<!DOCTYPE html><html lang="en"><head>
 <meta charset="UTF-8"><title>Simulation Report</title>
