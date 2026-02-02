@@ -646,8 +646,8 @@ def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
 
     # stream all prints + logger output to this run's queue
     old_stdout, old_stderr = sys.stdout, sys.stderr
-    sys.stdout = QueueStream(q)
-    sys.stderr = QueueStream(q)
+    sys.stdout = QueueStream(q, log_file=None)
+    sys.stderr = QueueStream(q, log_file=None)
     h, targets = _attach_queue_log_handler(q)
 
     # optional file lock (safe if filelock not installed)
@@ -4419,17 +4419,13 @@ def run_simulation_in_background_custom(data_dict, q):
     sys.stdout = QueueStream(q, log_file=log_file)
     sys.stderr = QueueStream(q, log_file=log_file)
     h, targets = _attach_queue_log_handler(q)
-    # Force verbose diagnostics for this run (user-requested)
+    # Essential logging only - verbose diagnostics disabled for performance
     try:
-        stryke.DIAGNOSTICS_ENABLED = True
-        stryke.VERBOSE_DIAGNOSTICS = True
-        log.info("Verbose diagnostics enabled for this run.")
-        try:
-            q.put_nowait("[INFO] Verbose diagnostics enabled for this run.")
-        except Exception:
-            pass
+        stryke.DIAGNOSTICS_ENABLED = False
+        stryke.VERBOSE_DIAGNOSTICS = False
+        log.info("Essential logging mode enabled.")
     except Exception as exc:
-        log.warning("Failed to enable verbose diagnostics: %s", exc)
+        log.warning("Failed to configure diagnostics: %s", exc)
     def _heartbeat():
         start_ts = time.time()
         while not stop_event.wait(30):
