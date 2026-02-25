@@ -155,17 +155,36 @@ print("[INIT] Patched Stryke.read_csv_if_exists to back-compat shim.", flush=Tru
 LOG_STREAM_MODE = os.environ.get("STRYKE_LOG_STREAM_MODE", "minimal").strip().lower()
 LOG_STREAM_ALLOW_ERRORS = os.environ.get("STRYKE_LOG_STREAM_ERRORS", "1").strip().lower() not in ("0", "false", "no")
 LOG_STREAM_DATE_RE = re.compile(r"^Date\s+.+\|\s*Flow\s+.+\|\s*\d+\s+Fish\s+Present\b")
+ITERATION_PROGRESS_RE = re.compile(r"\bIteration\s+\d+\s+of\s+\d+\b", re.IGNORECASE)
+DAY_PROGRESS_RE = re.compile(r"\bDay\s+\d+\s+of\s+\d+\b", re.IGNORECASE)
 
 def _should_emit_stream_line(line: str) -> bool:
-    if LOG_STREAM_MODE != "minimal":
-        return True
     if not line:
         return False
     stripped = str(line).strip()
+    if not stripped:
+        return False
+
+    # Always pass lifecycle/control lines used by the frontend status logic.
+    if stripped == "[Simulation Complete]":
+        return True
+    if stripped.startswith(("[INFO]", "[WARN]", "[WARNING]", "[ERROR]", "INFO:", "WARNING:", "ERROR:")):
+        return True
+    if "Traceback" in stripped:
+        return True
+
+    if LOG_STREAM_MODE != "minimal":
+        return True
+
+    # In minimal mode, keep only high-signal progress lines.
     if LOG_STREAM_DATE_RE.match(stripped):
         return True
+    if ITERATION_PROGRESS_RE.search(stripped):
+        return True
+    if DAY_PROGRESS_RE.search(stripped):
+        return True
     if LOG_STREAM_ALLOW_ERRORS:
-        if stripped.startswith("[ERROR]") or stripped.startswith("ERROR") or "Traceback" in stripped:
+        if stripped.startswith("[ERROR]") or stripped.startswith("ERROR"):
             return True
     return False
  
@@ -644,10 +663,18 @@ def run_xls_simulation_in_background(ws, wks, output_name, q, data_dict=None):
         finally: q.put("[Simulation Complete]")
         return
 
+    # Persist worker logs to file so stream/log_tail can recover across processes.
+    log_file = os.path.join(ws, "simulation_debug.log")
+    try:
+        with open(log_file, "w", encoding="utf-8") as f:
+            f.write(f"=== SIMULATION LOG START ({datetime.now().isoformat()}) ===\n")
+    except Exception:
+        log_file = None
+
     # stream all prints + logger output to this run's queue
     old_stdout, old_stderr = sys.stdout, sys.stderr
-    sys.stdout = QueueStream(q, log_file=None)
-    sys.stderr = QueueStream(q, log_file=None)
+    sys.stdout = QueueStream(q, log_file=log_file)
+    sys.stderr = QueueStream(q, log_file=log_file)
     h, targets = _attach_queue_log_handler(q)
 
     # optional file lock (safe if filelock not installed)
@@ -830,7 +857,7 @@ def upload_simulation():
 
 @app.get('/stream')
 def stream():
-    run_id = request.args.get('run', '')
+    run_id = (request.args.get('run', '') or '').strip() or (session.get('last_run_id', '') or '').strip()
     if not run_id:
         return "Missing ?run=<run_id>", 400
 
@@ -909,7 +936,7 @@ def stream():
 
 @app.get("/log_tail")
 def log_tail():
-    run_id = request.args.get("run", "")
+    run_id = (request.args.get("run", "") or "").strip() or (session.get("last_run_id", "") or "").strip()
     if not run_id:
         return jsonify({"error": "Missing run id"}), 400
     try:
@@ -4646,7 +4673,13 @@ def simulation_logs():
     """
     Show simulation logs page. Checks for completed simulation first.
     """
-    run_id = request.args.get('run', '')
+    run_id = (request.args.get('run', '') or '').strip() or (session.get('last_run_id', '') or '').strip()
+    if not run_id:
+        session_run_dir = session.get('run_dir')
+        if session_run_dir:
+            run_id = os.path.basename(os.path.normpath(session_run_dir))
+    if run_id:
+        session['last_run_id'] = run_id
     
     # Check if simulation has already completed by looking for output files
     user_root = session.get('user_sim_folder')

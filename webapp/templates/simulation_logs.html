@@ -325,22 +325,34 @@
             let totalIterations = null;
             let currentIteration = 0;
             let logLineCount = 0;
-            
+
             const params = new URLSearchParams(window.location.search);
-            const runId = params.get('run') || "";
+            const runId = "{{ run_id | default('', true) }}" || params.get('run') || "";
+            if (!runId) {
+                addLogLine("[ERROR] Missing run id. Reload this page from the Run Simulation action.");
+                statusText.textContent = '⚠️ Missing Run ID';
+                currentActivity.textContent = 'Cannot connect to logs';
+                return;
+            }
             
             const eventSource = new EventSource(`/stream?run=${encodeURIComponent(runId)}`);
 
             // Polling fallback for environments that block/close SSE
             let logOffset = 0;
             const pollIntervalMs = 2000;
+            let pollErrorShown = false;
             async function pollLogTail() {
                 try {
                     const resp = await fetch(`/log_tail?run=${encodeURIComponent(runId)}&offset=${logOffset}`);
                     if (!resp.ok) {
+                        if (!pollErrorShown) {
+                            addLogLine(`[WARNING] log_tail returned HTTP ${resp.status}.`);
+                            pollErrorShown = true;
+                        }
                         return;
                     }
                     const data = await resp.json();
+                    pollErrorShown = false;
                     if (typeof data.offset === "number") {
                         logOffset = data.offset;
                     }
@@ -364,9 +376,13 @@
                         resultsButton.style.display = "inline-block";
                     }
                 } catch (err) {
-                    // Ignore polling errors; SSE may still be active
+                    if (!pollErrorShown) {
+                        addLogLine(`[WARNING] log_tail polling error: ${err}`);
+                        pollErrorShown = true;
+                    }
                 }
             }
+            pollLogTail();
             const pollTimer = setInterval(pollLogTail, pollIntervalMs);
             
             // Fallback: Poll for completion every 30 seconds in case EventSource fails
@@ -379,12 +395,12 @@
                 }
             }, 30000); // Check every 30 seconds
             
-            // Handle connection errors
+            // Handle connection errors (do not force-close; let browser auto-retry)
             eventSource.onerror = function(error) {
                 console.error('EventSource error:', error);
                 if (eventSource.readyState === EventSource.CLOSED) {
-                    logOutput.innerHTML += '<div class="log-error">❌ Connection lost. Checking for completion every 30 seconds... <button onclick="location.reload()">🔄 Check Now</button></div>';
-                    statusText.textContent = 'Connection Lost - Auto-checking...';
+                    addLogLine("[WARNING] Live stream disconnected; relying on polling fallback.");
+                    statusText.textContent = 'Connection Lost - Polling Logs...';
                     statusIcon.textContent = '⚠️';
                     currentActivity.textContent = 'Waiting for completion...';
                 }
@@ -501,6 +517,10 @@
                 if (text.includes('report') || text.includes('Report')) {
                     currentActivity.textContent = 'Creating report';
                 }
+
+            if (text.startsWith('[INFO]')) {
+                currentActivity.textContent = text.replace('[INFO]', '').trim().substring(0, 60);
+            }
             }
 
             function addLogLine(text) {
@@ -559,13 +579,6 @@
                     
                     resultsButton.style.display = "inline-block";
                 }
-            };
-
-            eventSource.onerror = function(event) {
-                addLogLine("[ERROR] Connection lost or server unavailable.");
-                statusText.textContent = '⚠️ Connection Error';
-                currentActivity.textContent = 'Connection lost';
-                eventSource.close();
             };
 
             // Initial activity
