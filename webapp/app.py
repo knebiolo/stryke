@@ -79,9 +79,54 @@ from Stryke.stryke import epri
 # Use bounded queues to prevent memory issues if connection dies
 # maxsize=1000 means we keep last 1000 messages, older ones dropped
 RUN_QUEUES = defaultdict(lambda: queue.Queue(maxsize=1000))
+RUN_DIRS = {}
 
 def get_queue(run_id):
     return RUN_QUEUES[run_id]
+
+def _register_run_dir(run_id: str, run_dir: str) -> None:
+    if run_id and run_dir:
+        RUN_DIRS[run_id] = run_dir
+
+def _resolve_run_dir(run_id: str):
+    """Resolve run directory from registry, session, or disk scan."""
+    run_id = (run_id or "").strip()
+    if not run_id:
+        return session.get("run_dir") or session.get("proj_dir")
+
+    registered = RUN_DIRS.get(run_id)
+    if registered and os.path.isdir(registered):
+        return registered
+
+    user_root = session.get("user_sim_folder")
+    if user_root:
+        candidate = os.path.join(user_root, run_id)
+        if os.path.isdir(candidate):
+            _register_run_dir(run_id, candidate)
+            return candidate
+
+    session_run_dir = session.get("run_dir")
+    if session_run_dir and os.path.isdir(session_run_dir):
+        if os.path.basename(os.path.normpath(session_run_dir)) == run_id:
+            _register_run_dir(run_id, session_run_dir)
+            return session_run_dir
+
+    try:
+        for user_dir in os.listdir(SIM_PROJECT_FOLDER):
+            candidate = os.path.join(SIM_PROJECT_FOLDER, user_dir, run_id)
+            if os.path.isdir(candidate):
+                _register_run_dir(run_id, candidate)
+                return candidate
+    except Exception:
+        return None
+    return None
+
+def _append_run_log(run_dir: str, line: str) -> None:
+    if not run_dir:
+        return
+    log_path = os.path.join(run_dir, "simulation_debug.log")
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(line.rstrip("\n") + "\n")
 
 def _read_csv_with_encoding_fallback(file_path, *args, **kwargs):
     """Read CSV with a small, explicit encoding fallback chain."""
@@ -862,23 +907,10 @@ def stream():
         return "Missing ?run=<run_id>", 400
 
     q = get_queue(run_id)
-    user_root = session.get('user_sim_folder')
-    run_dir = None
-    if run_id and user_root:
-        run_dir = os.path.join(user_root, run_id)
-    if not run_dir:
-        run_dir = session.get('run_dir') or session.get('proj_dir')
-    if not run_dir or not os.path.exists(run_dir):
-        # Fallback: locate run_dir by scanning SIM_PROJECT_FOLDER/<user_dir>/<run_id>
-        try:
-            for user_dir in os.listdir(SIM_PROJECT_FOLDER):
-                candidate = os.path.join(SIM_PROJECT_FOLDER, user_dir, run_id)
-                if os.path.isdir(candidate):
-                    run_dir = candidate
-                    break
-        except Exception:
-            run_dir = None
+    run_dir = _resolve_run_dir(run_id)
     log_file = os.path.join(run_dir, "simulation_debug.log") if run_dir else None
+    complete_flag = os.path.join(run_dir, "simulation_complete.flag") if run_dir else None
+    failed_flag = os.path.join(run_dir, "simulation_failed.flag") if run_dir else None
 
     def event_stream():
         import queue as _q
@@ -908,6 +940,13 @@ def stream():
                         except Exception as exc:
                             yield f"data: [ERROR] Log tail failed: {exc}\n\n"
                             break
+                    if complete_flag and os.path.exists(complete_flag):
+                        yield "data: [Simulation Complete]\n\n"
+                        break
+                    if failed_flag and os.path.exists(failed_flag):
+                        yield "data: [ERROR] Simulation failed.\n\n"
+                        yield "data: [Simulation Complete]\n\n"
+                        break
                     if LOG_STREAM_MODE == "minimal":
                         yield ": keepalive\n\n"
                     else:
@@ -922,7 +961,8 @@ def stream():
                 if is_complete:
                     break
         finally:
-            RUN_QUEUES.pop(run_id, None)
+            # Keep queue alive across transient SSE disconnects/reconnects.
+            pass
 
     return Response(
         event_stream(),
@@ -944,25 +984,21 @@ def log_tail():
     except ValueError:
         offset = 0
 
-    user_root = session.get("user_sim_folder")
-    run_dir = None
-    if run_id and user_root:
-        run_dir = os.path.join(user_root, run_id)
-    if not run_dir:
-        run_dir = session.get("run_dir") or session.get("proj_dir")
-    if not run_dir or not os.path.exists(run_dir):
-        try:
-            for user_dir in os.listdir(SIM_PROJECT_FOLDER):
-                candidate = os.path.join(SIM_PROJECT_FOLDER, user_dir, run_id)
-                if os.path.isdir(candidate):
-                    run_dir = candidate
-                    break
-        except Exception:
-            run_dir = None
+    run_dir = _resolve_run_dir(run_id)
 
     log_file = os.path.join(run_dir, "simulation_debug.log") if run_dir else None
+    completed = False
+    failed = False
+    if run_dir:
+        if os.path.exists(os.path.join(run_dir, "simulation_complete.flag")):
+            completed = True
+        elif os.path.exists(os.path.join(run_dir, "simulation_report.html")):
+            completed = True
+        elif os.path.exists(os.path.join(run_dir, "simulation_failed.flag")):
+            completed = True
+            failed = True
     if not log_file or not os.path.exists(log_file):
-        return jsonify({"text": "", "offset": offset})
+        return jsonify({"text": "", "offset": offset, "completed": completed, "failed": failed})
 
     try:
         size = os.path.getsize(log_file)
@@ -980,13 +1016,7 @@ def log_tail():
         filtered_lines = [line for line in text.splitlines() if _should_emit_stream_line(line)]
         text = "\n".join(filtered_lines)
 
-    completed = False
-    if run_dir:
-        if os.path.exists(os.path.join(run_dir, "simulation_complete.flag")):
-            completed = True
-        elif os.path.exists(os.path.join(run_dir, "simulation_report.html")):
-            completed = True
-    return jsonify({"text": text, "offset": new_offset, "completed": completed})
+    return jsonify({"text": text, "offset": new_offset, "completed": completed, "failed": failed})
 
 def _safe_path(base_dir: str, *parts: str) -> str:
     """Join parts to base_dir and ensure the result stays inside base_dir."""
@@ -4441,6 +4471,19 @@ def run_simulation_in_background_custom(data_dict, q):
         with open(log_file, 'w') as f:
             f.write("=== SIMULATION LOG START ===\n")
 
+    def _emit(msg: str):
+        line = str(msg).rstrip("\n")
+        try:
+            q.put_nowait(line)
+        except Exception as exc:
+            log.warning("Queue write failed: %s", exc)
+        if log_file:
+            try:
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+            except Exception as exc:
+                log.warning("Log-file write failed: %s", exc)
+
     # stream all prints + logger output to this run's queue AND file
     old_stdout, old_stderr = sys.stdout, sys.stderr
     sys.stdout = QueueStream(q, log_file=log_file)
@@ -4458,26 +4501,15 @@ def run_simulation_in_background_custom(data_dict, q):
         while not stop_event.wait(30):
             elapsed = int(time.time() - start_ts)
             msg = f"[INFO] Simulation running... {elapsed // 60}m{elapsed % 60:02d}s elapsed"
-            try:
-                q.put_nowait(msg)
-            except Exception:
-                pass
-            if log_file:
-                try:
-                    with open(log_file, "a", encoding="utf-8") as f:
-                        f.write(msg + "\n")
-                except Exception:
-                    pass
+            _emit(msg)
 
     hb_thread = threading.Thread(target=_heartbeat, daemon=True)
     hb_thread.start()
 
     try:
-        try:
-            q.put_nowait("[INFO] Simulation thread started.")
-        except Exception:
-            pass
+        _emit("[INFO] Simulation thread started.")
         log.info("Starting UI-driven simulation...")
+        _emit("[INFO] Starting UI-driven simulation...")
         proj_dir = data_dict.get('proj_dir')
         output_name = data_dict.get('output_name', 'simulation_output')
         
@@ -4490,17 +4522,11 @@ def run_simulation_in_background_custom(data_dict, q):
         sim = stryke.simulation(proj_dir, output_name, existing=False)
         
         # Import webapp data
-        try:
-            q.put_nowait("[INFO] Importing webapp data...")
-        except Exception:
-            pass
+        _emit("[INFO] Importing webapp data...")
         sim.webapp_import(data_dict, output_name)
         
         # Run simulation
-        try:
-            q.put_nowait("[INFO] Running simulation...")
-        except Exception:
-            pass
+        _emit("[INFO] Running simulation...")
         sim.run()
         sim.summary()
         success = True
@@ -4526,10 +4552,16 @@ def run_simulation_in_background_custom(data_dict, q):
         log.info("Simulation completed successfully.")
     except Exception as e:
         log.exception("Simulation failed (UI-driven).")
-        try:
-            q.put(f"[ERROR] Simulation failed: {e}")
-        except Exception:
-            pass
+        _emit(f"[ERROR] Simulation failed: {e}")
+        for tb_line in traceback.format_exc().splitlines():
+            _emit(f"[ERROR] {tb_line}")
+        if proj_dir:
+            try:
+                failed_marker = os.path.join(proj_dir, "simulation_failed.flag")
+                with open(failed_marker, "w", encoding="utf-8") as f:
+                    f.write(f"{datetime.now().isoformat()} :: {e}")
+            except Exception as marker_exc:
+                _emit(f"[ERROR] Could not write failure marker: {marker_exc}")
     finally:
         stop_event.set()
         # restore stdio
@@ -4540,10 +4572,7 @@ def run_simulation_in_background_custom(data_dict, q):
                 lg.removeHandler(h)
             except Exception:
                 pass
-        try:
-            q.put("[Simulation Complete]")
-        except Exception:
-            pass
+        _emit("[Simulation Complete]")
 
 @app.route('/run_simulation', methods=['POST'])
 def run_simulation():
@@ -4577,14 +4606,15 @@ def run_simulation():
         return redirect(url_for('login'))
     run_dir = os.path.join(user_root, run_id)
     os.makedirs(run_dir, exist_ok=True)
+    _register_run_dir(run_id, run_dir)
     # Create the log file immediately so the SSE tailer can show progress even
     # if the worker thread runs in a different process.
     try:
-        log_path = os.path.join(run_dir, "simulation_debug.log")
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(f"[INFO] Run created at {datetime.now().isoformat()}\n")
-    except Exception:
-        pass
+        _append_run_log(run_dir, f"[INFO] Run created at {datetime.now().isoformat()}")
+        _append_run_log(run_dir, f"[INFO] Run ID: {run_id}")
+        _append_run_log(run_dir, "[INFO] Worker thread will start shortly.")
+    except Exception as exc:
+        app.logger.warning("Could not bootstrap debug log for run %s: %s", run_id, exc)
     session['run_dir'] = run_dir
     
     # Prepare data dictionary
@@ -4656,6 +4686,7 @@ def run_simulation():
         'units_system': session.get('units', 'imperial'),
         'simulation_mode': session.get('simulation_mode', 'multiple_powerhouses_simulated_entrainment_routing'),
         'output_name': output_name,
+        'run_id': run_id,
     }
     
     # Start the UI-driven worker with the per-run queue
@@ -4682,12 +4713,7 @@ def simulation_logs():
         session['last_run_id'] = run_id
     
     # Check if simulation has already completed by looking for output files
-    user_root = session.get('user_sim_folder')
-    proj_dir = None
-    if run_id and user_root:
-        proj_dir = os.path.join(user_root, run_id)
-    if not proj_dir:
-        proj_dir = session.get('run_dir') or session.get('proj_dir')
+    proj_dir = _resolve_run_dir(run_id)
     simulation_status = 'running'  # Default
     report_path = None
     
@@ -4706,6 +4732,7 @@ def simulation_logs():
         marker_file = os.path.join(proj_dir, 'report_path.txt')
         report_html = os.path.join(proj_dir, 'simulation_report.html')
         complete_marker = os.path.join(proj_dir, "simulation_complete.flag")
+        failed_marker = os.path.join(proj_dir, "simulation_failed.flag")
         output_name = session.get('output_name', 'simulation_output')
         output_h5 = os.path.join(proj_dir, f"{output_name}.h5")
         debug_log = os.path.join(proj_dir, 'simulation_debug.log')
@@ -4727,6 +4754,9 @@ def simulation_logs():
             simulation_status = 'completed'
         elif os.path.exists(complete_marker) and is_fresh(complete_marker):
             simulation_status = 'completed'
+            report_path = None
+        elif os.path.exists(failed_marker) and is_fresh(failed_marker):
+            simulation_status = 'failed'
             report_path = None
         elif os.path.exists(output_h5) and is_fresh(output_h5) and not run_started_at:
             # Found H5 output (simulation completed but report might be missing)

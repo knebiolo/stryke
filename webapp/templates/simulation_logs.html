@@ -300,6 +300,15 @@
             resultsButton.style.display = "inline-block";
             
             // Don't start EventSource connection
+        } else if (simulationStatus === 'failed') {
+            progressBar.style.width = '100%';
+            progressPercentage.textContent = 'Failed';
+            statusText.textContent = '❌ Simulation Failed';
+            statusIcon.textContent = '❌';
+            currentActivity.textContent = 'Run failed';
+            currentProgress.textContent = 'See logs below for the exact error.';
+            timeRemaining.textContent = 'Stopped';
+            logOutput.innerHTML = '<div class="log-error">❌ The simulation failed. Scroll logs for traceback details.</div>';
         } else if (simulationStatus === 'stalled') {
             // Simulation appears to be stalled
             progressBar.style.width = '50%';
@@ -317,6 +326,7 @@
             }, 10000);
         } else {
             // Simulation is running - connect to live stream
+            (() => {
             
             // Tracking variables
             let startTime = Date.now();
@@ -325,6 +335,7 @@
             let totalIterations = null;
             let currentIteration = 0;
             let logLineCount = 0;
+            let hasFailed = false;
 
             const params = new URLSearchParams(window.location.search);
             const runId = "{{ run_id | default('', true) }}" || params.get('run') || "";
@@ -367,13 +378,23 @@
                         }
                     }
                     if (data.completed) {
-                        progressBar.style.width = '100%';
-                        progressPercentage.textContent = '100%';
-                        statusText.textContent = '✅ Simulation Complete!';
-                        statusIcon.className = 'status-icon status-complete';
-                        currentActivity.textContent = 'Finished!';
-                        timeRemaining.textContent = 'Done!';
-                        resultsButton.style.display = "inline-block";
+                        if (data.failed) {
+                            hasFailed = true;
+                            progressBar.style.width = '100%';
+                            progressPercentage.textContent = 'Failed';
+                            statusText.textContent = '❌ Simulation Failed';
+                            statusIcon.textContent = '❌';
+                            currentActivity.textContent = 'Run failed';
+                            timeRemaining.textContent = 'Stopped';
+                        } else {
+                            progressBar.style.width = '100%';
+                            progressPercentage.textContent = '100%';
+                            statusText.textContent = '✅ Simulation Complete!';
+                            statusIcon.className = 'status-icon status-complete';
+                            currentActivity.textContent = 'Finished!';
+                            timeRemaining.textContent = 'Done!';
+                            resultsButton.style.display = "inline-block";
+                        }
                     }
                 } catch (err) {
                     if (!pollErrorShown) {
@@ -569,15 +590,31 @@
                     eventSource.close();
                     clearInterval(completionCheckInterval); // Stop polling
                     
-                    // Update to complete state
-                    progressBar.style.width = '100%';
-                    progressPercentage.textContent = '100%';
-                    statusText.textContent = '✅ Simulation Complete!';
-                    statusIcon.className = 'status-icon status-complete';
-                    currentActivity.textContent = 'Finished!';
-                    timeRemaining.textContent = 'Done!';
-                    
-                    resultsButton.style.display = "inline-block";
+                    if (hasFailed) {
+                        progressBar.style.width = '100%';
+                        progressPercentage.textContent = 'Failed';
+                        statusText.textContent = '❌ Simulation Failed';
+                        statusIcon.textContent = '❌';
+                        currentActivity.textContent = 'Run failed';
+                        timeRemaining.textContent = 'Stopped';
+                    } else {
+                        // Update to complete state
+                        progressBar.style.width = '100%';
+                        progressPercentage.textContent = '100%';
+                        statusText.textContent = '✅ Simulation Complete!';
+                        statusIcon.className = 'status-icon status-complete';
+                        currentActivity.textContent = 'Finished!';
+                        timeRemaining.textContent = 'Done!';
+                        
+                        resultsButton.style.display = "inline-block";
+                    }
+                }
+                if (text.includes("[ERROR] Simulation failed")) {
+                    hasFailed = true;
+                    statusText.textContent = '❌ Simulation Failed';
+                    statusIcon.textContent = '❌';
+                    currentActivity.textContent = 'Run failed';
+                    timeRemaining.textContent = 'Stopped';
                 }
             };
 
@@ -587,6 +624,7 @@
                     currentActivity.textContent = 'Initializing simulation...';
                 }
             }, 2000);
+            })();
         } // End of else block for running simulation
     </script>
 
