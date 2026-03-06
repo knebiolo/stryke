@@ -4,8 +4,8 @@ import pandas as pd
 from Stryke.stryke import simulation
 
 
-def test_driver_diagnostics_qopt_metrics(tmp_path):
-    proj_dir = tmp_path
+def test_driver_diagnostics_qopt_metrics(local_tmp_path):
+    proj_dir = local_tmp_path
     output_name = "diag_test"
     hdf_path = proj_dir / f"{output_name}.h5"
 
