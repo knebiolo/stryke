@@ -2586,9 +2586,10 @@ class simulation():
             except Exception:
                 max_ent_rate = None
 
-        # Final safety cap: never allow simulated entrainment to exceed max_ent_rate by an extreme factor
+        # Final safety cap: enforce the documented policy of one order-of-magnitude
+        # above the largest observed entrainment rate.
         if max_ent_rate is not None and np.isfinite(max_ent_rate) and max_ent_rate > 0:
-            final_cap = max_ent_rate * (10 ** 6)
+            final_cap = max_ent_rate * 10.0
             if ent_rate[0] > final_cap:
                 ent_rate = np.array([final_cap])
                 logger.warning("Entrained rate hit final cap=%s", final_cap)
@@ -2606,8 +2607,28 @@ class simulation():
         # else: 
         #     daily_rate = Mft3
 
-        # calcualte sample size
-        return np.round(daily_rate * ent_rate,0)[0]
+        # Calculate sample size and fail fast on runaway populations.
+        n_fish = float(np.round(daily_rate * ent_rate, 0)[0])
+        if not np.isfinite(n_fish):
+            raise ValueError(
+                f"Computed non-finite population size n={n_fish} "
+                f"(daily_rate={daily_rate}, ent_rate={ent_rate[0]}, curr_Q={curr_Q})."
+            )
+        if n_fish < 0:
+            raise ValueError(
+                f"Computed negative population size n={n_fish} "
+                f"(daily_rate={daily_rate}, ent_rate={ent_rate[0]}, curr_Q={curr_Q})."
+            )
+
+        max_daily_fish = int(os.environ.get("STRYKE_MAX_DAILY_FISH", "5000000"))
+        if n_fish > max_daily_fish:
+            raise ValueError(
+                f"Computed population size n={int(n_fish)} exceeds STRYKE_MAX_DAILY_FISH={max_daily_fish}. "
+                f"Inputs: curr_Q={curr_Q}, ent_rate={ent_rate[0]}, max_ent_rate={max_ent_rate}. "
+                "Adjust entrainment inputs or raise STRYKE_MAX_DAILY_FISH deliberately."
+            )
+
+        return n_fish
 
     def run(self):
         """
