@@ -113,6 +113,7 @@ def _env_flag(name, default="0"):
 DIAGNOSTICS_ENABLED = _env_flag("STRYKE_DIAGNOSTICS", "0")
 VERBOSE_DIAGNOSTICS = _env_flag("STRYKE_VERBOSE_DIAGNOSTICS", "0")
 STORE_AGENT_TRACES = _env_flag("STRYKE_STORE_AGENT_TRACES", "0")
+STORE_SIMULATION_TABLE = _env_flag("STRYKE_STORE_SIM_TABLE", "0")
 # When False: Only shows summaries and important events
 
 # Get the directory of the current script
@@ -3235,14 +3236,14 @@ class simulation():
                                 #logger.info('Finished movement')
 
    
-                                max_string_lengths = fishes.select_dtypes(include=['object']).apply(lambda x: x.str.len().max())
-                                fishes.to_hdf(self.hdf,
-                                              key=f'simulations/{scen}/{spc}',
-                                              mode='a',
-                                              format='table',
-                                              append=True,
-                                              min_itemsize=256)
-                                self.hdf.flush()
+                                if STORE_SIMULATION_TABLE:
+                                    fishes.to_hdf(self.hdf,
+                                                  key=f'simulations/{scen}/{spc}',
+                                                  mode='a',
+                                                  format='table',
+                                                  append=True,
+                                                  min_itemsize=256)
+                                    self.hdf.flush()
     
                                 if self.output_units == 'metric':
                                     curr_Q_report = curr_Q * 0.02831683199881
@@ -3291,6 +3292,59 @@ class simulation():
                                 total_entrained = entrained.sum()
                                 total_survived_entrained = survived.sum()
                                 total_mortality = total_entrained - total_survived_entrained
+
+                                # Persist lightweight per-route daily survival aggregates.
+                                # This preserves beta/route summaries without storing full fish trajectories.
+                                state_daily_frames = []
+                                for l in self.moves:
+                                    state_col = f'state_{l}'
+                                    survival_col = f'survival_{l}'
+                                    if state_col not in fishes.columns or survival_col not in fishes.columns:
+                                        continue
+                                    if l > 0:
+                                        prev_col = f'survival_{l-1}'
+                                        if prev_col in fishes.columns:
+                                            sub = fishes.loc[fishes[prev_col] == 1, [state_col, survival_col]]
+                                        else:
+                                            sub = fishes[[state_col, survival_col]]
+                                    else:
+                                        sub = fishes[[state_col, survival_col]]
+                                    if sub.empty:
+                                        continue
+
+                                    grouped = (
+                                        sub.groupby(state_col, observed=True)[survival_col]
+                                        .agg(['sum', 'count'])
+                                        .reset_index()
+                                        .rename(columns={state_col: 'state', 'sum': 'successes'})
+                                    )
+                                    grouped['scenario'] = str(scenario)
+                                    grouped['species'] = str(species_name)
+                                    grouped['iteration'] = int(i)
+                                    grouped['day'] = pd.to_datetime(day)
+                                    grouped['move'] = int(l)
+                                    state_daily_frames.append(
+                                        grouped[['scenario', 'species', 'iteration', 'day', 'move', 'state', 'successes', 'count']]
+                                    )
+
+                                if state_daily_frames:
+                                    state_daily_df = pd.concat(state_daily_frames, ignore_index=True)
+                                    state_daily_df['scenario'] = state_daily_df['scenario'].astype(str)
+                                    state_daily_df['species'] = state_daily_df['species'].astype(str)
+                                    state_daily_df['state'] = state_daily_df['state'].astype(str)
+                                    state_daily_df['day'] = pd.to_datetime(state_daily_df['day'])
+                                    state_daily_df['iteration'] = state_daily_df['iteration'].astype(int)
+                                    state_daily_df['move'] = state_daily_df['move'].astype(int)
+                                    state_daily_df['successes'] = state_daily_df['successes'].astype(float)
+                                    state_daily_df['count'] = state_daily_df['count'].astype(float)
+                                    state_daily_df.to_hdf(
+                                        self.hdf,
+                                        key='State_Daily',
+                                        mode='a',
+                                        format='table',
+                                        append=True,
+                                        min_itemsize={'scenario': 128, 'species': 128, 'state': 256},
+                                    )
                                 
                                 # Update the dictionary (overwrite defaults)
                                 daily_row_dict['num_entrained'] = [np.int64(total_entrained)]
@@ -3504,32 +3558,80 @@ class simulation():
                     print(f"[DIAG][ERROR] 'Daily' table is missing from HDF5!", flush=True)
             self.daily_summary = store['Daily']
             self.daily_summary.iloc[:,6:] = self.daily_summary.iloc[:,6:].astype(float)
+            self.daily_summary['species_norm'] = self.daily_summary['species'].astype(str).str.strip()
+            self.daily_summary['scenario_norm'] = self.daily_summary['scenario'].astype(str).str.strip()
     
             # Print summary statistics header
             print("\n" + "="*60, flush=True)
             print("SIMULATION SUMMARY STATISTICS", flush=True)
             print("="*60, flush=True)
-            
+            state_daily = store['State_Daily'] if '/State_Daily' in store.keys() else None
+            if state_daily is not None:
+                state_daily = state_daily.copy()
+                state_daily['day'] = pd.to_datetime(state_daily['day'])
+                state_daily['move'] = pd.to_numeric(state_daily['move'], errors='coerce').fillna(0).astype(int)
+                state_daily['successes'] = pd.to_numeric(state_daily['successes'], errors='coerce').fillna(0.0)
+                state_daily['count'] = pd.to_numeric(state_daily['count'], errors='coerce').fillna(0.0)
+                state_daily['scenario'] = state_daily['scenario'].astype(str).str.strip()
+                state_daily['species'] = state_daily['species'].astype(str).str.strip()
+                state_daily['state'] = state_daily['state'].astype(str)
+
             logger.info("iterate through species and scenarios and summarize")
             for i in species:
                 for j in scens:
                         sim_key = f"simulations/{j}/{i}"
-                        if f"/{sim_key}" not in store.keys():
+                        dat = None
+                        state_dat = None
+
+                        if f"/{sim_key}" in store.keys():
+                            dat = store[sim_key]
+                        elif state_daily is not None:
+                            state_dat = state_daily[
+                                (state_daily['scenario'] == str(j).strip()) &
+                                (state_daily['species'] == str(i).strip())
+                            ].copy()
+                            if state_dat.empty:
+                                logger.warning("Missing simulation aggregates for scenario '%s' species '%s'", j, i)
+                                continue
+                        else:
                             logger.warning("Missing simulation data for key '%s'", sim_key)
                             continue
-                        dat = store[sim_key]
-    
+
                         # summarize species-scenario - whole project
-                        whole_proj_succ = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
-                            .sum().to_frame().reset_index(drop=False)\
-                            .rename(columns={'survival_%s' % (max(self.moves)):'successes'})
-                        whole_proj_count = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
-                            .count().to_frame().reset_index(drop=False)\
-                            .rename(columns={'survival_%s' % (max(self.moves)):'count'})
-                        whole_summ = whole_proj_succ.merge(whole_proj_count)
-                        whole_summ['prob'] = whole_summ['successes'] / whole_summ['count']
-                        whole_summ.fillna(0, inplace=True)
-                        
+                        if dat is not None:
+                            whole_proj_succ = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
+                                .sum().to_frame().reset_index(drop=False)\
+                                .rename(columns={'survival_%s' % (max(self.moves)):'successes'})
+                            whole_proj_count = dat.groupby(by=['iteration','day'])['survival_%s' % (max(self.moves))]\
+                                .count().to_frame().reset_index(drop=False)\
+                                .rename(columns={'survival_%s' % (max(self.moves)):'count'})
+                            whole_summ = whole_proj_succ.merge(whole_proj_count)
+                            whole_summ['prob'] = whole_summ['successes'] / whole_summ['count']
+                            whole_summ.fillna(0, inplace=True)
+                        else:
+                            daily_subset = self.daily_summary[
+                                (self.daily_summary['species_norm'] == str(i).strip()) &
+                                (self.daily_summary['scenario_norm'] == str(j).strip())
+                            ][['iteration', 'day', 'pop_size']].copy()
+                            daily_subset['day'] = pd.to_datetime(daily_subset['day'])
+                            daily_subset = daily_subset.groupby(['iteration', 'day'], as_index=False)['pop_size'].max()
+
+                            final_move = int(max(self.moves)) if len(self.moves) > 0 else 0
+                            final_state = state_dat[state_dat['move'] == final_move]
+                            if final_state.empty:
+                                final_succ = pd.DataFrame(columns=['iteration', 'day', 'successes'])
+                            else:
+                                final_succ = final_state.groupby(['iteration', 'day'], as_index=False)['successes'].sum()
+
+                            whole_summ = daily_subset.merge(final_succ, on=['iteration', 'day'], how='left')
+                            whole_summ['successes'] = whole_summ['successes'].fillna(0.0)
+                            whole_summ['count'] = whole_summ['pop_size'].astype(float)
+                            whole_summ['prob'] = np.where(
+                                whole_summ['count'] > 0,
+                                whole_summ['successes'] / whole_summ['count'],
+                                0.0,
+                            )
+
                         # give a summary of whole project survival
                         logger.info("==== Whole Project Survival Summary ====")
 
@@ -3580,21 +3682,36 @@ class simulation():
 
                         self.beta_dict['%s_%s_%s' % (j, i, 'whole')] = [j, i, 'whole', mean_emp, std_emp, lcl_emp, ucl_emp]
                         for l in self.moves:
-                            if l > 0:
-                                sub_dat = dat[dat['survival_%s' % (l-1)] == 1]
+                            if dat is not None:
+                                if l > 0:
+                                    sub_dat = dat[dat['survival_%s' % (l-1)] == 1]
+                                else:
+                                    sub_dat = dat
+                                route_succ = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
+                                    .sum().to_frame().reset_index(drop=False)\
+                                    .rename(columns={'survival_%s' % (l):'successes'})
+                                route_count = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
+                                    .count().to_frame().reset_index(drop=False)\
+                                    .rename(columns={'survival_%s' % (l):'count'})
+                                route_summ = route_succ.merge(route_count)
+                                route_summ['prob'] = route_summ['successes'] / route_summ['count']
+                                route_state_col = 'state_%s' % (l)
                             else:
-                                sub_dat = dat
-                            route_succ = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
-                                .sum().to_frame().reset_index(drop=False)\
-                                .rename(columns={'survival_%s' % (l):'successes'})
-                            route_count = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
-                                .count().to_frame().reset_index(drop=False)\
-                                .rename(columns={'survival_%s' % (l):'count'})
-                            route_summ = route_succ.merge(route_count)
-                            route_summ['prob'] = route_summ['successes'] / route_summ['count']
-                            states = route_summ['state_%s' % (l)].unique()
+                                route_summ = state_dat[state_dat['move'] == int(l)][
+                                    ['iteration', 'day', 'state', 'successes', 'count']
+                                ].copy()
+                                if route_summ.empty:
+                                    continue
+                                route_summ['prob'] = np.where(
+                                    route_summ['count'] > 0,
+                                    route_summ['successes'] / route_summ['count'],
+                                    0.0,
+                                )
+                                route_state_col = 'state'
+
+                            states = route_summ[route_state_col].unique()
                             for m in states:
-                                st_df = route_summ[route_summ['state_%s' % (l)] == m]
+                                st_df = route_summ[route_summ[route_state_col] == m]
                                 prob_values = st_df['prob'].values
                                 if prob_values.size == 0:
                                     logger.warning(
@@ -3627,7 +3744,8 @@ class simulation():
                                                                           st_lcl, 
                                                                           st_ucl]
                         logger.info("Fit beta distributions to states")
-                        del dat
+                        if dat is not None:
+                            del dat
     
                 self.beta_df = pd.DataFrame.from_dict(data=self.beta_dict, orient='index',
                                                        columns=['scenario number','species','state','survival rate','variance','ll','ul'])
