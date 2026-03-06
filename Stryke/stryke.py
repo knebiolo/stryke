@@ -692,6 +692,49 @@ class simulation():
         # 8. Hydrograph.
         if "hydrograph_file" in data_dict:
             self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
+            if self.input_hydrograph_df is None:
+                raise ValueError(f"Failed to load hydrograph file: {data_dict['hydrograph_file']}")
+
+            hydro_cols = set(self.input_hydrograph_df.columns.tolist())
+            if {'datetimeUTC', 'DAvgFlow_prorate'}.issubset(hydro_cols):
+                self.input_hydrograph_df['datetimeUTC'] = pd.to_datetime(
+                    self.input_hydrograph_df['datetimeUTC'],
+                    errors='coerce',
+                )
+                self.input_hydrograph_df['DAvgFlow_prorate'] = pd.to_numeric(
+                    self.input_hydrograph_df['DAvgFlow_prorate'],
+                    errors='coerce',
+                )
+                invalid_dates = int(self.input_hydrograph_df['datetimeUTC'].isna().sum())
+                invalid_flows = int(self.input_hydrograph_df['DAvgFlow_prorate'].isna().sum())
+                if invalid_dates or invalid_flows:
+                    raise ValueError(
+                        "Hydrograph contains invalid datetimeUTC/DAvgFlow_prorate values: "
+                        f"invalid_dates={invalid_dates}, invalid_flows={invalid_flows}. "
+                        "Fix or remove malformed rows in hydrograph.csv."
+                    )
+            elif {'Date', 'Discharge'}.issubset(hydro_cols):
+                self.input_hydrograph_df['datetimeUTC'] = pd.to_datetime(
+                    self.input_hydrograph_df['Date'],
+                    errors='coerce',
+                )
+                self.input_hydrograph_df['DAvgFlow_prorate'] = pd.to_numeric(
+                    self.input_hydrograph_df['Discharge'],
+                    errors='coerce',
+                )
+                invalid_dates = int(self.input_hydrograph_df['datetimeUTC'].isna().sum())
+                invalid_flows = int(self.input_hydrograph_df['DAvgFlow_prorate'].isna().sum())
+                if invalid_dates or invalid_flows:
+                    raise ValueError(
+                        "Hydrograph contains invalid Date/Discharge values: "
+                        f"invalid_dates={invalid_dates}, invalid_flows={invalid_flows}. "
+                        "Fix or remove malformed rows in hydrograph.csv."
+                    )
+            else:
+                raise KeyError(
+                    "Hydrograph file must include either "
+                    "['datetimeUTC', 'DAvgFlow_prorate'] or ['Date', 'Discharge']."
+                )
             # Verbose diagnostics commented out
             # if DIAGNOSTICS_ENABLED:
             #     print(f"[DIAG] Hydrograph DataFrame shape: {self.input_hydrograph_df.shape if self.input_hydrograph_df is not None else 'None'}")
@@ -1754,7 +1797,8 @@ class simulation():
                 pen_id = f"{facility}|{unit}"
             penstocks_by_facility.setdefault(facility, {}).setdefault(pen_id, []).append(unit)
 
-        unit_flow_allocations = {}
+        # Always return explicit allocations for every unit to avoid downstream key-mismatch churn.
+        unit_flow_allocations = {u: 0.0 for u in unit_nodes}
         for facility, penstocks in penstocks_by_facility.items():
             if not penstocks:
                 continue
@@ -2186,17 +2230,27 @@ class simulation():
                     logger.info("Hydrology sheet detected. Applied proration and datetime conversion.")
                 # If 'DAvgFlow_prorate' and 'datetimeUTC' exist, use them (uploaded hydrograph)
                 elif 'DAvgFlow_prorate' in df.columns and 'datetimeUTC' in df.columns:
-                    logger.info("Webapp hydrograph detected. Columns already processed.")
+                    df['datetimeUTC'] = pd.to_datetime(df['datetimeUTC'], errors='coerce')
+                    df['DAvgFlow_prorate'] = pd.to_numeric(df['DAvgFlow_prorate'], errors='coerce')
+                    bad_rows = df['datetimeUTC'].isna() | df['DAvgFlow_prorate'].isna()
+                    if bad_rows.any():
+                        bad_count = int(bad_rows.sum())
+                        raise ValueError(
+                            "Webapp hydrograph contains malformed rows in "
+                            "['datetimeUTC', 'DAvgFlow_prorate'] "
+                            f"(invalid rows={bad_count})."
+                        )
+                    logger.info("Webapp hydrograph detected. Columns validated and normalized.")
                 else:
                     logger.error(f"Hydrograph DataFrame missing required columns. Columns: {df.columns.tolist()}")
                     raise KeyError("Hydrograph DataFrame must have either ['Discharge', 'Date'] or ['DAvgFlow_prorate', 'datetimeUTC'] columns.")
                 # extract year
-                df['year'] = pd.DatetimeIndex(df['datetimeUTC']).year
+                df['year'] = df['datetimeUTC'].dt.year
                 logger.info(f"Filtering hydrograph for flow_year={flow_year}")
                 df = df[df['year'] == flow_year]
                 logger.info(f"After year filter: shape={df.shape}")
                 # get months
-                df['month'] = pd.DatetimeIndex(df['datetimeUTC']).month.astype(int)
+                df['month'] = df['datetimeUTC'].dt.month.astype(int)
                 scen_months_int = [int(m) for m in scen_months]
                 logger.info(f"Filtering months: {scen_months_int}")
                 for i in scen_months_int:
@@ -2238,11 +2292,24 @@ class simulation():
         
         # Validate that hydrograph is not empty
         if flow_df.empty:
+            available_months = "Unknown"
+            available_years = "Unknown"
+            if hasattr(self, "input_hydrograph_df") and isinstance(self.input_hydrograph_df, pd.DataFrame):
+                hydro_df = self.input_hydrograph_df
+                if 'datetimeUTC' in hydro_df.columns:
+                    dt_series = pd.to_datetime(hydro_df['datetimeUTC'], errors='coerce')
+                    valid_dt = dt_series.dropna()
+                    if len(valid_dt) > 0:
+                        available_months = sorted(valid_dt.dt.month.unique().tolist())
+                        available_years = sorted(valid_dt.dt.year.unique().tolist())
+                    else:
+                        available_months = []
+                        available_years = []
             error_msg = (
                 f"ERROR: Hydrograph is empty after filtering for scenario '{scen}'.\n"
                 f"Requested months: {scen_months}, year: {flow_year if discharge_type == 'hydrograph' else 'N/A'}\n"
-                f"Available data months: {self.input_hydrograph_df['datetimeUTC'].dt.month.unique().tolist() if 'datetimeUTC' in self.input_hydrograph_df.columns else 'Unknown'}\n"
-                f"Available data years: {self.input_hydrograph_df['datetimeUTC'].dt.year.unique().tolist() if 'datetimeUTC' in self.input_hydrograph_df.columns else 'Unknown'}\n"
+                f"Available data months: {available_months}\n"
+                f"Available data years: {available_years}\n"
                 f"Please ensure your hydrograph data covers the requested time period."
             )
             logger.error(error_msg)
@@ -3141,7 +3208,7 @@ class simulation():
                                               mode='a',
                                               format='table',
                                               append=True,
-                                              min_itemsize=20)
+                                              min_itemsize=256)
                                 self.hdf.flush()
     
                                 if self.output_units == 'metric':
@@ -3300,12 +3367,15 @@ class simulation():
                                     })
                                 if route_records:
                                     route_flow_df = pd.DataFrame(route_records)
+                                    route_flow_df['scenario'] = route_flow_df['scenario'].astype(str)
+                                    route_flow_df['route'] = route_flow_df['route'].astype(str)
                                     route_flow_df['day'] = pd.to_datetime(route_flow_df['day'])
                                     route_flow_df.to_hdf(self.hdf,
                                                          key='Route_Flows',
                                                          mode='a',
                                                          format='table',
-                                                         append=True)
+                                                         append=True,
+                                                         min_itemsize={'scenario': 128, 'route': 256})
                                 hours_dict = context.get('hours_dict', {}) if isinstance(context, dict) else {}
                                 unit_flow_allocations = (
                                     context.get('unit_flow_allocations', {})
@@ -3337,16 +3407,19 @@ class simulation():
                                         })
                                     if hours_records:
                                         unit_hours_df = pd.DataFrame(hours_records)
+                                        unit_hours_df['scenario'] = unit_hours_df['scenario'].astype(str)
+                                        unit_hours_df['route'] = unit_hours_df['route'].astype(str)
                                         unit_hours_df['day'] = pd.to_datetime(unit_hours_df['day'])
                                         unit_hours_df.to_hdf(self.hdf,
                                                              key='Unit_Hours',
                                                              mode='a',
                                                              format='table',
-                                                             append=True)
+                                                             append=True,
+                                                             min_itemsize={'scenario': 128, 'route': 256})
                                 self._route_flow_logged_keys.add(route_flow_key)
                         self._route_flow_daily = defaultdict(float)
 
-                        logger.info("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
+                        logger.debug("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
                 self.hdf.flush()
                 logger.info("Completed Scenario %s for Species %s",scen,species)
                 print(f"[INFO] ✅ Completed scenario '{scen}' for species {species}", flush=True)

@@ -645,9 +645,17 @@ if __name__ == '__main__':
                 df_hydro.to_csv(hydro_file_path, index=False)
                 session['hydrograph_file'] = hydro_file_path
                 
-                # Extract flow_year from the hydrograph data.
-                df_hydro.reset_index(inplace=True)
-                flow_year = int(df_hydro.datetimeUTC.dt.year.iloc[0]) if not df_hydro.empty else None
+                # Extract flow_year from validated datetime values.
+                df_hydro.reset_index(inplace=True, drop=True)
+                if 'datetimeUTC' not in df_hydro.columns:
+                    raise ValueError("Hydrograph is missing required 'datetimeUTC' column.")
+                df_hydro['datetimeUTC'] = pd.to_datetime(df_hydro['datetimeUTC'], errors='coerce')
+                invalid_dates = int(df_hydro['datetimeUTC'].isna().sum())
+                if invalid_dates:
+                    raise ValueError(
+                        f"Hydrograph contains {invalid_dates} invalid datetime values in 'datetimeUTC'."
+                    )
+                flow_year = int(df_hydro['datetimeUTC'].dt.year.iloc[0]) if not df_hydro.empty else None
                 
                 logger.debug('hydrograph dataframe %s records long',df_hydro.shape)
                 # Force the Flow column to be the string 'hydrograph'
