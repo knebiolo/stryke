@@ -114,6 +114,9 @@ DIAGNOSTICS_ENABLED = _env_flag("STRYKE_DIAGNOSTICS", "0")
 VERBOSE_DIAGNOSTICS = _env_flag("STRYKE_VERBOSE_DIAGNOSTICS", "0")
 STORE_AGENT_TRACES = _env_flag("STRYKE_STORE_AGENT_TRACES", "0")
 STORE_SIMULATION_TABLE = _env_flag("STRYKE_STORE_SIM_TABLE", "0")
+# Keep day-level progress logs visible across long runs by default.
+# Set STRYKE_DAY_PROGRESS_ALL_ITERS=0 to restore legacy behavior (first 3 iterations only).
+DAY_PROGRESS_ALL_ITERS = _env_flag("STRYKE_DAY_PROGRESS_ALL_ITERS", "1")
 # When False: Only shows summaries and important events
 
 # Get the directory of the current script
@@ -2914,8 +2917,9 @@ class simulation():
                                 'latent': 0,
                             }
                         
-                        # Progress update every 10% of days for first few iterations
-                        if i < 3 and day_counter % max(1, int(total_days / 10)) == 0:
+                        # Progress update every 10% of days.
+                        # Default is all iterations; can be limited to first 3 with STRYKE_DAY_PROGRESS_ALL_ITERS=0.
+                        if (DAY_PROGRESS_ALL_ITERS or i < 3) and day_counter % max(1, int(total_days / 10)) == 0:
                             print(f"[INFO] Day {day_counter} of {total_days} (Iteration {int(i+1)})", flush=True)
 
                         if DIAGNOSTICS_ENABLED and VERBOSE_DIAGNOSTICS:
