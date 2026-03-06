@@ -112,6 +112,7 @@ def _env_flag(name, default="0"):
 
 DIAGNOSTICS_ENABLED = _env_flag("STRYKE_DIAGNOSTICS", "0")
 VERBOSE_DIAGNOSTICS = _env_flag("STRYKE_VERBOSE_DIAGNOSTICS", "0")
+STORE_AGENT_TRACES = _env_flag("STRYKE_STORE_AGENT_TRACES", "0")
 # When False: Only shows summaries and important events
 
 # Get the directory of the current script
@@ -1525,10 +1526,10 @@ class simulation():
                 # Track which factor killed this fish (if it died)
                 if not hasattr(self, '_mortality_components'):
                     self._mortality_components = {
-                        'impingement': [],
-                        'blade_strike': [],
-                        'barotrauma': [],
-                        'latent': []
+                        'impingement': 0,
+                        'blade_strike': 0,
+                        'barotrauma': 0,
+                        'latent': 0,
                     }
                 
                 # Simulate sequential exposure to mortality factors
@@ -1558,31 +1559,13 @@ class simulation():
                 
                 # Record which factor killed this fish (or 0 if survived)
                 if mortality_cause == 'impingement':
-                    self._mortality_components['impingement'].append(1)
-                    self._mortality_components['blade_strike'].append(0)
-                    self._mortality_components['barotrauma'].append(0)
-                    self._mortality_components['latent'].append(0)
+                    self._mortality_components['impingement'] += 1
                 elif mortality_cause == 'blade_strike':
-                    self._mortality_components['impingement'].append(0)
-                    self._mortality_components['blade_strike'].append(1)
-                    self._mortality_components['barotrauma'].append(0)
-                    self._mortality_components['latent'].append(0)
+                    self._mortality_components['blade_strike'] += 1
                 elif mortality_cause == 'barotrauma':
-                    self._mortality_components['impingement'].append(0)
-                    self._mortality_components['blade_strike'].append(0)
-                    self._mortality_components['barotrauma'].append(1)
-                    self._mortality_components['latent'].append(0)
+                    self._mortality_components['barotrauma'] += 1
                 elif mortality_cause == 'latent':
-                    self._mortality_components['impingement'].append(0)
-                    self._mortality_components['blade_strike'].append(0)
-                    self._mortality_components['barotrauma'].append(0)
-                    self._mortality_components['latent'].append(1)
-                else:
-                    # Fish survived all factors
-                    self._mortality_components['impingement'].append(0)
-                    self._mortality_components['blade_strike'].append(0)
-                    self._mortality_components['barotrauma'].append(0)
-                    self._mortality_components['latent'].append(0)
+                    self._mortality_components['latent'] += 1
                 
             try:
                 return np.float32(prob)
@@ -2620,7 +2603,7 @@ class simulation():
                 f"(daily_rate={daily_rate}, ent_rate={ent_rate[0]}, curr_Q={curr_Q})."
             )
 
-        max_daily_fish = int(os.environ.get("STRYKE_MAX_DAILY_FISH", "5000000"))
+        max_daily_fish = int(os.environ.get("STRYKE_MAX_DAILY_FISH", "100000"))
         if n_fish > max_daily_fish:
             raise ValueError(
                 f"Computed population size n={int(n_fish)} exceeds STRYKE_MAX_DAILY_FISH={max_daily_fish}. "
@@ -2654,10 +2637,10 @@ class simulation():
         
         # Initialize mortality component tracking for "Wheel of Death" visualization
         self._mortality_components = {
-            'impingement': [],
-            'blade_strike': [],
-            'barotrauma': [],
-            'latent': []
+            'impingement': 0,
+            'blade_strike': 0,
+            'barotrauma': 0,
+            'latent': 0,
         }
         
         # Create route and associated data.
@@ -2924,10 +2907,10 @@ class simulation():
                         # Reset mortality components at the start of each day
                         if hasattr(self, '_mortality_components'):
                             self._mortality_components = {
-                                'impingement': [],
-                                'blade_strike': [],
-                                'barotrauma': [],
-                                'latent': []
+                                'impingement': 0,
+                                'blade_strike': 0,
+                                'barotrauma': 0,
+                                'latent': 0,
                             }
                         
                         # Progress update every 10% of days for first few iterations
@@ -3043,11 +3026,39 @@ class simulation():
                                     n = self.population_sim(self.output_units, spc_dat, curr_Q)
                                 if int(n) == 0:
                                     n = 1
-    
-                                if int(n) <= 0:
+                                n = int(n)
+
+                                if n <= 0:
                                     raise ValueError(
                                         f"Population size resolved to {n} for species '{species_name}' "
                                         f"scenario '{scenario}' on day {day}."
+                                    )
+                                warn_daily_fish = int(os.environ.get("STRYKE_WARN_DAILY_FISH", "50000"))
+                                max_daily_fish = int(os.environ.get("STRYKE_MAX_DAILY_FISH", "100000"))
+                                if n >= warn_daily_fish:
+                                    logger.warning(
+                                        "Large daily fish population: n=%s species=%s scenario=%s day=%s curr_Q=%s",
+                                        n,
+                                        species_name,
+                                        scenario,
+                                        day,
+                                        float(curr_Q),
+                                    )
+                                if n > max_daily_fish:
+                                    raise ValueError(
+                                        f"Population size n={n} exceeds STRYKE_MAX_DAILY_FISH={max_daily_fish} "
+                                        f"for species '{species_name}', scenario '{scenario}', day {day}. "
+                                        "Reduce entrainment parameters or increase STRYKE_MAX_DAILY_FISH deliberately."
+                                    )
+
+                                max_state_rows = int(os.environ.get("STRYKE_MAX_DAILY_STATE_ROWS", "2000000"))
+                                estimated_state_rows = n * max(1, len(self.moves))
+                                if estimated_state_rows > max_state_rows:
+                                    raise ValueError(
+                                        f"Estimated daily state rows {estimated_state_rows} exceed "
+                                        f"STRYKE_MAX_DAILY_STATE_ROWS={max_state_rows} "
+                                        f"(n={n}, moves={len(self.moves)}, species='{species_name}', "
+                                        f"scenario='{scenario}', day={day})."
                                     )
                                 if not math.isnan(s):
                                     try:
@@ -3211,8 +3222,9 @@ class simulation():
                                 
                                     #logger.info('applied vectorized movement')
                                 
-                                    fishes[f'draw_{k}'] = np.float32(dice)
-                                    fishes[f'rates_{k}'] = np.float32(rates)
+                                    if STORE_AGENT_TRACES:
+                                        fishes[f'draw_{k}'] = np.float32(dice)
+                                        fishes[f'rates_{k}'] = np.float32(rates)
                                     fishes[f'survival_{k}'] = np.float32(survival)
                                 
                                     if k < max(self.moves):
@@ -3287,16 +3299,9 @@ class simulation():
                                 
                                 # Calculate mortality components from tracked data
                                 if hasattr(self, '_mortality_components') and total_entrained > 0:
-                                    # Sum mortality from all fish processed today (list was cleared at day start)
-                                    n_components = len(self._mortality_components['impingement'])
-                                    if n_components > 0:
-                                        daily_row_dict['mortality_impingement'] = [np.int64(np.sum(self._mortality_components['impingement']))]
-                                        daily_row_dict['mortality_blade_strike'] = [np.int64(np.sum(self._mortality_components['blade_strike']))]
-                                        daily_row_dict['mortality_barotrauma'] = [np.int64(np.sum(self._mortality_components['barotrauma']))]
-                                    else:
-                                        daily_row_dict['mortality_impingement'] = [np.int64(0)]
-                                        daily_row_dict['mortality_blade_strike'] = [np.int64(0)]
-                                        daily_row_dict['mortality_barotrauma'] = [np.int64(0)]
+                                    daily_row_dict['mortality_impingement'] = [np.int64(self._mortality_components.get('impingement', 0))]
+                                    daily_row_dict['mortality_blade_strike'] = [np.int64(self._mortality_components.get('blade_strike', 0))]
+                                    daily_row_dict['mortality_barotrauma'] = [np.int64(self._mortality_components.get('barotrauma', 0))]
                                 else:
                                     daily_row_dict['mortality_impingement'] = [np.int64(0)]
                                     daily_row_dict['mortality_blade_strike'] = [np.int64(0)]
