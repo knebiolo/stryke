@@ -244,6 +244,56 @@ def _normalize_identifier(value):
             return str(int(value))
     return str(value).strip() or None
 
+def _validate_operating_distribution_params(
+    *,
+    scenario,
+    facility,
+    unit_key,
+    shape,
+    location,
+    scale,
+    prob_not_operating,
+):
+    """Validate pumped-storage/peaking operating distribution inputs."""
+    if pd.isna(prob_not_operating) or not np.isfinite(prob_not_operating):
+        raise ValueError(
+            f"Operating Scenarios has invalid Prob_Not_Op for scenario '{scenario}', "
+            f"facility '{facility}', unit '{unit_key}': {prob_not_operating!r}"
+        )
+    if prob_not_operating < 0.0 or prob_not_operating > 1.0:
+        raise ValueError(
+            f"Operating Scenarios Prob_Not_Op must be between 0 and 1 for scenario '{scenario}', "
+            f"facility '{facility}', unit '{unit_key}'. Got {prob_not_operating}."
+        )
+
+    # If the unit never operates, distribution parameters are not used.
+    if prob_not_operating >= 1.0:
+        return
+
+    invalid_fields = [
+        name for name, value in (
+            ('shape', shape),
+            ('location', location),
+            ('scale', scale),
+        )
+        if pd.isna(value) or not np.isfinite(value)
+    ]
+    if invalid_fields:
+        raise ValueError(
+            f"Operating Scenarios has missing/invalid values for scenario '{scenario}', "
+            f"facility '{facility}', unit '{unit_key}': {invalid_fields}"
+        )
+    if shape <= 0.0:
+        raise ValueError(
+            f"Operating Scenarios lognormal shape must be > 0 for scenario '{scenario}', "
+            f"facility '{facility}', unit '{unit_key}'. Got {shape}."
+        )
+    if scale <= 0.0:
+        raise ValueError(
+            f"Operating Scenarios lognormal scale must be > 0 for scenario '{scenario}', "
+            f"facility '{facility}', unit '{unit_key}'. Got {scale}."
+        )
+
 def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
     """
     Backward-compatible wrapper:
@@ -2471,25 +2521,18 @@ class simulation():
                     shape = pd.to_numeric(op_row['shape'], errors='coerce')
                     location = pd.to_numeric(op_row['location'], errors='coerce')
                     scale = pd.to_numeric(op_row['scale'], errors='coerce')
-                    
-                    hours_operated[i] = lognorm.rvs(shape,location,scale,1000)
     
                     # flip a coin - see if this unit is running today
                     prob_not_operating = pd.to_numeric(op_row['Prob_Not_Op'], errors='coerce')
-                    invalid_fields = [
-                        name for name, value in (
-                            ('shape', shape),
-                            ('location', location),
-                            ('scale', scale),
-                            ('Prob_Not_Op', prob_not_operating),
-                        )
-                        if pd.isna(value)
-                    ]
-                    if invalid_fields:
-                        raise ValueError(
-                            f"Operating Scenarios has missing/invalid values for scenario '{scenario}', "
-                            f"facility '{facility}', unit '{unit_key}': {invalid_fields}"
-                        )
+                    _validate_operating_distribution_params(
+                        scenario=scenario,
+                        facility=facility,
+                        unit_key=unit_key,
+                        shape=shape,
+                        location=location,
+                        scale=scale,
+                        prob_not_operating=prob_not_operating,
+                    )
                     
                     #if operations == 'independent':
                     if np.random.uniform(0,1,1) <= prob_not_operating:
@@ -2498,7 +2541,8 @@ class simulation():
 
                     else:
                         # TODO Bad Creek Analysis halved hours - change back
-                        hours = lognorm.rvs(shape,location,scale,1)[0] #* 0.412290503
+                        hours = lognorm.rvs(shape, loc=location, scale=scale, size=1)[0] #* 0.412290503
+                        hours_operated[i] = hours
 
                         if hours > 24.:
                             hours = 24.

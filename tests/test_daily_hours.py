@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from Stryke import stryke as stryke_module
 from Stryke.stryke import simulation
@@ -83,9 +84,9 @@ def test_daily_hours_pumped_storage_accepts_webapp_headers_and_unit_lookup(monke
                 "Unit": "2",
                 "Hours": 24.0,
                 "Prob Not Operating": 1.0,
-                "Shape": 0.5,
+                "Shape": 0.0,
                 "Location": 0.0,
-                "Scale": 6.0,
+                "Scale": 0.0,
             },
             {
                 "Scenario": "ScenarioA",
@@ -104,7 +105,7 @@ def test_daily_hours_pumped_storage_accepts_webapp_headers_and_unit_lookup(monke
     monkeypatch.setattr(
         stryke_module.lognorm,
         "rvs",
-        lambda shape, location, scale, size: np.full(size, 6.0),
+        lambda shape, *args, **kwargs: np.full(kwargs.get("size", args[-1] if args else 1), 6.0),
     )
     monkeypatch.setattr(
         stryke_module.np.random,
@@ -127,3 +128,49 @@ def test_daily_hours_pumped_storage_accepts_webapp_headers_and_unit_lookup(monke
     assert flow_dict["FacilityA - Unit 2"] == 0.0
     assert tot_hours == 6.0
     assert tot_flow == 30.0 * 6.0 * 3600.0
+
+
+def test_daily_hours_pumped_storage_invalid_active_distribution_raises():
+    sim = simulation.__new__(simulation)
+    sim.unit_params = pd.DataFrame(
+        [
+            {"Facility": "FacilityA", "Unit": "1", "op_order": 1, "Qcap": 30.0},
+        ],
+        index=pd.Index(["FacilityA - Unit 1"], name="Unit_Name"),
+    )
+    sim.facility_params = pd.DataFrame(
+        [
+            {
+                "Operations": "pumped storage",
+                "Min_Op_Flow": 0.0,
+                "Env_Flow": 0.0,
+                "Bypass_Flow": 0.0,
+            }
+        ],
+        index=pd.Index(["FacilityA"], name="Facility"),
+    )
+    sim.operating_scenarios_df = pd.DataFrame(
+        [
+            {
+                "Scenario": "ScenarioA",
+                "Facility": "FacilityA",
+                "Unit": "1",
+                "Hours": 24.0,
+                "Prob Not Operating": 0.0,
+                "Shape": 0.0,
+                "Location": 0.0,
+                "Scale": 6.0,
+            },
+        ]
+    )
+
+    Q_dict = {
+        "curr_Q": 100.0,
+        "min_Q": {"FacilityA": 0.0},
+        "env_Q": {"FacilityA": 0.0},
+        "bypass_Q": {"FacilityA": 0.0},
+        "sta_cap": {"FacilityA": 100.0},
+    }
+
+    with pytest.raises(ValueError, match="lognormal shape must be > 0"):
+        sim.daily_hours(Q_dict, "ScenarioA")
