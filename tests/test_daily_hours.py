@@ -1,5 +1,7 @@
+import numpy as np
 import pandas as pd
 
+from Stryke import stryke as stryke_module
 from Stryke.stryke import simulation
 
 
@@ -51,3 +53,77 @@ def test_daily_hours_run_of_river_keys_and_flow():
     assert flow_dict["2"] == 0.0
     assert tot_hours == 48.0
     assert tot_flow == 50.0 * 24.0 * 3600.0
+
+
+def test_daily_hours_pumped_storage_accepts_webapp_headers_and_unit_lookup(monkeypatch):
+    sim = simulation.__new__(simulation)
+    sim.unit_params = pd.DataFrame(
+        [
+            {"Facility": "FacilityA", "Unit": "1", "op_order": 1, "Qcap": 30.0},
+            {"Facility": "FacilityA", "Unit": "2", "op_order": 2, "Qcap": 40.0},
+        ],
+        index=pd.Index(["FacilityA - Unit 1", "FacilityA - Unit 2"], name="Unit_Name"),
+    )
+    sim.facility_params = pd.DataFrame(
+        [
+            {
+                "Operations": "pumped storage",
+                "Min_Op_Flow": 0.0,
+                "Env_Flow": 0.0,
+                "Bypass_Flow": 0.0,
+            }
+        ],
+        index=pd.Index(["FacilityA"], name="Facility"),
+    )
+    sim.operating_scenarios_df = pd.DataFrame(
+        [
+            {
+                "Scenario": "ScenarioA",
+                "Facility": "FacilityA",
+                "Unit": "2",
+                "Hours": 24.0,
+                "Prob Not Operating": 1.0,
+                "Shape": 0.5,
+                "Location": 0.0,
+                "Scale": 6.0,
+            },
+            {
+                "Scenario": "ScenarioA",
+                "Facility": "FacilityA",
+                "Unit": "1",
+                "Hours": 24.0,
+                "Prob Not Operating": 0.0,
+                "Shape": 0.5,
+                "Location": 0.0,
+                "Scale": 6.0,
+            },
+        ],
+        index=[20, 10],
+    )
+
+    monkeypatch.setattr(
+        stryke_module.lognorm,
+        "rvs",
+        lambda shape, location, scale, size: np.full(size, 6.0),
+    )
+    monkeypatch.setattr(
+        stryke_module.np.random,
+        "uniform",
+        lambda low, high, size: np.array([0.5]),
+    )
+
+    Q_dict = {
+        "curr_Q": 100.0,
+        "min_Q": {"FacilityA": 0.0},
+        "env_Q": {"FacilityA": 0.0},
+        "bypass_Q": {"FacilityA": 0.0},
+        "sta_cap": {"FacilityA": 100.0},
+    }
+    tot_hours, tot_flow, hours_dict, flow_dict = sim.daily_hours(Q_dict, "ScenarioA")
+
+    assert hours_dict["FacilityA - Unit 1"] == 6.0
+    assert hours_dict["FacilityA - Unit 2"] == 0.0
+    assert flow_dict["FacilityA - Unit 1"] == 30.0 * 6.0 * 3600.0
+    assert flow_dict["FacilityA - Unit 2"] == 0.0
+    assert tot_hours == 6.0
+    assert tot_flow == 30.0 * 6.0 * 3600.0

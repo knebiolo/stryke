@@ -208,6 +208,42 @@ def _normalize_facility_flow_columns(df):
         df = df.rename(columns=updates)
     return df
 
+def _normalize_operating_scenario_columns(df):
+    """Normalize operating-scenario headers across Excel and webapp CSV inputs."""
+    if df is None or df.empty:
+        return df
+    rename_map = {
+        "Prob Not Operating": "Prob_Not_Op",
+        "prob_not_operating": "Prob_Not_Op",
+        "prob not operating": "Prob_Not_Op",
+        "Shape": "shape",
+        "shape ": "shape",
+        "Location": "location",
+        "location ": "location",
+        "Scale": "scale",
+        "scale ": "scale",
+    }
+    updates = {src: dst for src, dst in rename_map.items() if src in df.columns and dst not in df.columns}
+    if updates:
+        df = df.rename(columns=updates)
+    return df
+
+def _normalize_identifier(value):
+    """Normalize identifiers so numeric and string unit ids compare consistently."""
+    if pd.isna(value):
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        return value or None
+    if isinstance(value, (int, np.integer)):
+        return str(int(value))
+    if isinstance(value, (float, np.floating)):
+        if np.isnan(value):
+            return None
+        if float(value).is_integer():
+            return str(int(value))
+    return str(value).strip() or None
+
 def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
     """
     Backward-compatible wrapper:
@@ -453,8 +489,11 @@ class simulation():
                                                     index_col = None,
                                                     usecols = "B:I",
                                                     skiprows = 8)
+        self.operating_scenarios_df = _normalize_operating_scenario_columns(self.operating_scenarios_df)
         
-        self.operating_scenarios_df['OpScenario'] = self.operating_scenarios_df.Scenario + " " + self.operating_scenarios_df.Unit
+        self.operating_scenarios_df['OpScenario'] = (
+            self.operating_scenarios_df.Scenario.astype(str) + " " + self.operating_scenarios_df.Unit.astype(str)
+        )
         self.ops_scens = None
         
         self.flow_scenarios = self.flow_scenarios_df['Scenario'].unique()
@@ -662,8 +701,9 @@ class simulation():
         if "operating_scenarios_file" in data_dict:
             self.operating_scenarios_df = read_csv_if_exists(
                 data_dict["operating_scenarios_file"],
-                numeric_cols=['Hours', 'Location', 'Prob Not Operating', 'Scale', 'Shape', 'Unit']
+                numeric_cols=['Hours', 'Location', 'Prob Not Operating', 'Scale', 'Shape']
             )
+            self.operating_scenarios_df = _normalize_operating_scenario_columns(self.operating_scenarios_df)
             #logger.info('operating scenarios columns', self.operating_scenarios_df.columns.to_list())
             # Verbose diagnostics commented out
             # if DIAGNOSTICS_ENABLED:
@@ -2337,7 +2377,8 @@ class simulation():
             print(f"[DIAG] daily_hours called: scenario={scenario}, Q_dict keys={list(Q_dict.keys())}", flush=True)
 
 
-        ops_df = self.operating_scenarios_df[self.operating_scenarios_df.Scenario == scenario]
+        ops_df = self.operating_scenarios_df[self.operating_scenarios_df.Scenario == scenario].copy()
+        ops_df = _normalize_operating_scenario_columns(ops_df)
         #ops_df.set_index('Unit', inplace = True)
         facilities = ops_df.Facility.unique()
         
@@ -2385,10 +2426,11 @@ class simulation():
             fac_type = seasonal_facs.at[facility,'Operations']
             fac_units = self.unit_params[self.unit_params.Facility == facility]
             if not fac_units.index.equals(pd.RangeIndex(start=0, stop=len(fac_units), step=1)):
-                fac_units.reset_index(drop=False, inplace=True)
+                fac_units = fac_units.reset_index(drop=False)
 
             #fac_units.set_index('Unit', inplace = True)
             fac_units = fac_units.sort_values(by = 'op_order')
+            facility_ops = ops_df[ops_df.Facility == facility].copy()
             #logger.debug('Facility Type is %s',fac_type)
             # if operations are modeled with a distribution 
             for i in fac_units.index:
@@ -2402,17 +2444,52 @@ class simulation():
                 if unit_key is None or (isinstance(unit_key, float) and np.isnan(unit_key)):
                     unit_key = i
                 unit_key = str(unit_key)
+                unit_match = _normalize_identifier(row.get('Unit', unit_key))
                 if fac_type != 'run-of-river':
                     order = fac_units.at[i,'op_order']
+                    unit_ops = facility_ops[
+                        facility_ops['Unit'].map(_normalize_identifier) == unit_match
+                    ]
+                    if unit_ops.empty:
+                        raise ValueError(
+                            f"Operating scenario row missing for scenario '{scenario}', "
+                            f"facility '{facility}', unit '{unit_key}'."
+                        )
+                    op_row = unit_ops.iloc[0]
+
+                    missing_cols = [
+                        col for col in ('shape', 'location', 'scale', 'Prob_Not_Op')
+                        if col not in op_row.index
+                    ]
+                    if missing_cols:
+                        raise ValueError(
+                            "Operating Scenarios is missing required pumped storage/peaking columns: "
+                            f"{missing_cols}. Found columns: {facility_ops.columns.tolist()}"
+                        )
+
                     # get log norm shape parameters
-                    shape = ops_df.at[i,'shape']
-                    location = ops_df.at[i,'location']
-                    scale = ops_df.at[i,'scale']
+                    shape = pd.to_numeric(op_row['shape'], errors='coerce')
+                    location = pd.to_numeric(op_row['location'], errors='coerce')
+                    scale = pd.to_numeric(op_row['scale'], errors='coerce')
                     
                     hours_operated[i] = lognorm.rvs(shape,location,scale,1000)
     
                     # flip a coin - see if this unit is running today
-                    prob_not_operating = ops_df.at[i,'Prob_Not_Op']
+                    prob_not_operating = pd.to_numeric(op_row['Prob_Not_Op'], errors='coerce')
+                    invalid_fields = [
+                        name for name, value in (
+                            ('shape', shape),
+                            ('location', location),
+                            ('scale', scale),
+                            ('Prob_Not_Op', prob_not_operating),
+                        )
+                        if pd.isna(value)
+                    ]
+                    if invalid_fields:
+                        raise ValueError(
+                            f"Operating Scenarios has missing/invalid values for scenario '{scenario}', "
+                            f"facility '{facility}', unit '{unit_key}': {invalid_fields}"
+                        )
                     
                     #if operations == 'independent':
                     if np.random.uniform(0,1,1) <= prob_not_operating:
