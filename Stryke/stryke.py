@@ -214,6 +214,7 @@ def _normalize_operating_scenario_columns(df):
         return df
     rename_map = {
         "Prob Not Operating": "Prob_Not_Op",
+        "Prob_Not_Operating": "Prob_Not_Op",
         "prob_not_operating": "Prob_Not_Op",
         "prob not operating": "Prob_Not_Op",
         "Shape": "shape",
@@ -293,6 +294,36 @@ def _validate_operating_distribution_params(
             f"Operating Scenarios lognormal scale must be > 0 for scenario '{scenario}', "
             f"facility '{facility}', unit '{unit_key}'. Got {scale}."
         )
+
+def _detect_pumped_storage_mode(op_row):
+    """
+    Detect pumped storage operating mode:
+    - 'fixed': Use Hours column directly (shape/location/scale are ALL zero or missing)
+    - 'stochastic': Use lognormal hurdle model (any distribution param is non-zero)
+    
+    Returns: ('fixed', fixed_hours) or ('stochastic', None)
+    """
+    shape = pd.to_numeric(op_row.get('shape'), errors='coerce')
+    location = pd.to_numeric(op_row.get('location'), errors='coerce')
+    scale = pd.to_numeric(op_row.get('scale'), errors='coerce')
+    
+    # Check if ANY distribution param is non-zero (stochastic mode indicator)
+    has_nonzero_shape = pd.notna(shape) and shape != 0.0
+    has_nonzero_scale = pd.notna(scale) and scale != 0.0
+    has_nonzero_location = pd.notna(location) and location != 0.0
+    
+    if has_nonzero_shape or has_nonzero_scale or has_nonzero_location:
+        # At least one param is non-zero -> stochastic mode
+        return ('stochastic', None)
+    
+    # All params are zero or missing -> fixed hours mode
+    hours = pd.to_numeric(op_row.get('Hours'), errors='coerce')
+    if pd.isna(hours) or hours < 0:
+        raise ValueError(
+            f"Pumped storage unit has neither valid distribution parameters "
+            f"nor valid Hours value. Hours={hours}, shape={shape}, scale={scale}"
+        )
+    return ('fixed', float(hours))
 
 def _read_csv_if_exists_compat(file_path=None, *args, **kwargs):
     """
@@ -2507,49 +2538,82 @@ class simulation():
                         )
                     op_row = unit_ops.iloc[0]
 
-                    missing_cols = [
-                        col for col in ('shape', 'location', 'scale', 'Prob_Not_Op')
-                        if col not in op_row.index
-                    ]
-                    if missing_cols:
-                        raise ValueError(
-                            "Operating Scenarios is missing required pumped storage/peaking columns: "
-                            f"{missing_cols}. Found columns: {facility_ops.columns.tolist()}"
-                        )
-
-                    # get log norm shape parameters
-                    shape = pd.to_numeric(op_row['shape'], errors='coerce')
-                    location = pd.to_numeric(op_row['location'], errors='coerce')
-                    scale = pd.to_numeric(op_row['scale'], errors='coerce')
-    
-                    # flip a coin - see if this unit is running today
-                    prob_not_operating = pd.to_numeric(op_row['Prob_Not_Op'], errors='coerce')
-                    _validate_operating_distribution_params(
-                        scenario=scenario,
-                        facility=facility,
-                        unit_key=unit_key,
-                        shape=shape,
-                        location=location,
-                        scale=scale,
-                        prob_not_operating=prob_not_operating,
-                    )
+                    # Detect operating mode: fixed hours or stochastic hurdle model
+                    mode, fixed_hours = _detect_pumped_storage_mode(op_row)
                     
-                    #if operations == 'independent':
-                    if np.random.uniform(0,1,1) <= prob_not_operating:
-                        hours_dict[unit_key] = 0.
-                        flow_dict[unit_key] = 0.
-
-                    else:
-                        # TODO Bad Creek Analysis halved hours - change back
-                        hours = lognorm.rvs(shape, loc=location, scale=scale, size=1)[0] #* 0.412290503
-                        hours_operated[i] = hours
-
-                        if hours > 24.:
-                            hours = 24.
+                    if mode == 'fixed':
+                        # Simple fixed-hours mode: use Hours column directly
+                        # Check Prob_Not_Op if provided (optional hurdle for fixed mode)
+                        prob_not_operating = pd.to_numeric(op_row.get('Prob_Not_Op'), errors='coerce')
+                        if pd.notna(prob_not_operating):
+                            # Validate probability range
+                            if prob_not_operating < 0.0 or prob_not_operating > 1.0:
+                                raise ValueError(
+                                    f"Operating Scenarios Prob_Not_Op must be between 0 and 1 for scenario '{scenario}', "
+                                    f"facility '{facility}', unit '{unit_key}'. Got {prob_not_operating}."
+                                )
+                            # Apply hurdle: flip coin to see if unit operates
+                            if np.random.uniform(0, 1, 1) <= prob_not_operating:
+                                hours_dict[unit_key] = 0.0
+                                flow_dict[unit_key] = 0.0
+                                hours_operated[i] = 0.0
+                                continue  # Skip to next unit
+                        
+                        hours = fixed_hours
+                        if hours > 24.0:
+                            hours = 24.0
                         elif hours < 0:
-                            hours = 0.
+                            hours = 0.0
                         hours_dict[unit_key] = hours
-                        flow_dict[unit_key] = fac_units.at[i,'Qcap'] * hours * 3600.    
+                        flow_dict[unit_key] = fac_units.at[i, 'Qcap'] * hours * 3600.0
+                        hours_operated[i] = hours
+                    
+                    else:  # mode == 'stochastic'
+                        # Stochastic hurdle model with lognormal distribution
+                        # Validate that required columns exist
+                        missing_cols = [
+                            col for col in ('shape', 'location', 'scale', 'Prob_Not_Op')
+                            if col not in op_row.index
+                        ]
+                        if missing_cols:
+                            raise ValueError(
+                                "Operating Scenarios is missing required pumped storage/peaking columns: "
+                                f"{missing_cols}. Found columns: {facility_ops.columns.tolist()}"
+                            )
+
+                        # get log norm shape parameters
+                        shape = pd.to_numeric(op_row['shape'], errors='coerce')
+                        location = pd.to_numeric(op_row['location'], errors='coerce')
+                        scale = pd.to_numeric(op_row['scale'], errors='coerce')
+        
+                        # flip a coin - see if this unit is running today
+                        prob_not_operating = pd.to_numeric(op_row['Prob_Not_Op'], errors='coerce')
+                        _validate_operating_distribution_params(
+                            scenario=scenario,
+                            facility=facility,
+                            unit_key=unit_key,
+                            shape=shape,
+                            location=location,
+                            scale=scale,
+                            prob_not_operating=prob_not_operating,
+                        )
+                        
+                        #if operations == 'independent':
+                        if np.random.uniform(0,1,1) <= prob_not_operating:
+                            hours_dict[unit_key] = 0.
+                            flow_dict[unit_key] = 0.
+
+                        else:
+                            # TODO Bad Creek Analysis halved hours - change back
+                            hours = lognorm.rvs(shape, loc=location, scale=scale, size=1)[0] #* 0.412290503
+                            hours_operated[i] = hours
+
+                            if hours > 24.:
+                                hours = 24.
+                            elif hours < 0:
+                                hours = 0.
+                            hours_dict[unit_key] = hours
+                            flow_dict[unit_key] = fac_units.at[i,'Qcap'] * hours * 3600.    
                             
                 else:
                     #logger.debug('start processing run of river facility unit %s',i)
@@ -2726,14 +2790,6 @@ class simulation():
             raise ValueError(
                 f"Computed negative population size n={n_fish} "
                 f"(daily_rate={daily_rate}, ent_rate={ent_rate[0]}, curr_Q={curr_Q})."
-            )
-
-        max_daily_fish = int(os.environ.get("STRYKE_MAX_DAILY_FISH", "100000"))
-        if n_fish > max_daily_fish:
-            raise ValueError(
-                f"Computed population size n={int(n_fish)} exceeds STRYKE_MAX_DAILY_FISH={max_daily_fish}. "
-                f"Inputs: curr_Q={curr_Q}, ent_rate={ent_rate[0]}, max_ent_rate={max_ent_rate}. "
-                "Adjust entrainment inputs or raise STRYKE_MAX_DAILY_FISH deliberately."
             )
 
         return n_fish

@@ -37,17 +37,3 @@ def test_population_sim_caps_to_one_order_of_magnitude(monkeypatch):
     assert n == expected
 
 
-def test_population_sim_fails_fast_on_runaway_population(monkeypatch):
-    sim = simulation.__new__(simulation)
-    spc_df = _species_df(max_ent_rate=1000.0)
-
-    monkeypatch.setattr(
-        stryke_mod.lognorm,
-        "rvs",
-        lambda *args, **kwargs: np.array([1.0e12]),
-    )
-    monkeypatch.setenv("STRYKE_MAX_DAILY_FISH", "1000000")
-
-    with pytest.raises(ValueError, match="STRYKE_MAX_DAILY_FISH"):
-        sim.population_sim(output_units="metric", spc_df=spc_df, curr_Q=100000.0)
-

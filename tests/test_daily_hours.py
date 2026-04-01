@@ -174,3 +174,177 @@ def test_daily_hours_pumped_storage_invalid_active_distribution_raises():
 
     with pytest.raises(ValueError, match="lognormal shape must be > 0"):
         sim.daily_hours(Q_dict, "ScenarioA")
+
+
+def test_daily_hours_pumped_storage_fixed_hours_mode():
+    """Test fixed-hours mode: Hours column used directly when distribution params are zero/missing."""
+    sim = simulation.__new__(simulation)
+    sim.unit_params = pd.DataFrame(
+        [
+            {"Facility": "FacilityA", "Unit": "1", "op_order": 1, "Qcap": 30.0},
+            {"Facility": "FacilityA", "Unit": "2", "op_order": 2, "Qcap": 40.0},
+        ],
+        index=pd.Index(["FacilityA - Unit 1", "FacilityA - Unit 2"], name="Unit_Name"),
+    )
+    sim.facility_params = pd.DataFrame(
+        [
+            {
+                "Operations": "pumped storage",
+                "Min_Op_Flow": 0.0,
+                "Env_Flow": 0.0,
+                "Bypass_Flow": 0.0,
+            }
+        ],
+        index=pd.Index(["FacilityA"], name="Facility"),
+    )
+    # Fixed hours mode: shape=0, scale=0, location=0 -> use Hours directly
+    sim.operating_scenarios_df = pd.DataFrame(
+        [
+            {
+                "Scenario": "ScenarioA",
+                "Facility": "FacilityA",
+                "Unit": "1",
+                "Hours": 12.0,
+                "Prob Not Operating": 0.0,
+                "Shape": 0.0,
+                "Location": 0.0,
+                "Scale": 0.0,
+            },
+            {
+                "Scenario": "ScenarioA",
+                "Facility": "FacilityA",
+                "Unit": "2",
+                "Hours": 8.0,
+                "Prob Not Operating": 0.0,
+                "Shape": 0.0,
+                "Location": 0.0,
+                "Scale": 0.0,
+            },
+        ]
+    )
+
+    Q_dict = {
+        "curr_Q": 100.0,
+        "min_Q": {"FacilityA": 0.0},
+        "env_Q": {"FacilityA": 0.0},
+        "bypass_Q": {"FacilityA": 0.0},
+        "sta_cap": {"FacilityA": 100.0},
+    }
+    tot_hours, tot_flow, hours_dict, flow_dict = sim.daily_hours(Q_dict, "ScenarioA")
+
+    # Fixed hours should be used exactly as specified
+    assert hours_dict["FacilityA - Unit 1"] == 12.0
+    assert hours_dict["FacilityA - Unit 2"] == 8.0
+    assert flow_dict["FacilityA - Unit 1"] == 30.0 * 12.0 * 3600.0
+    assert flow_dict["FacilityA - Unit 2"] == 40.0 * 8.0 * 3600.0
+    assert tot_hours == 20.0
+
+
+def test_daily_hours_pumped_storage_stochastic_mode():
+    """Test stochastic mode: lognormal distribution used when params are valid."""
+    sim = simulation.__new__(simulation)
+    sim.unit_params = pd.DataFrame(
+        [
+            {"Facility": "FacilityA", "Unit": "1", "op_order": 1, "Qcap": 30.0},
+        ],
+        index=pd.Index(["FacilityA - Unit 1"], name="Unit_Name"),
+    )
+    sim.facility_params = pd.DataFrame(
+        [
+            {
+                "Operations": "pumped storage",
+                "Min_Op_Flow": 0.0,
+                "Env_Flow": 0.0,
+                "Bypass_Flow": 0.0,
+            }
+        ],
+        index=pd.Index(["FacilityA"], name="Facility"),
+    )
+    # Stochastic mode: valid distribution parameters
+    sim.operating_scenarios_df = pd.DataFrame(
+        [
+            {
+                "Scenario": "ScenarioA",
+                "Facility": "FacilityA",
+                "Unit": "1",
+                "Hours": 999.0,  # Should be ignored in stochastic mode
+                "Prob Not Operating": 0.0,
+                "Shape": 0.5,
+                "Location": 0.0,
+                "Scale": 6.0,
+            },
+        ]
+    )
+
+    # Mock lognorm to return predictable value
+    import Stryke.stryke as stryke_module
+    original_rvs = stryke_module.lognorm.rvs
+    
+    def mock_rvs(*args, **kwargs):
+        return np.array([10.0])
+    
+    stryke_module.lognorm.rvs = mock_rvs
+    try:
+        Q_dict = {
+            "curr_Q": 100.0,
+            "min_Q": {"FacilityA": 0.0},
+            "env_Q": {"FacilityA": 0.0},
+            "bypass_Q": {"FacilityA": 0.0},
+            "sta_cap": {"FacilityA": 100.0},
+        }
+        tot_hours, tot_flow, hours_dict, flow_dict = sim.daily_hours(Q_dict, "ScenarioA")
+
+        # Should use sampled hours (10.0), not Hours column (999.0)
+        assert hours_dict["FacilityA - Unit 1"] == 10.0
+        assert flow_dict["FacilityA - Unit 1"] == 30.0 * 10.0 * 3600.0
+    finally:
+        stryke_module.lognorm.rvs = original_rvs
+
+
+def test_daily_hours_pumped_storage_fixed_mode_invalid_hours_raises():
+    """Test that fixed mode raises error if Hours is invalid."""
+    sim = simulation.__new__(simulation)
+    sim.unit_params = pd.DataFrame(
+        [
+            {"Facility": "FacilityA", "Unit": "1", "op_order": 1, "Qcap": 30.0},
+        ],
+        index=pd.Index(["FacilityA - Unit 1"], name="Unit_Name"),
+    )
+    sim.facility_params = pd.DataFrame(
+        [
+            {
+                "Operations": "pumped storage",
+                "Min_Op_Flow": 0.0,
+                "Env_Flow": 0.0,
+                "Bypass_Flow": 0.0,
+            }
+        ],
+        index=pd.Index(["FacilityA"], name="Facility"),
+    )
+    # Invalid: shape/scale are 0 (fixed mode) but Hours is NaN
+    sim.operating_scenarios_df = pd.DataFrame(
+        [
+            {
+                "Scenario": "ScenarioA",
+                "Facility": "FacilityA",
+                "Unit": "1",
+                "Hours": np.nan,
+                "Prob Not Operating": 0.0,
+                "Shape": 0.0,
+                "Location": 0.0,
+                "Scale": 0.0,
+            },
+        ]
+    )
+
+    Q_dict = {
+        "curr_Q": 100.0,
+        "min_Q": {"FacilityA": 0.0},
+        "env_Q": {"FacilityA": 0.0},
+        "bypass_Q": {"FacilityA": 0.0},
+        "sta_cap": {"FacilityA": 100.0},
+    }
+
+    with pytest.raises(ValueError, match="neither valid distribution parameters nor valid Hours"):
+        sim.daily_hours(Q_dict, "ScenarioA")
+
