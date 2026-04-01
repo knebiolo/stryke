@@ -3226,7 +3226,7 @@ class simulation():
                                         f"scenario '{scenario}' on day {day}."
                                     )
                                 warn_daily_fish = int(os.environ.get("STRYKE_WARN_DAILY_FISH", "50000"))
-                                max_daily_fish = int(os.environ.get("STRYKE_MAX_DAILY_FISH", "100000"))
+                                max_daily_fish = int(os.environ.get("STRYKE_MAX_DAILY_FISH", "500000"))
                                 if n >= warn_daily_fish:
                                     logger.warning(
                                         "Large daily fish population: n=%s species=%s scenario=%s day=%s curr_Q=%s",
@@ -3237,11 +3237,17 @@ class simulation():
                                         float(curr_Q),
                                     )
                                 if n > max_daily_fish:
-                                    raise ValueError(
-                                        f"Population size n={n} exceeds STRYKE_MAX_DAILY_FISH={max_daily_fish} "
-                                        f"for species '{species_name}', scenario '{scenario}', day {day}. "
-                                        "Reduce entrainment parameters or increase STRYKE_MAX_DAILY_FISH deliberately."
+                                    logger.warning(
+                                        "Population size n=%s exceeds STRYKE_MAX_DAILY_FISH=%s "
+                                        "for species '%s', scenario '%s', day %s. Capping at %s to prevent memory issues.",
+                                        n,
+                                        max_daily_fish,
+                                        species_name,
+                                        scenario,
+                                        day,
+                                        max_daily_fish,
                                     )
+                                    n = max_daily_fish
 
                                 max_state_rows = int(os.environ.get("STRYKE_MAX_DAILY_STATE_ROWS", "2000000"))
                                 estimated_state_rows = n * max(1, len(self.moves))
