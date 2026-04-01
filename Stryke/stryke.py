@@ -2628,8 +2628,11 @@ class simulation():
                         # For example, if ops_df has a 'Unit' column:
                         unit_ops = ops_df[ops_df.Unit == row['Unit']]#[ops_df.Unit == idx
                         if unit_ops.empty:
-                            logger.debug("No operations data found for unit %s", idx)
-                            continue
+                            raise ValueError(
+                                f"No operating scenario found for scenario '{scenario}', "
+                                f"facility '{facility}', unit '{row.get('Unit', idx)}'. "
+                                "All run-of-river units must have operating hours defined."
+                            )
                         
                         unit_key = None
                         if unit_index_col and unit_index_col in fac_units.columns:
@@ -2682,6 +2685,13 @@ class simulation():
         for u in hours_dict.keys():
             tot_hours = tot_hours + hours_dict[u]
             tot_flow = tot_flow + flow_dict[u]
+        
+        # Validate that we have operating data for at least one unit
+        if not hours_dict:
+            raise ValueError(
+                f"No operating hours computed for scenario '{scenario}'. "
+                "This indicates a configuration error in operating scenarios or unit parameters."
+            )
                
         ops_df.reset_index(drop = False, inplace = True)
             
