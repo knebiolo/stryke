@@ -816,10 +816,26 @@ class simulation():
             #     print(f"[DIAG] Population DataFrame columns: {self.pop.columns.tolist()}")
             #     print(f"[DIAG] Population DataFrame head:\n{self.pop.head()}")
         # 8. Hydrograph.
-        if "hydrograph_file" in data_dict:
-            self.input_hydrograph_df = read_csv_if_exists(data_dict["hydrograph_file"])
+        flow_df = getattr(self, "flow_scenarios_df", None)
+        requires_hydrograph = False
+        if flow_df is not None and "Flow" in flow_df.columns:
+            flow_values = (
+                flow_df["Flow"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+            )
+            requires_hydrograph = bool(flow_values.eq("hydrograph").any())
+
+        hydrograph_file = data_dict.get("hydrograph_file")
+        hydrograph_file_str = str(hydrograph_file).strip() if hydrograph_file is not None else ""
+        if hydrograph_file_str.lower() in {"", "none", "null", "nan"}:
+            hydrograph_file_str = ""
+
+        if hydrograph_file_str:
+            self.input_hydrograph_df = read_csv_if_exists(hydrograph_file_str)
             if self.input_hydrograph_df is None:
-                raise ValueError(f"Failed to load hydrograph file: {data_dict['hydrograph_file']}")
+                raise ValueError(f"Failed to load hydrograph file: {hydrograph_file_str}")
 
             hydro_cols = set(self.input_hydrograph_df.columns.tolist())
             if {'datetimeUTC', 'DAvgFlow_prorate'}.issubset(hydro_cols):
@@ -867,6 +883,12 @@ class simulation():
             #     if self.input_hydrograph_df is not None:
             #         print(f"[DIAG] Hydrograph DataFrame columns: {self.input_hydrograph_df.columns.tolist()}")
             #         print(f"[DIAG] Hydrograph DataFrame head:\n{self.input_hydrograph_df.head()}")
+        else:
+            self.input_hydrograph_df = None
+            if requires_hydrograph:
+                raise ValueError(
+                    "Flow scenarios require hydrograph input, but hydrograph_file was not provided."
+                )
 
         
         # # 9. Unit Conversion.
