@@ -1683,24 +1683,29 @@ class simulation():
                 # Fish must survive each factor to proceed to next
                 fish_survived = True
                 mortality_cause = None
+                mortality_rng = getattr(self, '_mortality_rng', None)
+                if mortality_rng is not None:
+                    rand_draw = mortality_rng.random
+                else:
+                    rand_draw = np.random.random
                 
                 # 1. Check impingement
-                if np.random.random() > imp_surv_prob:
+                if rand_draw() > imp_surv_prob:
                     fish_survived = False
                     mortality_cause = 'impingement'
                 
                 # 2. If survived impingement, check blade strike
-                elif np.random.random() > strike_surv_prob:
+                elif rand_draw() > strike_surv_prob:
                     fish_survived = False
                     mortality_cause = 'blade_strike'
                 
                 # 3. If survived blade strike, check barotrauma
-                elif np.random.random() > baro_surv:
+                elif rand_draw() > baro_surv:
                     fish_survived = False
                     mortality_cause = 'barotrauma'
                 
                 # 4. If survived all immediate factors, check latent mortality
-                elif np.random.random() > latent_survival:
+                elif rand_draw() > latent_survival:
                     fish_survived = False
                     mortality_cause = 'latent'
                 
@@ -2838,6 +2843,29 @@ class simulation():
         self.hdf = pd.HDFStore(self.hdf_path, mode='a')
         if DIAGNOSTICS_ENABLED:
             print(f"[DIAG] HDF5 file reopened successfully. Current keys: {self.hdf.keys()}", flush=True)
+
+        # Optional reproducibility control for debugging and A/B comparisons.
+        # When STRYKE_RANDOM_SEED is set, seed both the legacy numpy RNG and the
+        # Generator used in random_state-based scipy draws.
+        seed_raw = str(os.environ.get("STRYKE_RANDOM_SEED", "")).strip()
+        if seed_raw:
+            try:
+                seed_val = int(seed_raw)
+            except ValueError as exc:
+                raise ValueError(
+                    f"STRYKE_RANDOM_SEED must be an integer; received '{seed_raw}'."
+                ) from exc
+            global rng
+            rng = default_rng(seed_val)
+            np.random.seed(seed_val)
+            # Keep mortality component bookkeeping stochastic but isolated from
+            # the core simulation random stream so diagnostics do not perturb outputs.
+            self._mortality_rng = default_rng(seed_val + 1)
+            logger.info("Using deterministic random seed STRYKE_RANDOM_SEED=%s", seed_val)
+            print(f"[INFO] Using deterministic random seed STRYKE_RANDOM_SEED={seed_val}", flush=True)
+        else:
+            # Isolate mortality bookkeeping randomness from core simulation draws.
+            self._mortality_rng = default_rng()
         
         # DEBUG: Show critical simulation parameters
         print(f"[DEBUG RUN START] ========== SIMULATION BEGINNING ==========", flush=True)
