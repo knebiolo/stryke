@@ -10,6 +10,7 @@ if defined STRYKE_PYTHON_EXE if exist "%STRYKE_PYTHON_EXE%" set "PYTHON_EXE=%STR
 
 rem --- Repo-local virtual env / embedded env ---
 if not defined PYTHON_EXE if exist "%~dp0.venv\Scripts\python.exe" set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"
+if not defined PYTHON_EXE if exist "%~dp0venv\Scripts\python.exe" set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
 if not defined PYTHON_EXE if exist "%~dp0Stryke\Scripts\python.exe" set "PYTHON_EXE=%~dp0Stryke\Scripts\python.exe"
 
 rem --- Common conda env names / locations for shared multi-user installs ---
@@ -22,7 +23,25 @@ if not defined PYTHON_EXE if exist "%USERPROFILE%\.conda\envs\stryke\python.exe"
 if not defined PYTHON_EXE if exist "%ProgramData%\anaconda3\envs\stryke\python.exe" set "PYTHON_EXE=%ProgramData%\anaconda3\envs\stryke\python.exe"
 if not defined PYTHON_EXE if exist "%ProgramData%\miniconda3\envs\stryke\python.exe" set "PYTHON_EXE=%ProgramData%\miniconda3\envs\stryke\python.exe"
 
-rem --- Fallback: any python on PATH ---
+rem --- Already-activated conda/venv session (CONDA_PREFIX / VIRTUAL_ENV) ---
+if not defined PYTHON_EXE if defined CONDA_PREFIX if exist "%CONDA_PREFIX%\python.exe" set "PYTHON_EXE=%CONDA_PREFIX%\python.exe"
+if not defined PYTHON_EXE if defined VIRTUAL_ENV if exist "%VIRTUAL_ENV%\Scripts\python.exe" set "PYTHON_EXE=%VIRTUAL_ENV%\Scripts\python.exe"
+
+rem --- Conda base env, discovered dynamically (covers custom install paths / non-"stryke" env names) ---
+if not defined PYTHON_EXE (
+  where conda >nul 2>nul
+  if not errorlevel 1 (
+    for /f "delims=" %%I in ('conda info --base 2^>nul') do (
+      if exist "%%I\envs\stryke\python.exe" set "PYTHON_EXE=%%I\envs\stryke\python.exe"
+      if not defined PYTHON_EXE if exist "%%I\python.exe" set "PYTHON_EXE=%%I\python.exe"
+    )
+  )
+)
+
+rem --- Fallback: py launcher (skips Windows Store alias stubs), then any python on PATH ---
+if not defined PYTHON_EXE (
+  for /f "delims=" %%I in ('py -3 -c "import sys; print(sys.executable)" 2^>nul') do if not defined PYTHON_EXE set "PYTHON_EXE=%%I"
+)
 if not defined PYTHON_EXE (
   for /f "delims=" %%I in ('where python 2^>nul') do if not defined PYTHON_EXE set "PYTHON_EXE=%%I"
 )
