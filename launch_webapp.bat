@@ -6,51 +6,51 @@ cd /d "%~dp0"
 set "PYTHON_EXE="
 
 rem --- Optional override for admins/power users ---
-if defined STRYKE_PYTHON_EXE if exist "%STRYKE_PYTHON_EXE%" set "PYTHON_EXE=%STRYKE_PYTHON_EXE%"
+if defined STRYKE_PYTHON_EXE call :try_python "%STRYKE_PYTHON_EXE%"
 
 rem --- Repo-local virtual env / embedded env ---
-if not defined PYTHON_EXE if exist "%~dp0.venv\Scripts\python.exe" set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"
-if not defined PYTHON_EXE if exist "%~dp0venv\Scripts\python.exe" set "PYTHON_EXE=%~dp0venv\Scripts\python.exe"
-if not defined PYTHON_EXE if exist "%~dp0Stryke\Scripts\python.exe" set "PYTHON_EXE=%~dp0Stryke\Scripts\python.exe"
+call :try_python "%~dp0.venv\Scripts\python.exe"
+call :try_python "%~dp0venv\Scripts\python.exe"
+call :try_python "%~dp0Stryke\Scripts\python.exe"
 
 rem --- Common conda env names / locations for shared multi-user installs ---
-if not defined PYTHON_EXE if exist "%USERPROFILE%\Desktop\conda_envs\stryke\python.exe" set "PYTHON_EXE=%USERPROFILE%\Desktop\conda_envs\stryke\python.exe"
-if not defined PYTHON_EXE if exist "%USERPROFILE%\miniconda3\envs\stryke\python.exe" set "PYTHON_EXE=%USERPROFILE%\miniconda3\envs\stryke\python.exe"
-if not defined PYTHON_EXE if exist "%USERPROFILE%\anaconda3\envs\stryke\python.exe" set "PYTHON_EXE=%USERPROFILE%\anaconda3\envs\stryke\python.exe"
-if not defined PYTHON_EXE if exist "%LOCALAPPDATA%\anaconda3\envs\stryke\python.exe" set "PYTHON_EXE=%LOCALAPPDATA%\anaconda3\envs\stryke\python.exe"
-if not defined PYTHON_EXE if exist "%LOCALAPPDATA%\miniconda3\envs\stryke\python.exe" set "PYTHON_EXE=%LOCALAPPDATA%\miniconda3\envs\stryke\python.exe"
-if not defined PYTHON_EXE if exist "%USERPROFILE%\.conda\envs\stryke\python.exe" set "PYTHON_EXE=%USERPROFILE%\.conda\envs\stryke\python.exe"
-if not defined PYTHON_EXE if exist "%ProgramData%\anaconda3\envs\stryke\python.exe" set "PYTHON_EXE=%ProgramData%\anaconda3\envs\stryke\python.exe"
-if not defined PYTHON_EXE if exist "%ProgramData%\miniconda3\envs\stryke\python.exe" set "PYTHON_EXE=%ProgramData%\miniconda3\envs\stryke\python.exe"
+call :try_python "%USERPROFILE%\Desktop\conda_envs\stryke\python.exe"
+call :try_python "%USERPROFILE%\miniconda3\envs\stryke\python.exe"
+call :try_python "%USERPROFILE%\anaconda3\envs\stryke\python.exe"
+call :try_python "%LOCALAPPDATA%\anaconda3\envs\stryke\python.exe"
+call :try_python "%LOCALAPPDATA%\miniconda3\envs\stryke\python.exe"
+call :try_python "%USERPROFILE%\.conda\envs\stryke\python.exe"
+call :try_python "%ProgramData%\anaconda3\envs\stryke\python.exe"
+call :try_python "%ProgramData%\miniconda3\envs\stryke\python.exe"
 
 rem --- Already-activated conda/venv session (CONDA_PREFIX / VIRTUAL_ENV) ---
-if not defined PYTHON_EXE if defined CONDA_PREFIX if exist "%CONDA_PREFIX%\python.exe" set "PYTHON_EXE=%CONDA_PREFIX%\python.exe"
-if not defined PYTHON_EXE if defined VIRTUAL_ENV if exist "%VIRTUAL_ENV%\Scripts\python.exe" set "PYTHON_EXE=%VIRTUAL_ENV%\Scripts\python.exe"
+if defined CONDA_PREFIX call :try_python "%CONDA_PREFIX%\python.exe"
+if defined VIRTUAL_ENV call :try_python "%VIRTUAL_ENV%\Scripts\python.exe"
 
 rem --- Conda base env, discovered dynamically (covers custom install paths / non-"stryke" env names) ---
 if not defined PYTHON_EXE (
   where conda >nul 2>nul
   if not errorlevel 1 (
     for /f "delims=" %%I in ('conda info --base 2^>nul') do (
-      if exist "%%I\envs\stryke\python.exe" set "PYTHON_EXE=%%I\envs\stryke\python.exe"
-      if not defined PYTHON_EXE if exist "%%I\python.exe" set "PYTHON_EXE=%%I\python.exe"
+      call :try_python "%%I\envs\stryke\python.exe"
+      call :try_python "%%I\python.exe"
     )
   )
 )
 
 rem --- Fallback: py launcher (skips Windows Store alias stubs), then any python on PATH ---
 if not defined PYTHON_EXE (
-  for /f "delims=" %%I in ('py -3 -c "import sys; print(sys.executable)" 2^>nul') do if not defined PYTHON_EXE set "PYTHON_EXE=%%I"
+  for /f "delims=" %%I in ('py -3 -c "import sys; print(sys.executable)" 2^>nul') do call :try_python "%%I"
 )
 if not defined PYTHON_EXE (
-  for /f "delims=" %%I in ('where python 2^>nul') do if not defined PYTHON_EXE set "PYTHON_EXE=%%I"
+  for /f "delims=" %%I in ('where python 2^>nul') do call :try_python "%%I"
 )
 if not defined PYTHON_EXE (
-  for /f "delims=" %%I in ('where py 2^>nul') do if not defined PYTHON_EXE set "PYTHON_EXE=%%I"
+  for /f "delims=" %%I in ('where py 2^>nul') do call :try_python "%%I"
 )
 
 if not defined PYTHON_EXE (
-  echo [ERROR] Could not find a Python executable for Stryke.
+  echo [ERROR] Could not find a working Python executable for Stryke.
   echo         Set STRYKE_PYTHON_EXE to the full path of python.exe and run again.
   pause
   exit /b 1
@@ -90,3 +90,12 @@ if not "%RC%"=="0" (
 )
 
 exit /b %RC%
+
+rem --- Accepts a candidate python.exe path; only keeps it if it actually runs ---
+:try_python
+if defined PYTHON_EXE goto :eof
+if "%~1"=="" goto :eof
+if not exist "%~1" goto :eof
+"%~1" -c "import sys" >nul 2>nul
+if not errorlevel 1 set "PYTHON_EXE=%~1"
+goto :eof
