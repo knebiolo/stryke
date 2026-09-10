@@ -436,13 +436,13 @@
             <div class="callout">
               <strong>Required for Empirical:</strong> If using an empirical scenario, please populate these fields.
             </div>
-            <label for="length_mean">Total Length (Mean) 
-              <span class="tooltip" title="{% if session.units=='imperial' %}Mean total length in inches{% else %}Mean total length in mm{% endif %}">[?]</span>
+            <label for="length_mean">Total Length (Mean) {% if session.units=='imperial' %}(inches){% else %}(cm){% endif %}
+              <span class="tooltip" title="{% if session.units=='imperial' %}Mean total length in inches{% else %}Mean total length in cm{% endif %}">[?]</span>
             </label>
             <input type="number" step="any" id="length_mean" name="length_mean" value="{{ population_data.get('Length_mean', '') }}" placeholder="Enter mean total length">
-            
-            <label for="length_sd">Total Length (Std Dev) 
-              <span class="tooltip" title="{% if session.units=='imperial' %}Standard deviation in inches{% else %}Standard deviation in mm{% endif %}">[?]</span>
+
+            <label for="length_sd">Total Length (Std Dev) {% if session.units=='imperial' %}(inches){% else %}(cm){% endif %}
+              <span class="tooltip" title="{% if session.units=='imperial' %}Standard deviation in inches{% else %}Standard deviation in cm{% endif %}">[?]</span>
             </label>
             <input type="number" step="any" id="length_sd" name="length_sd" value="{{ population_data.get('Length_sd', '') }}" placeholder="Enter total length standard deviation">
           </fieldset>

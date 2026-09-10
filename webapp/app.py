@@ -4138,8 +4138,8 @@ def population():
                     if length_mean_input:
                         try:
                             length_mean_in = float(length_mean_input)
-                            if units == 'metric' : 
-                                length_mean_in /= 25.4
+                            if units == 'metric' :
+                                length_mean_in /= 2.54
                             pop_data["length location"] = length_mean_in
                         except Exception as e:
                             print("Length mean conversion failed: {}".format(e), flush=True)
@@ -4147,7 +4147,7 @@ def population():
                         try:
                             length_sd_in = float(length_sd_input)
                             if units == 'metric':
-                                length_sd_in /= 25.4
+                                length_sd_in /= 2.54
                             pop_data["length scale"] = length_sd_in
                         except Exception as e:
                             print("Length SD conversion failed: {}".format(e), flush=True)
@@ -4189,14 +4189,14 @@ def population():
         # Final conversions for length_mean, length_sd
         length_mean_val = safe_float(request.form.get('length_mean'))
         if length_mean_val is not None:
-            length_mean_in = length_mean_val / 25.4 if units == 'metric' else length_mean_val
+            length_mean_in = length_mean_val / 2.54 if units == 'metric' else length_mean_val
         else:
             length_mean_in = None
         pop_data["Length_mean"] = length_mean_in
     
         length_sd_val = safe_float(request.form.get('length_sd'))
         if length_sd_val is not None:
-            length_sd_in = length_sd_val / 25.4 if units == 'metric' else length_sd_val
+            length_sd_in = length_sd_val / 2.54 if units == 'metric' else length_sd_val
         else:
             length_sd_in = None
         pop_data["Length_sd"] = length_sd_in
@@ -4318,22 +4318,22 @@ def population():
                         except (ValueError, TypeError) as e:
                             print(f"ERROR converting U_crit: {e}", flush=True)
                     
-                    # Convert Length_mean from inches (stored) to mm (display) if units are metric
+                    # Convert Length_mean from inches (stored) to cm (display) if units are metric
                     if units == 'metric' and 'Length_mean' in population_data:
                         try:
                             if pd.notna(population_data['Length_mean']):
                                 length_in = float(population_data['Length_mean'])
-                                population_data['Length_mean'] = length_in * 25.4  # Convert inches to mm
-                                print(f"DEBUG: Converted Length_mean from {length_in} in to {population_data['Length_mean']} mm", flush=True)
+                                population_data['Length_mean'] = length_in * 2.54  # Convert inches to cm
+                                print(f"DEBUG: Converted Length_mean from {length_in} in to {population_data['Length_mean']} cm", flush=True)
                         except (ValueError, TypeError) as e:
                             print(f"ERROR converting Length_mean: {e}", flush=True)
-                    
-                    # Convert Length_sd from inches (stored) to mm (display) if units are metric
+
+                    # Convert Length_sd from inches (stored) to cm (display) if units are metric
                     if units == 'metric' and 'Length_sd' in population_data:
                         try:
                             if pd.notna(population_data['Length_sd']):
                                 sd_in = float(population_data['Length_sd'])
-                                population_data['Length_sd'] = sd_in * 25.4  # Convert inches to mm
+                                population_data['Length_sd'] = sd_in * 2.54  # Convert inches to cm
                         except (ValueError, TypeError) as e:
                             print(f"ERROR converting Length_sd: {e}", flush=True)
                     
