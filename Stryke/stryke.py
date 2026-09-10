@@ -3120,6 +3120,31 @@ class simulation():
                     common_name=common_name,
                     family_name=family_name,
                 )
+                if not math.isnan(mean_len):
+                    family_max_length_in = {
+                        "Acipenseridae": 240,  # sturgeon - generous, rare large individuals
+                        "Salmonidae": 60,
+                        "Percidae": 40,        # walleye/perch
+                        "Centrarchidae": 30,
+                        "Ictaluridae": 60,
+                        "Catostomidae": 40,
+                        "Cyprinidae": 60,
+                    }
+                    default_max_length_in = 120  # generous fallback when family is unknown
+                    resolved_family = self._resolve_fish_family(
+                        species_name=species_name,
+                        common_name=common_name,
+                        family_name=family_name,
+                    )
+                    max_length_in = family_max_length_in.get(resolved_family, default_max_length_in)
+                    if mean_len > max_length_in:
+                        raise ValueError(
+                            f"Length_mean={mean_len} in for species '{species_name}' "
+                            f"(family '{resolved_family}') exceeds the plausible maximum of "
+                            f"{max_length_in} in. This usually means Length_mean/Length_sd were "
+                            f"entered in the wrong units (e.g. centimeters typed into a field the "
+                            f"UI is treating as inches) - check the Population form and re-enter."
+                        )
                 iterations = spc_dat.iat[0, spc_dat.columns.get_loc('Iterations')]
                 u_crit = spc_dat.iat[0, spc_dat.columns.get_loc('U_crit')]
                 occur_prob = spc_dat.iat[0, spc_dat.columns.get_loc('occur_prob')]
