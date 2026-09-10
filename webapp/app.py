@@ -390,6 +390,25 @@ ALLOWED_EXCEL_EXTENSIONS = {".xls", ".xlsx", ".xlsm"}
 ALLOWED_JSON_EXTENSIONS = {".json"}
 ALLOWED_STRYKE_EXTENSIONS = {".stryke"}
 
+_UNIT_PARAM_LENGTH_FIELDS = (
+    "intake_vel", "H", "D", "B", "D1", "D2",
+    "fb_depth", "ps_D", "ps_length", "submergence_depth", "elevation_head",
+)
+_UNIT_PARAM_FLOW_FIELDS = ("Qopt", "Qcap", "Penstock_Qcap")
+
+
+def _convert_unit_params_metric_to_imperial(df_unit, needs_conversion):
+    """Convert a raw-metric Unit Parameters DataFrame in place to the app's internal
+    imperial units, matching the conversion applied by the /unit-parameters form route."""
+    if not needs_conversion:
+        return
+    for col in _UNIT_PARAM_LENGTH_FIELDS:
+        if col in df_unit.columns:
+            df_unit[col] = pd.to_numeric(df_unit[col], errors='coerce') * 3.28084
+    for col in _UNIT_PARAM_FLOW_FIELDS:
+        if col in df_unit.columns:
+            df_unit[col] = pd.to_numeric(df_unit[col], errors='coerce') * 35.31469989
+
 # Set session lifetime to 1 day (adjust as needed)
 app.permanent_session_lifetime = timedelta(days=1)
 
@@ -1285,6 +1304,10 @@ def save_project():
         project_data = {
             'version': '1.0',
             'saved_date': datetime.now().isoformat(),
+            # Marks numeric fields (unit_parameters, facilities, population, hydrograph) as
+            # already converted to the app's internal imperial units, so load_project()
+            # knows not to re-apply metric->imperial conversion.
+            'internal_units': 'imperial',
             'project_info': {},
             'flow_scenarios': {},
             'facilities': {},
@@ -1434,6 +1457,17 @@ def load_project():
                 print(f"SET session vars: name={session['project_name']}, units={session['units']}", flush=True)
         else:
             print("DEBUG: No project_info in loaded data!", flush=True)
+
+        # Older/foreign .stryke files may store raw metric values (no 'internal_units'
+        # marker means they predate this conversion-on-load safeguard). Convert them to
+        # the app's internal imperial units here so they behave like a fresh metric
+        # form submission instead of silently mis-simulating.
+        needs_metric_conversion = (
+            session.get('units', 'metric') == 'metric'
+            and project_data.get('internal_units') != 'imperial'
+        )
+        if needs_metric_conversion:
+            print("DEBUG load_project: legacy metric file detected, converting to internal imperial units", flush=True)
         
         # Restore flow scenarios
         if project_data.get('flow_scenarios'):
@@ -1461,6 +1495,10 @@ def load_project():
         session.pop('hydrograph_file', None)
         if project_data.get('hydrograph'):
             df = pd.DataFrame(project_data['hydrograph'])
+            if needs_metric_conversion:
+                for col in ('Discharge', 'DAvgFlow_prorate'):
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce') * 35.31469989
             hydro_csv_path = os.path.join(sim_folder, 'hydrograph.csv')
             df.to_csv(hydro_csv_path, index=False)
             # CRITICAL: Store hydrograph_file for simulation
@@ -1469,6 +1507,12 @@ def load_project():
         # Restore facilities
         if project_data.get('facilities'):
             df = pd.DataFrame(project_data['facilities'])
+            if needs_metric_conversion:
+                if 'Rack Spacing' in df.columns:
+                    df['Rack Spacing'] = (pd.to_numeric(df['Rack Spacing'], errors='coerce') / 1000.0) * 3.28084
+                for col in ('Min_Op_Flow', 'Env_Flow', 'Bypass_Flow'):
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce') * 35.3147
             df.to_csv(os.path.join(sim_folder, 'facilities.csv'), index=False)
             # CRITICAL: Store facilities_data for simulation
             session['facilities_data'] = df.to_dict('records')
@@ -1483,22 +1527,32 @@ def load_project():
         unit_params_data = project_data.get('unit_parameters')
         if isinstance(unit_params_data, dict) and unit_params_data.get('csv_content'):
             unit_params_path = os.path.join(sim_folder, 'unit_params.csv')
-            with open(unit_params_path, 'w') as f:
-                f.write(unit_params_data['csv_content'])
+            if needs_metric_conversion:
+                df_unit = pd.read_csv(io.StringIO(unit_params_data['csv_content']))
+                _convert_unit_params_metric_to_imperial(df_unit, needs_metric_conversion)
+                df_unit.to_csv(unit_params_path, index=False)
+            else:
+                with open(unit_params_path, 'w') as f:
+                    f.write(unit_params_data['csv_content'])
             session['unit_params_file'] = unit_params_path
         elif isinstance(unit_params_data, list) and unit_params_data:
             unit_params_path = os.path.join(sim_folder, 'unit_params.csv')
-            pd.DataFrame(unit_params_data).to_csv(unit_params_path, index=False)
+            df_unit = pd.DataFrame(unit_params_data)
+            _convert_unit_params_metric_to_imperial(df_unit, needs_metric_conversion)
+            df_unit.to_csv(unit_params_path, index=False)
             session['unit_params_file'] = unit_params_path
         elif isinstance(unit_params_data, dict) and unit_params_data:
             unit_params_path = os.path.join(sim_folder, 'unit_params.csv')
             records = unit_params_data.get('records')
             if isinstance(records, list) and records:
-                pd.DataFrame(records).to_csv(unit_params_path, index=False)
+                df_unit = pd.DataFrame(records)
+                _convert_unit_params_metric_to_imperial(df_unit, needs_metric_conversion)
+                df_unit.to_csv(unit_params_path, index=False)
                 session['unit_params_file'] = unit_params_path
             else:
                 df_unit = pd.DataFrame(unit_params_data)
                 if not df_unit.empty:
+                    _convert_unit_params_metric_to_imperial(df_unit, needs_metric_conversion)
                     df_unit.to_csv(unit_params_path, index=False)
                     session['unit_params_file'] = unit_params_path
         
@@ -1556,6 +1610,12 @@ def load_project():
         # Restore population
         if project_data.get('population'):
             df = pd.DataFrame(project_data['population'])
+            if needs_metric_conversion:
+                if 'U_crit' in df.columns:
+                    df['U_crit'] = pd.to_numeric(df['U_crit'], errors='coerce') * 3.28084
+                for col in ('Length_mean', 'Length_sd'):
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce') / 25.4
             pop_csv_path = os.path.join(sim_folder, 'population.csv')
             df.to_csv(pop_csv_path, index=False)
             session['population_csv_path'] = pop_csv_path

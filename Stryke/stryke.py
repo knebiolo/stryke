@@ -587,6 +587,10 @@ class simulation():
                                  index_col = None,
                                  usecols = "B:V", 
                                  skiprows = 11)
+
+        # U_crit is collected in m/s; convert to ft/s to match intake_vel when metric
+        if self.output_units == 'metric' and 'U_crit' in self.pop.columns:
+            self.pop['U_crit'] = self.pop.U_crit * 3.28084
                     
         # create output HDF file
         self.proj_dir = proj_dir
@@ -855,6 +859,13 @@ class simulation():
                         f"invalid_dates={invalid_dates}, invalid_flows={invalid_flows}. "
                         "Fix or remove malformed rows in hydrograph.csv."
                     )
+                negative_mask = self.input_hydrograph_df['DAvgFlow_prorate'] < 0
+                if negative_mask.any():
+                    bad_dates = self.input_hydrograph_df.loc[negative_mask, 'datetimeUTC'].dt.strftime('%Y-%m-%d').tolist()
+                    raise ValueError(
+                        "Hydrograph contains negative DAvgFlow_prorate values on: "
+                        f"{', '.join(bad_dates)}. Discharge cannot be negative."
+                    )
             elif {'Date', 'Discharge'}.issubset(hydro_cols):
                 self.input_hydrograph_df['datetimeUTC'] = pd.to_datetime(
                     self.input_hydrograph_df['Date'],
@@ -871,6 +882,13 @@ class simulation():
                         "Hydrograph contains invalid Date/Discharge values: "
                         f"invalid_dates={invalid_dates}, invalid_flows={invalid_flows}. "
                         "Fix or remove malformed rows in hydrograph.csv."
+                    )
+                negative_mask = self.input_hydrograph_df['DAvgFlow_prorate'] < 0
+                if negative_mask.any():
+                    bad_dates = self.input_hydrograph_df.loc[negative_mask, 'datetimeUTC'].dt.strftime('%Y-%m-%d').tolist()
+                    raise ValueError(
+                        "Hydrograph contains negative DAvgFlow_prorate values on: "
+                        f"{', '.join(bad_dates)}. Discharge cannot be negative."
                     )
             else:
                 raise KeyError(
