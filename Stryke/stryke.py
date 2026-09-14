@@ -4640,7 +4640,11 @@ class epri():
             
             
             self.epri = pd.read_csv(data_dir,  encoding= 'unicode_escape')
-    
+            # Guard against duplicate rows from Access join fan-outs (only
+            # latitude/drainageArea/maxDischarge ever differ across dupes,
+            # neither of which is used downstream) reinflating sample sizes.
+            self.epri = self.epri.drop_duplicates(subset=['ID', 'Species'], keep='first')
+
             ''' I want to hook up stryke to the EPRI database when project loads, figure out how to do this cuz this is lame'''
     
             if NIDID is not None:
