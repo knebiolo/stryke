@@ -2,10 +2,10 @@
 
 This script will:
 - Parse the `species_defaults` list literal from `webapp/app.py`.
-- For each species entry, attempt to extract a genus name from the `name` field.
-- Query the EPRI fitter via `stryke.epri(Genus=genus)` and run Pareto/LogNormal/Weibull/Gamma fits.
-- Collect KS p-values and distribution parameters, choose the best distribution.
-- Write out a CSV `species_fit_suggestions.csv` with recommended dist and parameters.
+- Resolve genus, meteorological months, and Great Lakes HUC02=4 from each preset name.
+- Fit Pareto, lognormal, and Weibull distributions to the matching positive EPRI rates.
+- Select by AICc, using Anderson-Darling as a tie-breaker, and report sample metadata.
+- Write a CSV and PDF review report without modifying `webapp/app.py`.
 
 Usage: run this in the project root where your Python environment has the dependencies installed.
 
@@ -24,7 +24,10 @@ from datetime import datetime
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 APP_PY = os.path.join(PROJECT_ROOT, 'webapp', 'app.py')
-OUTPUT_CSV = os.path.join(PROJECT_ROOT, 'species_fit_suggestions.csv')
+OUTPUT_CSV = os.environ.get(
+    'STRYKE_FIT_OUTPUT_CSV',
+    os.path.join(PROJECT_ROOT, 'species_fit_suggestions.csv'),
+)
 
 # Delay importing heavy libraries until needed
 # Ensure repo root is on sys.path so local package imports work when running script
@@ -71,6 +74,49 @@ def guess_genus_from_name(name):
     return genus
 
 
+METEOROLOGICAL_SEASON_MONTHS = {
+    'Winter': (12, 1, 2),
+    'Spring': (3, 4, 5),
+    'Summer': (6, 7, 8),
+    'Fall': (9, 10, 11),
+}
+GREAT_LAKES_HUC02 = 4
+
+
+def parse_preset_filters(name):
+    """Resolve the genus, month list, and Great Lakes HUC02 from a preset name."""
+    genus, separator, label = name.partition(', Great Lakes, ')
+    if not separator or not genus.strip():
+        raise ValueError(f'Unsupported species-default name: {name!r}')
+
+    label = label.strip()
+    if label == 'Annual':
+        months = tuple(range(1, 13))
+    else:
+        if not label.startswith('Met '):
+            raise ValueError(f'Unsupported season label in species default: {name!r}')
+        season_names = [
+            part.strip()
+            for part in re.split(r'\s*(?:&|,|\band\b)\s*', label[4:])
+            if part.strip()
+        ]
+        unknown = [
+            season for season in season_names
+            if season not in METEOROLOGICAL_SEASON_MONTHS
+        ]
+        if unknown:
+            raise ValueError(f'Unknown season(s) {unknown!r} in species default {name!r}')
+        months = tuple(sorted({
+            month
+            for season in season_names
+            for month in METEOROLOGICAL_SEASON_MONTHS[season]
+        }))
+        if not months:
+            raise ValueError(f'No months resolved for species default {name!r}')
+
+    return genus.strip(), months, GREAT_LAKES_HUC02
+
+
 def anderson_darling_statistic(sample, cdf_fn):
     """Compute Anderson-Darling statistic for sample given CDF function.
     cdf_fn should accept an array and return CDF values in [0,1]."""
@@ -93,60 +139,89 @@ def compute_loglik_aic(obs, dist_obj, params, floc_fixed=True):
     Returns (loglik, aic, aicc, bic) or (None, None, None, None) on error.
     """
     if params is None:
-        return (None, None, None, None)
-    obs = np.asarray(obs)
+        raise ValueError('Cannot calculate fit statistics without fitted parameters.')
+    obs = np.asarray(obs, dtype=float)
     n = obs.size
     if n == 0:
-        return (None, None, None, None)
-    try:
-        # Unpack params: scipy may return (shape, loc, scale) or (c, loc, scale)
-        shape, loc, scale = params[0], params[1], params[2]
-        # Compute pdf
-        pdf = dist_obj.pdf(obs, shape, loc=loc, scale=scale)
-        # Avoid zeros
-        pdf = np.clip(pdf, 1e-300, None)
-        loglik = float(np.sum(np.log(pdf)))
-        # parameter count k: if loc fixed -> 2 else 3
-        k = 2 if floc_fixed else 3
-        aic = 2 * k - 2 * loglik
-        if n - k - 1 > 0:
-            aicc = aic + (2 * k * (k + 1)) / float(n - k - 1)
-        else:
-            aicc = aic
-        bic = math.log(n) * k - 2 * loglik
-        return (loglik, aic, aicc, bic)
-    except Exception:
-        return (None, None, None, None)
+        raise ValueError('Cannot calculate fit statistics without observations.')
+    shape, loc, scale = params[0], params[1], params[2]
+    logpdf = dist_obj.logpdf(obs, shape, loc=loc, scale=scale)
+    if not np.isfinite(logpdf).all():
+        raise ValueError('Fitted distribution produced non-finite log probabilities.')
+    loglik = float(np.sum(logpdf))
+    k = 2 if floc_fixed else 3
+    aic = 2 * k - 2 * loglik
+    aicc = aic + (2 * k * (k + 1) / float(n - k - 1) if n - k - 1 > 0 else aic)
+    bic = math.log(n) * k - 2 * loglik
+    return (loglik, aic, aicc, bic)
 
 
-def run_fits_and_select_best(genus):
-    # Import here to avoid top-level dependency when not running script
-    try:
-        from Stryke.stryke import epri
-    except Exception:
-        # allow import via package name
-        import Stryke
-        from Stryke.stryke import epri
+def fit_distributions(observations):
+    """Fit supported positive-rate distributions and select by AICc, then AD."""
+    from scipy.stats import pareto, lognorm, weibull_min
 
-    filter_args = {}
-    if genus:
-        filter_args['Genus'] = genus
-    # Call epri
-    try:
-        fish = epri(**filter_args)
-    except Exception as e:
-        raise RuntimeError(f'epri query failed for genus {genus}: {e}')
+    values = np.asarray(observations, dtype=float)
+    if values.size == 0 or not np.isfinite(values).all() or np.any(values <= 0):
+        raise ValueError('Distribution fitting requires finite, strictly positive rates.')
+
+    distributions = {
+        'Pareto': pareto,
+        'Log Normal': lognorm,
+        'Weibull': weibull_min,
+    }
+    metrics = {}
+    for name, distribution in distributions.items():
+        params = distribution.fit(values, floc=0)
+        loglik, aic, aicc, _ = compute_loglik_aic(values, distribution, params)
+        ad = anderson_darling_statistic(
+            values,
+            lambda sample, dist=distribution, fitted=params: dist.cdf(sample, *fitted),
+        )
+        metrics[name] = {
+            'params': params,
+            'loglik': loglik,
+            'aic': aic,
+            'aicc': aicc,
+            'ad': ad,
+        }
+
+    criterion_key = 'aicc' if values.size > 3 else 'aic'
+    criterion = 'AICc' if criterion_key == 'aicc' else 'AIC'
+    best_score = min(result[criterion_key] for result in metrics.values())
+    candidates = [
+        (name, result)
+        for name, result in metrics.items()
+        if result[criterion_key] - best_score <= 2.0
+    ]
+    best_name, best_result = min(candidates, key=lambda item: item[1]['ad'])
+    decision_reason = (
+        f'{criterion} tie; selected by AD ({best_result["ad"]:.4f})'
+        if len(candidates) > 1
+        else f'{criterion} lowest ({best_score:.3f})'
+    )
+    return best_name, best_result['params'], metrics, decision_reason, criterion
+
+
+def run_fits_and_select_best(preset_name):
+    from Stryke.stryke import epri
+
+    genus, months, huc02 = parse_preset_filters(preset_name)
+    fish = epri(Genus=genus, HUC02=[huc02], Month=list(months))
+    rates = np.asarray(fish.epri.FishPerMft3.values, dtype=float)
+    if not np.isfinite(rates).all() or np.any(rates < 0):
+        raise ValueError(f'Invalid entrainment rates found for {preset_name!r}.')
+    n_present = rates.size
+    n_zero = int(np.count_nonzero(rates == 0))
+    observations = rates[rates > 0]
+    if observations.size == 0:
+        raise ValueError(f'No positive entrainment rates found for {preset_name!r}.')
+    fish.epri = fish.epri.loc[fish.epri.FishPerMft3 > 0].copy()
 
     # Run the standard three fits only
     fish.ParetoFit()
     fish.LogNormalFit()
     fish.WeibullMinFit()
-    # Ensure plot() called to compute KS tests (plot() computes and stores pareto_t, log_normal_t, weibull_t, gamma_t)
-    fig = None
-    try:
-        fig = fish.plot()
-    except Exception:
-        traceback.print_exc()
+    fig = fish.plot()
 
     # Collect p-values
     def get_p(val):
@@ -158,12 +233,6 @@ def run_fits_and_select_best(genus):
     pareto_p = get_p(getattr(fish, 'pareto_t', -1))
     lognorm_p = get_p(getattr(fish, 'log_normal_t', -1))
     weibull_p = get_p(getattr(fish, 'weibull_t', -1))
-
-    # Observations
-    try:
-        observations = np.asarray(fish.epri.FishPerMft3.values)
-    except Exception:
-        observations = np.array([])
 
     # For each distribution compute loglik/AIC/AICc/BIC and AD statistic
     metrics = {}
@@ -207,13 +276,19 @@ def run_fits_and_select_best(genus):
         'Weibull': weibull_aicc if weibull_aicc is not None else float('inf'),
     }
     # pick lowest AICc
-    best_by_aicc = min(aicc_map.items(), key=lambda kv: kv[1])
+    criterion = 'AICc' if observations.size > 3 else 'AIC'
+    criterion_map = aicc_map if criterion == 'AICc' else {
+        'Pareto': pareto_aic,
+        'Log Normal': lognorm_aic,
+        'Weibull': weibull_aic,
+    }
+    best_by_aicc = min(criterion_map.items(), key=lambda kv: kv[1])
     # Check for ties within delta_aicc
     delta_aicc = 2.0
-    candidates = [k for k, v in aicc_map.items() if abs(v - best_by_aicc[1]) <= delta_aicc]
+    candidates = [k for k, v in criterion_map.items() if abs(v - best_by_aicc[1]) <= delta_aicc]
     if len(candidates) == 1:
         best_dist = candidates[0]
-        reason = f'AICc lowest ({best_by_aicc[1]:.3f})'
+        reason = f'{criterion} lowest ({best_by_aicc[1]:.3f})'
     else:
         # tie-breaker: AD statistic (smaller better)
         ad_map = {
@@ -225,7 +300,7 @@ def run_fits_and_select_best(genus):
         # If AD available, pick that; otherwise fallback to KS p-value
         if math.isfinite(best_by_ad[1]):
             best_dist = best_by_ad[0]
-            reason = f'AICc tie; selected by AD ({best_by_ad[1]:.4f})'
+            reason = f'{criterion} tie; selected by AD ({best_by_ad[1]:.4f})'
         else:
             p_map = {
                 'Pareto': pareto_p,
@@ -235,7 +310,7 @@ def run_fits_and_select_best(genus):
             # restrict to candidates
             p_map = {k: p_map[k] for k in candidates}
             best_dist = max(p_map.items(), key=lambda kv: kv[1])[0]
-            reason = 'AICc tie; selected by KS p-value'
+            reason = f'{criterion} tie; selected by KS p-value'
 
     # Grab params
     params = {'shape': None, 'location': None, 'scale': None}
@@ -253,19 +328,46 @@ def run_fits_and_select_best(genus):
     except Exception:
         traceback.print_exc()
 
+    best_dist, selected_params, fit_metrics, reason, criterion = fit_distributions(observations)
+    params = {
+        'shape': float(selected_params[0]),
+        'location': float(selected_params[1]),
+        'scale': float(selected_params[2]),
+    }
+    metrics = {}
+    metric_prefixes = {
+        'Pareto': 'pareto',
+        'Log Normal': 'lognorm',
+        'Weibull': 'weibull',
+    }
+    for name, result in fit_metrics.items():
+        prefix = metric_prefixes[name]
+        metrics[f'{prefix}_loglik'] = result['loglik']
+        metrics[f'{prefix}_aic'] = result['aic']
+        metrics[f'{prefix}_aicc'] = result['aicc']
+        metrics[f'{prefix}_ad'] = result['ad']
+
     return {
         'genus': genus,
+        'months': months,
+        'huc02': huc02,
+        'n_present': n_present,
+        'n_positive': int(observations.size),
+        'n_zero': n_zero,
+        'occur_prob': float(fish.presence),
+        'max_ent_rate': float(fish.max_ent_rate),
         'best_dist': best_dist,
         'pareto_p': pareto_p,
         'lognorm_p': lognorm_p,
         'weibull_p': weibull_p,
-        'gamma_p': gamma_p,
+        'gamma_p': getattr(fish, 'gamma_t', None),
         'extreme_p': getattr(fish, 'extreme_t', 'N/A'),
         'shape': params['shape'],
         'location': params['location'],
         'scale': params['scale'],
         'metrics': metrics,
         'decision_reason': reason,
+        'criterion': criterion,
         'plot_fig': fig,
     }
 
@@ -276,7 +378,10 @@ def main():
     print(f'Found {len(species)} species entries')
 
     rows = []
-    pdf_path = os.path.join(PROJECT_ROOT, 'species_fit_report.pdf')
+    pdf_path = os.environ.get(
+        'STRYKE_FIT_OUTPUT_PDF',
+        os.path.join(PROJECT_ROOT, 'species_fit_report.pdf'),
+    )
     pdf = PdfPages(pdf_path)
     # Optional environment override to limit number of species processed for quick testing
     try:
@@ -294,12 +399,19 @@ def main():
             rows.append({'name': name, 'error': 'no genus'})
             continue
         try:
-            res = run_fits_and_select_best(genus)
+            res = run_fits_and_select_best(name)
             # Flatten metrics
             m = res.get('metrics', {})
             row = {
                 'name': name,
                 'genus': genus,
+                'huc02': res.get('huc02'),
+                'months': ','.join(map(str, res.get('months', ()))),
+                'n_present': res.get('n_present'),
+                'n_positive': res.get('n_positive'),
+                'n_zero': res.get('n_zero'),
+                'occur_prob': res.get('occur_prob'),
+                'max_ent_rate': res.get('max_ent_rate'),
                 'best_dist': res.get('best_dist'),
                 'decision_reason': res.get('decision_reason'),
                 'pareto_p': res.get('pareto_p'), 'lognorm_p': res.get('lognorm_p'), 'weibull_p': res.get('weibull_p'), 'gamma_p': res.get('gamma_p'), 'extreme_p': res.get('extreme_p'),
@@ -343,7 +455,7 @@ def main():
                         pdf.savefig()
                     except Exception:
                         pass
-        except Exception as e:
+        except (ValueError, ZeroDivisionError) as e:
             print('  Error processing:', e)
             traceback.print_exc()
             rows.append({'name': name, 'error': str(e)})
@@ -357,7 +469,8 @@ def main():
 
     # Write CSV with extended columns
     fieldnames = [
-        'name', 'genus', 'best_dist', 'decision_reason',
+        'name', 'genus', 'huc02', 'months', 'n_present', 'n_positive',
+        'n_zero', 'occur_prob', 'max_ent_rate', 'best_dist', 'decision_reason',
         'pareto_p', 'lognorm_p', 'weibull_p', 'gamma_p',
         'shape', 'location', 'scale',
         'pareto_loglik', 'pareto_aic', 'pareto_aicc', 'pareto_bic', 'pareto_ad',

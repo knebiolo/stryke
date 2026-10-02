@@ -119,6 +119,125 @@ STORE_SIMULATION_TABLE = _env_flag("STRYKE_STORE_SIM_TABLE", "0")
 DAY_PROGRESS_ALL_ITERS = _env_flag("STRYKE_DAY_PROGRESS_ALL_ITERS", "1")
 # When False: Only shows summaries and important events
 
+# Mortality cause codes stored per move in the fish table (cause_{k}).
+CAUSE_NONE = 0
+CAUSE_IMPINGEMENT = 1
+CAUSE_BLADE_STRIKE = 2
+CAUSE_BAROTRAUMA = 3
+CAUSE_OTHER = 4  # death at a node without component probabilities (e.g. a priori)
+CAUSE_SCREENED = 5  # alive: too wide for the rack but out-swam the intake, never entrained
+
+
+def _attribute_mortality_cause(dice, rates, status, imp_surv, strike_surv, screened=None):
+    """Attribute each death to a cause using the same uniform draw that decided it.
+
+    A fish dies when ``dice > rates`` where ``rates = imp * strike * baro``.
+    Impingement survival is 0 or 1, so a death with ``imp < 1`` is impingement.
+    Otherwise the death interval ``(strike*baro, 1]`` is split into
+    ``(strike, 1]`` -> blade strike and ``(strike*baro, strike]`` -> barotrauma,
+    which reproduces the sequential exposure probabilities exactly. Surviving
+    fish flagged as ``screened`` are coded CAUSE_SCREENED.
+    """
+    dice = np.asarray(dice, dtype=np.float64)
+    rates = np.asarray(rates)
+    status = np.asarray(status)
+    imp_surv = np.asarray(imp_surv, dtype=np.float64)
+    # rates are float32-rounded; round strike the same way so that
+    # strike-only deaths (baro == 1) never fall into the barotrauma interval.
+    strike_cmp = np.asarray(strike_surv, dtype=np.float64).astype(np.float32)
+
+    died = (status == 1) & (dice > rates)
+    known = died & np.isfinite(imp_surv)
+    cause = np.zeros(dice.shape, dtype=np.int8)
+    cause[died & ~known] = CAUSE_OTHER
+    impinged = known & (imp_surv < 1.0)
+    cause[impinged] = CAUSE_IMPINGEMENT
+    remaining = known & ~impinged
+    blade = remaining & (dice > strike_cmp)
+    cause[blade] = CAUSE_BLADE_STRIKE
+    cause[remaining & ~blade] = CAUSE_BAROTRAUMA
+    if screened is not None:
+        screened = np.asarray(screened, dtype=np.float64)
+        cause[(status == 1) & ~died & (screened == 1.0)] = CAUSE_SCREENED
+    return cause
+
+
+def _length_bin_cm():
+    raw = os.environ.get("STRYKE_LENGTH_BIN_CM", "1")
+    try:
+        width = float(raw)
+    except ValueError as exc:
+        raise ValueError(f"STRYKE_LENGTH_BIN_CM must be a number; received '{raw}'.") from exc
+    if not width > 0:
+        raise ValueError(f"STRYKE_LENGTH_BIN_CM must be > 0; received '{raw}'.")
+    return width
+
+
+def _accumulate_length_bins(acc, length_cm, entrained, survived, cause_at_unit, bin_cm, escaped=None):
+    """Add one day's fish to a (7, nbins) count array keyed by length bin.
+
+    Rows: entrained, mortality, impingement, blade strike, barotrauma, other,
+    escaped (screened by the rack and passed downstream via spill).
+    """
+    entrained = np.asarray(entrained, dtype=bool)
+    escaped = np.zeros_like(entrained) if escaped is None else np.asarray(escaped, dtype=bool)
+    if not (entrained.any() or escaped.any()):
+        return acc
+    all_bins = np.clip(np.floor(np.asarray(length_cm, dtype=np.float64) / bin_cm).astype(np.int64), 0, None)
+    bins = all_bins[entrained]
+    dead = ~np.asarray(survived, dtype=bool)[entrained]
+    cause = np.asarray(cause_at_unit)[entrained]
+    nb = int(all_bins[entrained | escaped].max()) + 1
+    if acc is None:
+        acc = np.zeros((7, nb), dtype=np.int64)
+    elif acc.shape[1] < nb:
+        acc = np.pad(acc, ((0, 0), (0, nb - acc.shape[1])))
+    width = acc.shape[1]
+    acc[0] += np.bincount(bins, minlength=width)
+    acc[1] += np.bincount(bins[dead], minlength=width)
+    for row, code in ((2, CAUSE_IMPINGEMENT), (3, CAUSE_BLADE_STRIKE),
+                      (4, CAUSE_BAROTRAUMA), (5, CAUSE_OTHER)):
+        sel = dead & (cause == code)
+        acc[row] += np.bincount(bins[sel], minlength=width)
+    acc[6] += np.bincount(all_bins[escaped], minlength=width)
+    return acc
+
+
+def summarize_length_bins(length_bins, iterations_by_key):
+    """Mean per-iteration (i.e. per simulated year) counts by length bin.
+
+    ``length_bins`` is the raw /Length_Bins table (one row per scenario, species,
+    iteration and non-empty bin). ``iterations_by_key`` maps (scenario, species)
+    to the number of iterations simulated so empty iterations count as zero.
+    """
+    count_cols = ['num_entrained', 'num_mortality', 'mortality_impingement',
+                  'mortality_blade_strike', 'mortality_barotrauma', 'mortality_other', 'num_escaped']
+    if length_bins is None or length_bins.empty:
+        return pd.DataFrame(columns=['scenario', 'species', 'length_bin_lower_cm',
+                                     'length_bin_upper_cm', 'iterations']
+                            + [f'mean_{c}' for c in count_cols] + ['mortality_rate'])
+    df = length_bins.copy()
+    if 'num_escaped' not in df.columns:
+        df['num_escaped'] = 0
+    df['scenario'] = df['scenario'].astype(str).str.strip()
+    df['species'] = df['species'].astype(str).str.strip()
+    grouped = (df.groupby(['scenario', 'species', 'length_bin_lower_cm', 'length_bin_upper_cm'])[count_cols]
+                 .sum().reset_index())
+    iters = []
+    for scen, spc in zip(grouped['scenario'], grouped['species']):
+        n_iter = iterations_by_key.get((scen, spc))
+        if n_iter is None or not n_iter > 0:
+            raise ValueError(f"Iteration count missing for length summary of scenario '{scen}' species '{spc}'.")
+        iters.append(int(n_iter))
+    grouped['iterations'] = iters
+    for c in count_cols:
+        grouped[f'mean_{c}'] = grouped[c] / grouped['iterations']
+    grouped['mortality_rate'] = np.where(grouped['num_entrained'] > 0,
+                                         grouped['num_mortality'] / grouped['num_entrained'], np.nan)
+    out_cols = ['scenario', 'species', 'length_bin_lower_cm', 'length_bin_upper_cm', 'iterations'] \
+        + [f'mean_{c}' for c in count_cols] + ['mortality_rate']
+    return grouped[out_cols].sort_values(['scenario', 'species', 'length_bin_lower_cm']).reset_index(drop=True)
+
 # Get the directory of the current script
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -1476,7 +1595,39 @@ class simulation():
                        u_param_dict,
                        barotrauma = False,
                        width_ratio = None):
+        """Return only the survival probability; see node_surv_components."""
+        return self.node_surv_components(
+            length,
+            u_crit,
+            status,
+            surv_fun,
+            route,
+            surv_dict,
+            u_param_dict,
+            barotrauma=barotrauma,
+            width_ratio=width_ratio,
+        )[0]
+
+    def node_surv_components(self,
+                             length,
+                             u_crit,
+                             status,
+                             surv_fun,
+                             route,
+                             surv_dict,
+                             u_param_dict,
+                             barotrauma = False,
+                             width_ratio = None):
         """
+        Returns a tuple ``(prob, imp_surv, strike_surv, baro_surv, screened)``.
+        ``prob`` is the overall node survival probability (see below). The
+        component survival probabilities are used to attribute a death to
+        impingement, blade strike or barotrauma. ``screened`` is 1.0 when the
+        fish is too wide for the rack but can out-swim the intake velocity, so
+        it never passes the rack and must not be counted as entrained. The
+        components and ``screened`` are NaN for a priori nodes and for fish
+        that are already dead (status 0).
+
         Calculates the survival probability of a fish passing through a node in 
         the migratory network, taking into account the type of hydraulic structure 
         encountered (e.g., Kaplan, Propeller, Francis turbines, or pump mode operation) 
@@ -1537,9 +1688,11 @@ class simulation():
 
     
         if status == 0:
-            return 0.0
+            return (0.0, np.nan, np.nan, np.nan, np.nan)
         else:
             if surv_fun == 'a priori':
+                imp_surv_prob = strike_surv_prob = baro_surv = np.nan
+                screened = np.nan
                 if route not in surv_dict:
                     raise KeyError(
                         f"A priori survival missing for route '{route}'. "
@@ -1564,6 +1717,7 @@ class simulation():
                     imp_surv_prob = 0.
                 else:
                     imp_surv_prob = 1.
+                screened = 1.0 if (blocked_by_rack and imp_surv_prob == 1.) else 0.0
 
                 #logger.debug('calculated impingement survival')
                 
@@ -1669,61 +1823,20 @@ class simulation():
                 prob = imp_surv_prob * strike_surv_prob * baro_surv * latent_survival
                 prob = scalarize(prob)
                 
-                # Store mortality causes for each entrained fish
-                # Track which factor killed this fish (if it died)
-                if not hasattr(self, '_mortality_components'):
-                    self._mortality_components = {
-                        'impingement': 0,
-                        'blade_strike': 0,
-                        'barotrauma': 0,
-                        'latent': 0,
-                    }
-                
-                # Simulate sequential exposure to mortality factors
-                # Fish must survive each factor to proceed to next
-                fish_survived = True
-                mortality_cause = None
-                mortality_rng = getattr(self, '_mortality_rng', None)
-                if mortality_rng is not None:
-                    rand_draw = mortality_rng.random
-                else:
-                    rand_draw = np.random.random
-                
-                # 1. Check impingement
-                if rand_draw() > imp_surv_prob:
-                    fish_survived = False
-                    mortality_cause = 'impingement'
-                
-                # 2. If survived impingement, check blade strike
-                elif rand_draw() > strike_surv_prob:
-                    fish_survived = False
-                    mortality_cause = 'blade_strike'
-                
-                # 3. If survived blade strike, check barotrauma
-                elif rand_draw() > baro_surv:
-                    fish_survived = False
-                    mortality_cause = 'barotrauma'
-                
-                # 4. If survived all immediate factors, check latent mortality
-                elif rand_draw() > latent_survival:
-                    fish_survived = False
-                    mortality_cause = 'latent'
-                
-                # Record which factor killed this fish (or 0 if survived)
-                if mortality_cause == 'impingement':
-                    self._mortality_components['impingement'] += 1
-                elif mortality_cause == 'blade_strike':
-                    self._mortality_components['blade_strike'] += 1
-                elif mortality_cause == 'barotrauma':
-                    self._mortality_components['barotrauma'] += 1
-                elif mortality_cause == 'latent':
-                    self._mortality_components['latent'] += 1
-                
             try:
-                return np.float32(prob)
+                prob_out = np.float32(prob)
             except (ValueError, TypeError) as e:
                 logger.error(f'Cannot convert probability {prob} to float32: {e}')
-                return np.float32(1.0)  # Default to 100% survival on conversion error
+                prob_out = np.float32(1.0)  # Default to 100% survival on conversion error
+            return (
+                prob_out,
+                float(scalarize(imp_surv_prob)),
+                float(scalarize(strike_surv_prob)),
+                float(scalarize(baro_surv)),
+                float(screened),
+            )
+    
+    # create function that builds networkx graph object from nodes and edges in project database
     
     # create function that builds networkx graph object from nodes and edges in project database
     def create_route(self):
@@ -2405,7 +2518,11 @@ class simulation():
             sim_hydro_dict = {}
             print(f"[DIAG] create_hydrograph: fixed discharge={fixed_discharge}", flush=True)
             
-            # for every month 
+            # for every month, accumulate one day/flow entry per calendar day.
+            # NOTE: the DataFrame build + concat used to happen inside this loop,
+            # which re-added every previously processed month on each pass
+            # (e.g. 3 months -> first month tripled, second doubled). Build the
+            # DataFrame once, after the dict has every month's days.
             for month in scen_months:
                 days = day_in_month_dict[month]
                 for day in np.arange(1,days+1,1):
@@ -2413,17 +2530,16 @@ class simulation():
                     sim_hydro_dict[date] = fixed_discharge
                 if DIAGNOSTICS_ENABLED:
                     print(f"[DIAG] Simulated hydrograph dict keys: {list(sim_hydro_dict.keys())[:5]} ...", flush=True)
-                            
-                df = pd.DataFrame.from_dict(sim_hydro_dict,orient = 'index')  
-                df.reset_index(inplace = True, drop = False)
-                df.rename(columns = {'index':'datetimeUTC',0:'DAvgFlow_prorate'},inplace = True)
-                if DIAGNOSTICS_ENABLED:
-                    print(f"[DIAG] Simulated hydrograph DataFrame shape: {df.shape}, columns: {df.columns.tolist()}", flush=True)
-                df['month'] = pd.to_datetime(df.datetimeUTC).dt.month
-                if np.any(df.DAvgFlow_prorate.values < 0):
-                    logger.debug ('prorated daily average flow value not found')
-                #flow_df = flow_df.append(df)
-                flow_df = pd.concat([df, flow_df])
+
+            df = pd.DataFrame.from_dict(sim_hydro_dict,orient = 'index')
+            df.reset_index(inplace = True, drop = False)
+            df.rename(columns = {'index':'datetimeUTC',0:'DAvgFlow_prorate'},inplace = True)
+            if DIAGNOSTICS_ENABLED:
+                print(f"[DIAG] Simulated hydrograph DataFrame shape: {df.shape}, columns: {df.columns.tolist()}", flush=True)
+            df['month'] = pd.to_datetime(df.datetimeUTC).dt.month
+            if np.any(df.DAvgFlow_prorate.values < 0):
+                logger.debug ('prorated daily average flow value not found')
+            flow_df = pd.concat([df, flow_df])
         
         # Validate that hydrograph is not empty
         if flow_df.empty:
@@ -2858,14 +2974,8 @@ class simulation():
             global rng
             rng = default_rng(seed_val)
             np.random.seed(seed_val)
-            # Keep mortality component bookkeeping stochastic but isolated from
-            # the core simulation random stream so diagnostics do not perturb outputs.
-            self._mortality_rng = default_rng(seed_val + 1)
             logger.info("Using deterministic random seed STRYKE_RANDOM_SEED=%s", seed_val)
             print(f"[INFO] Using deterministic random seed STRYKE_RANDOM_SEED={seed_val}", flush=True)
-        else:
-            # Isolate mortality bookkeeping randomness from core simulation draws.
-            self._mortality_rng = default_rng()
         
         # DEBUG: Show critical simulation parameters
         print(f"[DEBUG RUN START] ========== SIMULATION BEGINNING ==========", flush=True)
@@ -2876,13 +2986,6 @@ class simulation():
         
         self._route_flow_logged_keys = set()
         
-        # Initialize mortality component tracking for "Wheel of Death" visualization
-        self._mortality_components = {
-            'impingement': 0,
-            'blade_strike': 0,
-            'barotrauma': 0,
-            'latent': 0,
-        }
         
         # Create route and associated data.
         self.create_route()
@@ -3035,6 +3138,17 @@ class simulation():
         for idx, row in self.nodes.iterrows():
             # Use the Location field as key (assuming ID equals Location).
             surv_dict[row['Location']] = row['Survival']
+
+        # Fish screened by a unit's rack (too wide, but able to out-swim the intake)
+        # are assumed to pass downstream via that facility's spillway.
+        spill_for_unit = {}
+        graph_nodes = set(self.graph.nodes) if getattr(self, 'graph', None) is not None else set()
+        for unit_name, fac in unit_fac_dict.items():
+            spill_node = None
+            if 'Spillway' in self.facility_params.columns and fac in self.facility_params.index:
+                spill_node = self.facility_params.at[fac, 'Spillway']
+            if isinstance(spill_node, str) and spill_node in graph_nodes:
+                spill_for_unit[str(unit_name)] = spill_node
         #print("Survival dictionary created:", surv_dict, flush=True)
         #logger.debug('iterate over scenarios')
         # Iterate over each flow scenario.
@@ -3156,6 +3270,8 @@ class simulation():
                 print(f"[DEBUG SIM START] Barotrauma enabled: {barotrauma_required}, op_order_dict: {op_order_dict}", flush=True)
                 
                 spc_length = pd.DataFrame()
+                length_bin_cm = _length_bin_cm()
+                length_acc = {}
                 for i in np.arange(0, iterations, 1):
                     if i % max(1, int(iterations / 10)) == 0:  # Report every 10%
                         print(f"[INFO] Species {species_name}: Iteration {int(i+1)} of {int(iterations)}", flush=True)
@@ -3169,15 +3285,6 @@ class simulation():
                         # DEBUG: Print first day of first iteration
                         if i == 0 and day_counter == 1:
                             print(f"[DEBUG DAY 1] curr_Q={curr_Q:.1f} cfs, units={units}", flush=True)
-                        
-                        # Reset mortality components at the start of each day
-                        if hasattr(self, '_mortality_components'):
-                            self._mortality_components = {
-                                'impingement': 0,
-                                'blade_strike': 0,
-                                'barotrauma': 0,
-                                'latent': 0,
-                            }
                         
                         # Progress update every 10% of days.
                         # Default is all iterations; can be limited to first 3 with STRYKE_DAY_PROGRESS_ALL_ITERS=0.
@@ -3394,6 +3501,7 @@ class simulation():
                                         'state_0': np.repeat(self.nodes.at[0, 'Location'], int(n))
                                     })
                                     
+                                fishes['escaped'] = np.zeros(int(n), dtype=bool)
                                 #logger.info('Starting movement')
                                 
                                 def scalarize(x):
@@ -3410,7 +3518,7 @@ class simulation():
                                     surv_fun = scalarize(surv_fun)
                                     location = scalarize(location)
                                     try:
-                                        return self.node_surv_rate(
+                                        return self.node_surv_components(
                                             pop,
                                             swim,
                                             status,
@@ -3463,7 +3571,7 @@ class simulation():
                                     surv_fun = np.asarray(surv_fun).flatten()
                                 
                                     v_surv_rate = np.vectorize(safe_node_surv_rate, excluded=[5, 6, 7])
-                                    rates = v_surv_rate(
+                                    rates, imp_surv_arr, strike_surv_arr, baro_surv_arr, screened_arr = v_surv_rate(
                                         population,
                                         swim_speed,
                                         status_arr,
@@ -3475,7 +3583,44 @@ class simulation():
                                     )
                                 
                                     #logger.info('applied vectorized survival rate')
+                                    # Rack-screened fish escape the unit and pass via the spillway
+                                    # (same survival draw, spillway survival). Without a spillway
+                                    # node they pass downstream unharmed and stay off the unit tally.
+                                    screened_now = np.nan_to_num(np.asarray(screened_arr, dtype=np.float64)) == 1.0
+                                    if np.any(screened_now):
+                                        fishes['escaped'] = fishes['escaped'].values | screened_now
+                                        spill_targets = np.array(
+                                            [spill_for_unit.get(str(loc), '') for loc in current_location], dtype=object
+                                        )
+                                        reroute = screened_now & (spill_targets != '')
+                                        if np.any(reroute):
+                                            current_location = current_location.astype(object)
+                                            current_location[reroute] = spill_targets[reroute]
+                                            current_location = current_location.astype(str)
+                                            fishes[f'state_{k}'] = current_location
+                                            sub_fun = v_surv_fun(current_location[reroute], self.surv_fun_dict)
+                                            sub = v_surv_rate(
+                                                population[reroute],
+                                                swim_speed[reroute],
+                                                status_arr[reroute],
+                                                np.asarray(sub_fun).flatten(),
+                                                current_location[reroute],
+                                                surv_dict,
+                                                u_param_dict,
+                                                width_ratio,
+                                            )
+                                            rates = np.asarray(rates, dtype=np.float32)
+                                            imp_surv_arr = np.asarray(imp_surv_arr, dtype=np.float64)
+                                            strike_surv_arr = np.asarray(strike_surv_arr, dtype=np.float64)
+                                            screened_arr = np.asarray(screened_arr, dtype=np.float64)
+                                            rates[reroute] = sub[0]
+                                            imp_surv_arr[reroute] = sub[1]
+                                            strike_surv_arr[reroute] = sub[2]
+                                            screened_arr[reroute] = sub[4]
                                     survival = np.where(dice <= rates, 1, 0)
+                                    fishes[f'cause_{k}'] = _attribute_mortality_cause(
+                                        dice, rates, status_arr, imp_surv_arr, strike_surv_arr, screened_arr
+                                    )
                                 
                                     if k < max(self.moves):
                                         def safe_movement(location, status, speed):
@@ -3534,18 +3679,23 @@ class simulation():
                                     'num_mortality': [np.int64(0)],
                                     'mortality_impingement': [np.int64(0)],
                                     'mortality_blade_strike': [np.int64(0)],
-                                    'mortality_barotrauma': [np.int64(0)]
+                                    'mortality_barotrauma': [np.int64(0)],
+                                    'num_escaped': [np.int64(0)]
                                 }
-                                # Identify state and survival columns.
+                                # Identify state, survival and cause columns (same move order).
                                 state_columns = sorted([col for col in fishes.columns if col.startswith('state_')])
                                 survival_columns = sorted([col for col in fishes.columns if col.startswith('survival_')])
+                                cause_columns = [c.replace('survival_', 'cause_', 1) for c in survival_columns]
+                                cause_vals = fishes[cause_columns].to_numpy()
                                 
                                 # Convert state columns to Unicode strings.
                                 state_vals = fishes[state_columns].to_numpy(dtype='U50')
                                 # Use np.char.find to detect any uppercase 'U' in each state.
 
-                                # Mask: where 'U' is found per state column per row
-                                mask = np.char.find(state_vals, 'U') >= 0
+                                # Mask: where 'U' is found per state column per row. Fish screened
+                                # by the rack (too wide, but able to out-swim the intake) never
+                                # pass the rack, so that visit does not count as entrainment.
+                                mask = (np.char.find(state_vals, 'U') >= 0) & (cause_vals != CAUSE_SCREENED)
                                 entrained = mask.any(axis=1)
                                 
                                 # Safer way to find first index of 'U' in each row
@@ -3565,6 +3715,24 @@ class simulation():
                                 total_survived_entrained = survived.sum()
                                 total_mortality = total_entrained - total_survived_entrained
 
+                                # Cause of death at the first turbine encounter, from the
+                                # same draw that decided survival.
+                                cause_at_unit = np.zeros(len(fishes), dtype=np.int8)
+                                cause_at_unit[entrained] = cause_vals[entrained, valid_indices]
+                                dead_entrained = entrained & ~survived
+                                if np.any(dead_entrained & (cause_at_unit == CAUSE_NONE)):
+                                    raise RuntimeError(
+                                        f"Entrained mortality without an attributed cause for species "
+                                        f"'{species_name}' scenario '{scenario}' on day {day}."
+                                    )
+                                escaped = fishes['escaped'].to_numpy(dtype=bool)
+                                total_escaped = int(escaped.sum())
+                                length_cm = np.asarray(population, dtype=np.float64) * 30.48
+                                length_acc[int(i)] = _accumulate_length_bins(
+                                    length_acc.get(int(i)), length_cm, entrained, survived,
+                                    cause_at_unit, length_bin_cm, escaped=escaped,
+                                )
+
                                 # Persist lightweight per-route daily survival aggregates.
                                 # This preserves beta/route summaries without storing full fish trajectories.
                                 state_daily_frames = []
@@ -3581,6 +3749,10 @@ class simulation():
                                             sub = fishes[[state_col, survival_col]]
                                     else:
                                         sub = fishes[[state_col, survival_col]]
+                                    cause_col = f'cause_{l}'
+                                    if cause_col in fishes.columns:
+                                        # Screened fish did not pass this unit; keep them out of its route survival.
+                                        sub = sub[fishes.loc[sub.index, cause_col] != CAUSE_SCREENED]
                                     if sub.empty:
                                         continue
 
@@ -3623,15 +3795,11 @@ class simulation():
                                 daily_row_dict['num_survived'] = [np.int64(total_survived_entrained)]
                                 daily_row_dict['num_mortality'] = [np.int64(total_mortality)]
                                 
-                                # Calculate mortality components from tracked data
-                                if hasattr(self, '_mortality_components') and total_entrained > 0:
-                                    daily_row_dict['mortality_impingement'] = [np.int64(self._mortality_components.get('impingement', 0))]
-                                    daily_row_dict['mortality_blade_strike'] = [np.int64(self._mortality_components.get('blade_strike', 0))]
-                                    daily_row_dict['mortality_barotrauma'] = [np.int64(self._mortality_components.get('barotrauma', 0))]
-                                else:
-                                    daily_row_dict['mortality_impingement'] = [np.int64(0)]
-                                    daily_row_dict['mortality_blade_strike'] = [np.int64(0)]
-                                    daily_row_dict['mortality_barotrauma'] = [np.int64(0)]
+                                # Calculate mortality components from the attributed causes
+                                daily_row_dict['mortality_impingement'] = [np.int64(np.sum(dead_entrained & (cause_at_unit == CAUSE_IMPINGEMENT)))]
+                                daily_row_dict['mortality_blade_strike'] = [np.int64(np.sum(dead_entrained & (cause_at_unit == CAUSE_BLADE_STRIKE)))]
+                                daily_row_dict['mortality_barotrauma'] = [np.int64(np.sum(dead_entrained & (cause_at_unit == CAUSE_BAROTRAUMA)))]
+                                daily_row_dict['num_escaped'] = [np.int64(total_escaped)]
     
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 
@@ -3675,7 +3843,8 @@ class simulation():
                                     'num_mortality': [np.int64(0)],
                                     'mortality_impingement': [np.int64(0)],
                                     'mortality_blade_strike': [np.int64(0)],
-                                    'mortality_barotrauma': [np.int64(0)]
+                                    'mortality_barotrauma': [np.int64(0)],
+                                    'num_escaped': [np.int64(0)]
                                 }
                                 daily = pd.DataFrame.from_dict(daily_row_dict, orient='columns')
                                 
@@ -3772,6 +3941,34 @@ class simulation():
                         self._route_flow_daily = defaultdict(float)
 
                         logger.debug("Scenario %s Dat %s Iteration %s for Species %s complete",scenario,day,i,species_name)
+                length_records = []
+                for iter_idx, acc in sorted(length_acc.items()):
+                    if acc is None:
+                        continue
+                    for b in np.nonzero(acc[0] + acc[6])[0]:
+                        length_records.append({
+                            'scenario': str(scenario),
+                            'species': str(species_name),
+                            'iteration': int(iter_idx),
+                            'length_bin_lower_cm': float(b * length_bin_cm),
+                            'length_bin_upper_cm': float((b + 1) * length_bin_cm),
+                            'num_entrained': int(acc[0, b]),
+                            'num_mortality': int(acc[1, b]),
+                            'mortality_impingement': int(acc[2, b]),
+                            'mortality_blade_strike': int(acc[3, b]),
+                            'mortality_barotrauma': int(acc[4, b]),
+                            'mortality_other': int(acc[5, b]),
+                            'num_escaped': int(acc[6, b]),
+                        })
+                if length_records:
+                    pd.DataFrame(length_records).to_hdf(
+                        self.hdf,
+                        key='Length_Bins',
+                        mode='a',
+                        format='table',
+                        append=True,
+                        min_itemsize={'scenario': 128, 'species': 128},
+                    )
                 self.hdf.flush()
                 logger.info("Completed Scenario %s for Species %s",scen,species)
                 print(f"[INFO] ✅ Completed scenario '{scen}' for species {species}", flush=True)
@@ -3829,6 +4026,15 @@ class simulation():
                 else:
                     print(f"[DIAG][ERROR] 'Daily' table is missing from HDF5!", flush=True)
             self.daily_summary = store['Daily']
+            length_bins_raw = store['Length_Bins'] if '/Length_Bins' in store.keys() else None
+            if length_bins_raw is not None:
+                iterations_by_key = {
+                    (str(r['Scenario']).strip(), str(r['Species']).strip()): r['Iterations']
+                    for _, r in pop.iterrows()
+                }
+                self.length_summary = summarize_length_bins(length_bins_raw, iterations_by_key)
+            else:
+                self.length_summary = None
             self.daily_summary.iloc[:,6:] = self.daily_summary.iloc[:,6:].astype(float)
             self.daily_summary['species_norm'] = self.daily_summary['species'].astype(str).str.strip()
             self.daily_summary['scenario_norm'] = self.daily_summary['scenario'].astype(str).str.strip()
@@ -3959,6 +4165,8 @@ class simulation():
                                     sub_dat = dat[dat['survival_%s' % (l-1)] == 1]
                                 else:
                                     sub_dat = dat
+                                if 'cause_%s' % (l) in sub_dat.columns:
+                                    sub_dat = sub_dat[sub_dat['cause_%s' % (l)] != CAUSE_SCREENED]
                                 route_succ = sub_dat.groupby(by=['iteration','day','state_%s' % (l)])['survival_%s' % (l)]\
                                     .sum().to_frame().reset_index(drop=False)\
                                     .rename(columns={'survival_%s' % (l):'successes'})
@@ -4365,6 +4573,12 @@ class simulation():
             store.put("Yearly_Summary", self.cum_sum, format="table", data_columns=True)
             if isinstance(getattr(self, 'driver_diagnostics', None), pd.DataFrame):
                 store.put("Driver_Diagnostics", self.driver_diagnostics, format="table", data_columns=True)
+            if isinstance(getattr(self, 'length_summary', None), pd.DataFrame):
+                store.put("Length_Summary", self.length_summary, format="table", data_columns=True)
+        if isinstance(getattr(self, 'length_summary', None), pd.DataFrame):
+            self.length_summary.to_csv(
+                os.path.join(self.proj_dir, f"{self.output_name}_length_summary.csv"), index=False
+            )
     
         return
                 
@@ -4639,7 +4853,7 @@ class epri():
             data_dir = os.path.normpath(data_dir)  # Normalize path for OS compatibility
             
             
-            self.epri = pd.read_csv(data_dir,  encoding= 'unicode_escape')
+            self.epri = pd.read_csv(data_dir, encoding='utf-8-sig')
             # Guard against duplicate rows from Access join fan-outs (only
             # latitude/drainageArea/maxDischarge ever differ across dupes,
             # neither of which is used downstream) reinflating sample sizes.

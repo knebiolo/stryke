@@ -139,6 +139,7 @@ simulation_*.log
 uploads/
 simulation_project/
 simulation_report_*/
+qc_output/
 
 # OS files
 .DS_Store

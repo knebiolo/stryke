@@ -21,11 +21,11 @@ DATA_PATH = os.path.normpath(
 
 
 def main():
-    df = pd.read_csv(DATA_PATH, encoding="unicode_escape")
+    df = pd.read_csv(DATA_PATH, encoding="utf-8-sig")
     n_before = len(df)
     deduped = df.drop_duplicates(subset=["ID", "Species"], keep="first")
     n_after = len(deduped)
-    deduped.to_csv(DATA_PATH, index=False, encoding="unicode_escape")
+    deduped.to_csv(DATA_PATH, index=False, encoding="utf-8-sig", lineterminator="\n")
     print(f"epri1997.csv: {n_before} -> {n_after} rows ({n_before - n_after} duplicate rows removed)")
 
 
