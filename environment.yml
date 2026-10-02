@@ -12,9 +12,6 @@ dependencies:
   - networkx
   - statsmodels
   - h5py
-  - flask
-  - flask-session
-  - werkzeug
   - requests
   - pyproj
   - geopandas

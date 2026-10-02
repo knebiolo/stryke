@@ -7,7 +7,6 @@ STRYKE is a fish passage and survival simulation tool for hydroelectric faciliti
 ```
 stryke/
 ├── Stryke/          # Core simulation engine
-├── webapp/          # Web interface
 ├── Data/            # Reference data
 ├── Scripts/         # Analysis tools
 ├── tests/           # Unit tests
@@ -32,17 +31,7 @@ conda activate stryke
 pip install -r requirements.txt
 ```
 
-### 2. Run the Web Application
-
-```powershell
-# From project root
-cd webapp
-python app.py
-```
-
-Then open http://localhost:5000 in your browser.
-
-### 3. Run Example Notebook
+### 2. Run Example Notebook
 
 ```powershell
 jupyter lab examples/stryke_project_notebook.ipynb
@@ -74,7 +63,7 @@ Remove-Item temp\* -Recurse -Force -Exclude README.md
 
 ## Development Workflow
 
-1. **Make changes** to code in `Stryke/` or `webapp/`
+1. **Make changes** to code in `Stryke/`
 2. **Test locally** with `pytest` and manual testing
 3. **Check outputs** in `temp/` directory
 4. **Review logs** in `dev-notes/` for previous fixes
@@ -92,9 +81,6 @@ Remove-Item temp\* -Recurse -Force -Exclude README.md
 
 ### Simulation not running?
 Check `temp/simulation_debug.log` for errors.
-
-### Web interface issues?
-Enable Flask debug mode and check browser console.
 
 ### Data loading errors?
 Verify file paths in `Data/` directory.

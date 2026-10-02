@@ -7,22 +7,11 @@ stryke/
 ├── setup.py                     # Package installation script
 ├── requirements.txt             # Python dependencies
 ├── environment.yml              # Conda environment specification
-├── Dockerfile                   # Docker container definition
-├── railway.toml                 # Railway deployment config
-├── Procfile.txt                 # Process definitions for deployment
 │
 ├── Stryke/                      # Core simulation package
 │   ├── __init__.py
 │   ├── stryke.py                # Main simulation engine
 │   └── ...
-│
-├── webapp/                      # Flask web application
-│   ├── app.py                   # Main Flask app
-│   ├── templates/               # HTML templates
-│   └── static/                  # CSS, JS, images
-│       ├── autosave.js
-│       ├── validation.js
-│       └── enable-on-change.js
 │
 ├── Scripts/                     # Analysis and utility scripts
 │   ├── barotrauma.py
@@ -62,11 +51,6 @@ stryke/
 ├── pics/                        # Screenshots and diagrams
 │   └── *.jpg, *.pdf
 │
-├── instance/                    # Flask instance folder (runtime)
-│   └── sessions/
-│
-├── uploads/                     # User file uploads (runtime, not in git)
-│
 ├── simulation_project/          # Active simulation projects (runtime, not in git)
 │
 └── source/                      # Sphinx documentation source
@@ -77,7 +61,6 @@ stryke/
 
 ### Core Application
 - **Stryke/** - The main simulation engine and business logic
-- **webapp/** - Web interface built with Flask
 
 ### Development
 - **tests/** - Automated tests (run with pytest)
@@ -95,6 +78,4 @@ stryke/
 
 ### Runtime (Not in Git)
 - **temp/** - Temporary simulation outputs
-- **uploads/** - User-uploaded files
 - **simulation_project/** - Active simulation data
-- **instance/** - Flask session data

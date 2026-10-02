@@ -64,11 +64,7 @@ Anaconda Navigator will install all the required packages listed in the `environ
 6. Within **JupyterLab** you will need to import the file `stryke_project_notebook.ipynb` from the `GitHub > stryke` folder (located in the same place as defined in step 1.6 above) into the area below the list of file folders in JupyterLab. Then click on this file within **JupyterLab** to launch Stryke.
 ![import_button](https://github.com/knebiolo/stryke/blob/master/pics/import_button.jpg)
 ![load_notebook](https://github.com/knebiolo/stryke/blob/master/pics/load_notebook.jpg)
-### 5. Simplified User Interface  
-To launch the simplified user interface, open the folder where Stryke is located and double click the `RUN_STRYKE.bat` file. This will automatically launch a command window, find the Anaconda environment, and open a browser tab with a codeless interface. Use the file explorer in the tab to select the input spreadsheet and click the 'Run Stryke' button. After clicking run, text output will show that either Stryke finished running or encountered an error. 
-
-Please note, this file may need to be tailored to point to the user’s Anaconda installation if it is not a common installation location.
-
+### Troubleshooting
 If you are getting an error `ValueError: Sheet 'beta fit' already exists and if_sheet_exists is set to 'error'`, the output Excel sheets are still in the file and will not let you overwrite them. Please delete the output sheets (last sheets in the file, starting with lowercase letters), save and close the file, and click run again.
 
 ---
