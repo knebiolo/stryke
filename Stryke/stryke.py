@@ -118,6 +118,9 @@ STORE_SIMULATION_TABLE = _env_flag("STRYKE_STORE_SIM_TABLE", "0")
 # Set STRYKE_DAY_PROGRESS_ALL_ITERS=0 to restore legacy behavior (first 3 iterations only).
 DAY_PROGRESS_ALL_ITERS = _env_flag("STRYKE_DAY_PROGRESS_ALL_ITERS", "1")
 # When False: Only shows summaries and important events
+# Opt-in input fixes (both default OFF; set to 1 to enable while they are being validated):
+#   STRYKE_UCRIT_METRIC_CONVERSION  convert the worksheet U_crit from m/s to ft/s when output units are metric
+#   STRYKE_REJECT_NEGATIVE_FLOW     raise a ValueError when a hydrograph contains a negative daily flow
 
 # Mortality cause codes stored per move in the fish table (cause_{k}).
 CAUSE_NONE = 0
@@ -706,6 +709,12 @@ class simulation():
                                  index_col = None,
                                  usecols = "B:V", 
                                  skiprows = 11)
+
+        # U_crit is collected in m/s; convert to ft/s to match intake_vel when metric.
+        # Behind STRYKE_UCRIT_METRIC_CONVERSION (default off) until validated on real projects.
+        if (_env_flag("STRYKE_UCRIT_METRIC_CONVERSION", "0")
+                and self.output_units == 'metric' and 'U_crit' in self.pop.columns):
+            self.pop['U_crit'] = self.pop.U_crit * 3.28084
                     
         # create output HDF file
         self.proj_dir = proj_dir
@@ -974,6 +983,13 @@ class simulation():
                         f"invalid_dates={invalid_dates}, invalid_flows={invalid_flows}. "
                         "Fix or remove malformed rows in hydrograph.csv."
                     )
+                negative_mask = self.input_hydrograph_df['DAvgFlow_prorate'] < 0
+                if negative_mask.any() and _env_flag("STRYKE_REJECT_NEGATIVE_FLOW", "0"):
+                    bad_dates = self.input_hydrograph_df.loc[negative_mask, 'datetimeUTC'].dt.strftime('%Y-%m-%d').tolist()
+                    raise ValueError(
+                        "Hydrograph contains negative DAvgFlow_prorate values on: "
+                        f"{', '.join(bad_dates)}. Discharge cannot be negative."
+                    )
             elif {'Date', 'Discharge'}.issubset(hydro_cols):
                 self.input_hydrograph_df['datetimeUTC'] = pd.to_datetime(
                     self.input_hydrograph_df['Date'],
@@ -990,6 +1006,13 @@ class simulation():
                         "Hydrograph contains invalid Date/Discharge values: "
                         f"invalid_dates={invalid_dates}, invalid_flows={invalid_flows}. "
                         "Fix or remove malformed rows in hydrograph.csv."
+                    )
+                negative_mask = self.input_hydrograph_df['DAvgFlow_prorate'] < 0
+                if negative_mask.any() and _env_flag("STRYKE_REJECT_NEGATIVE_FLOW", "0"):
+                    bad_dates = self.input_hydrograph_df.loc[negative_mask, 'datetimeUTC'].dt.strftime('%Y-%m-%d').tolist()
+                    raise ValueError(
+                        "Hydrograph contains negative DAvgFlow_prorate values on: "
+                        f"{', '.join(bad_dates)}. Discharge cannot be negative."
                     )
             else:
                 raise KeyError(
